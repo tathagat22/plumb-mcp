@@ -142,17 +142,25 @@ function pushSelection(): void {
   });
 }
 
-figma.on("selectionchange", pushSelection);
-
-// Debounced watch mode — re-stream after the designer edits.
-let changeTimer: ReturnType<typeof setTimeout> | null = null;
-figma.on("documentchange", () => {
-  if (changeTimer !== null) clearTimeout(changeTimer);
-  changeTimer = setTimeout(pushSelection, 400);
-});
-
 figma.ui.onmessage = (message: { type?: string }) => {
   if (message && message.type === "resync") pushSelection();
 };
 
-pushSelection();
+// Debounced watch mode — re-stream after the designer edits.
+let changeTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function start(): Promise<void> {
+  // documentAccess "dynamic-page" requires every page to be loaded before a
+  // document-wide change handler can be registered.
+  await figma.loadAllPagesAsync();
+
+  figma.on("selectionchange", pushSelection);
+  figma.on("documentchange", () => {
+    if (changeTimer !== null) clearTimeout(changeTimer);
+    changeTimer = setTimeout(pushSelection, 400);
+  });
+
+  pushSelection();
+}
+
+void start();
