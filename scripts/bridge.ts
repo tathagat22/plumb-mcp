@@ -1,10 +1,12 @@
 /**
- * Offline test of the plugin bridge: starts the WebSocket bridge, connects a
- * simulated plugin client, pairs, streams the fixture as a selection, then
- * calls plumb_selection over an in-memory MCP transport. No Figma needed.
+ * Offline test of the plugin bridge. Starts the WebSocket bridge, connects a
+ * simulated plugin (pairs, streams an inventory, answers get-node / get-assets),
+ * then exercises plumb_outline / plumb_node / plumb_assets over an in-memory
+ * MCP transport. No Figma needed.
  */
 import { once } from "node:events";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -13,6 +15,8 @@ import { WebSocket } from "ws";
 import { startBridge } from "../src/bridge/server";
 import { bridge } from "../src/bridge/store";
 import { createServer } from "../src/server";
+
+process.env.PLUMB_ASSETS_DIR = join(tmpdir(), `plumb-bridge-${Date.now()}`);
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = JSON.parse(
@@ -35,66 +39,129 @@ function check(label: string, ok: boolean, detail = ""): void {
 await startBridge();
 check("bridge bound a localhost port", bridge.port !== null, `port ${bridge.port}`);
 
-// --- simulate the Figma plugin ------------------------------------------
+// --- simulated Figma plugin ---------------------------------------------
+const fakeSvg = Buffer.from(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>',
+).toString("base64");
+
 const ws = new WebSocket(`ws://127.0.0.1:${bridge.port}`);
-// Attach the listener before the socket opens — the server sends plumb-hello
-// immediately on connect (the real plugin UI does the same).
 let gotHello = false;
 let gotPaired = false;
 ws.on("message", (raw) => {
-  const msg = JSON.parse(String(raw)) as { t?: string };
+  const msg = JSON.parse(String(raw)) as { t?: string; reqId?: string };
   if (msg.t === "plumb-hello") gotHello = true;
   if (msg.t === "paired") gotPaired = true;
+  if (msg.t === "get-node") {
+    ws.send(
+      JSON.stringify({
+        t: "node",
+        reqId: msg.reqId,
+        doc: fixture,
+        nodeName: "Export employees · dialog",
+      }),
+    );
+  }
+  if (msg.t === "get-assets") {
+    ws.send(
+      JSON.stringify({
+        t: "assets",
+        reqId: msg.reqId,
+        error: null,
+        assets: [{ id: "i1", name: "star icon", format: "SVG", dataBase64: fakeSvg }],
+      }),
+    );
+  }
 });
 await once(ws, "open");
-await delay(120);
-check("server sends plumb-hello on connect", gotHello);
 
-// the user "clicks Pair with Plumb"
 ws.send(JSON.stringify({ t: "pair", pluginVersion: "test" }));
 await delay(120);
-check("server confirms pairing", gotPaired && bridge.paired);
+check("server confirms pairing", gotHello && gotPaired && bridge.paired);
 
-// the plugin streams the current selection
+ws.send(
+  JSON.stringify({
+    t: "inventory",
+    fileName: "Test File",
+    pages: [
+      {
+        id: "0:1",
+        name: "Page 1",
+        frames: [
+          { id: "131:6950", name: "Export Dialog", w: 528, h: 578 },
+          { id: "131:1", name: "Login", w: 1440, h: 1024 },
+          { id: "131:2", name: "Login", w: 375, h: 812 },
+        ],
+      },
+    ],
+  }),
+);
 ws.send(
   JSON.stringify({
     t: "selection",
     doc: fixture,
-    fileName: "Fixture file",
+    fileName: "Test File",
     pageName: "Page 1",
     nodeName: "Export employees · dialog",
   }),
 );
 await delay(120);
-check("server stored the streamed selection", bridge.selection !== null);
+check("server stored the inventory", bridge.inventory !== null);
 
-// --- call the tools over MCP --------------------------------------------
+// --- MCP tools ----------------------------------------------------------
 const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 const server = createServer();
 await server.connect(serverTransport);
 const client = new Client({ name: "plumb-bridge-test", version: "0.0.0" });
 await client.connect(clientTransport);
 
-const status = parse(await client.callTool({ name: "plumb_status", arguments: {} }));
-check("plumb_status reports the plugin connected", status.plugin?.connected === true);
+const outline = parse(await client.callTool({ name: "plumb_outline", arguments: {} }));
+check(
+  "plumb_outline returns the plugin inventory",
+  outline.source === "plugin" && outline.meta?.screenCount === 3,
+  `${outline.meta?.screenCount} screens`,
+);
 
-const sel = parse(
-  await client.callTool({ name: "plumb_selection", arguments: { depth: 3 } }),
+const byName = parse(
+  await client.callTool({ name: "plumb_node", arguments: { name: "Export" } }),
 );
 check(
-  "plumb_selection returns a PDS from the plugin path",
-  sel.source === "plugin" && !sel.error && typeof sel.nodes === "object",
-  `${sel.meta?.nodeCount} nodes, ~${sel.meta?.estTokens} tokens`,
+  "plumb_node by unique name returns a PDS",
+  byName.source === "plugin" && !byName.error && typeof byName.nodes === "object",
+  `${byName.meta?.nodeCount} nodes`,
 );
+
+const dup = parse(
+  await client.callTool({ name: "plumb_node", arguments: { name: "Login" } }),
+);
+check(
+  "plumb_node on a duplicate name returns all matches",
+  dup.ambiguous === true && Array.isArray(dup.matches) && dup.matches.length === 2,
+  `${dup.matches ? dup.matches.length : 0} matches`,
+);
+
+const assets = parse(
+  await client.callTool({ name: "plumb_assets", arguments: { id: "131:6950" } }),
+);
+check(
+  "plumb_assets writes asset files and returns paths",
+  assets.source === "plugin" &&
+    assets.count === 1 &&
+    typeof assets.assets?.[0]?.path === "string" &&
+    existsSync(assets.assets[0].path),
+  assets.assets?.[0]?.path ?? "(no path)",
+);
+
+const status = parse(await client.callTool({ name: "plumb_status", arguments: {} }));
+check("plumb_status reports the screen count", status.plugin?.screens === 3);
 
 ws.close();
 await client.close();
 await server.close();
 
-console.log("─".repeat(58));
+console.log("─".repeat(60));
 if (failed) {
   console.error(`✗ ${failed} check(s) failed.`);
   process.exit(1);
 }
-console.log("✓ PASS: the bridge pairs, streams, and serves plumb_selection (offline).");
+console.log("✓ PASS: bridge + inventory + by-name fetch + asset export all work (offline).");
 process.exit(0);

@@ -1,4 +1,5 @@
 import type { FigmaNode } from "../figma/types";
+import type { InventoryPage } from "./protocol";
 
 /** The current selection the paired plugin has streamed. */
 export interface BridgeSelection {
@@ -7,6 +8,12 @@ export interface BridgeSelection {
   pageName: string;
   nodeName: string;
   receivedAt: number;
+}
+
+/** The file's screen inventory streamed by the paired plugin. */
+export interface BridgeInventory {
+  fileName: string;
+  pages: InventoryPage[];
 }
 
 /**
@@ -21,14 +28,17 @@ class BridgeStore {
   pluginVersion: string | null = null;
   /** The latest selection streamed by the paired plugin. */
   selection: BridgeSelection | null = null;
+  /** The file's screen inventory (all pages → top-level frames). */
+  inventory: BridgeInventory | null = null;
   /** Last time any message arrived from the plugin (epoch ms). */
   lastSeen = 0;
 
-  /** Clear pairing + selection — called when the plugin disconnects. */
+  /** Clear pairing-scoped state — called when the plugin disconnects. */
   reset(): void {
     this.paired = false;
     this.pluginVersion = null;
     this.selection = null;
+    this.inventory = null;
   }
 }
 

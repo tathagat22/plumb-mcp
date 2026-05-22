@@ -3,12 +3,15 @@
 Local, free, token-frugal Figma → code bridge for AI coding agents.
 See [plan.md](./plan.md) for the full design.
 
-> **Status: Milestone 1 — in progress.** Five MCP tools — `plumb_status`,
-> `plumb_outline`, `plumb_node`, `plumb_tokens` (REST path) and
-> `plumb_selection` (plugin path) — plus the normalizer that turns raw Figma
-> nodes into the compact **Plumb Design Spec (PDS)**, a version-keyed cache,
-> the localhost plugin bridge with one-time-confirm pairing, and `plumb-mcp
-> init`. See [`figma-plugin/`](./figma-plugin/) for the companion plugin.
+> **Status: Milestone 1.5 — done.** Six MCP tools — `plumb_status`,
+> `plumb_outline`, `plumb_node`, `plumb_tokens`, `plumb_selection`, and
+> `plumb_assets` — plus the normalizer that turns raw Figma nodes into the
+> compact **Plumb Design Spec (PDS)**, a version-keyed cache, the localhost
+> plugin bridge with one-time-confirm pairing (collapses to a dot when not
+> needed), full file access through the paired plugin (every screen, query
+> by name, duplicates returned for disambiguation), asset export to a local
+> folder (SVG for icons, PNG for images), and `plumb-mcp init`.
+> See [`figma-plugin/`](./figma-plugin/) for the companion plugin.
 
 ## Try it
 

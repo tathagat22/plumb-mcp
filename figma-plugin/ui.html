@@ -4,54 +4,86 @@
 <meta charset="utf-8" />
 <style>
   body { font: 12px -apple-system, BlinkMacSystemFont, sans-serif; margin: 0;
-    padding: 14px; color: #1a1a1a; background: #fff; }
+    color: #1a1a1a; background: #fff; }
+  #panel { padding: 14px; }
   .row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: #c0392b; flex: none; }
   .dot.wait { background: #f39c12; }
   .dot.on { background: #2ecc71; }
   #status { font-weight: 600; }
-  #sel { color: #666; margin-bottom: 12px; word-break: break-word; min-height: 16px; }
+  #info { color: #666; margin-bottom: 12px; line-height: 1.5; }
   button { font: inherit; font-weight: 600; padding: 9px 12px; width: 100%;
     border: 0; border-radius: 6px; background: #8b6cff; color: #fff; cursor: pointer; }
   button:disabled { background: #e6e6e6; color: #aaa; cursor: default; }
-  .hint { color: #9a9a9a; margin-top: 10px; font-size: 11px; line-height: 1.4; }
+  button.ghost { background: #f1f1f4; color: #444; margin-top: 8px; }
+  .warn { color: #9a9a9a; margin-top: 12px; font-size: 11px; line-height: 1.45; }
+  .warn b { color: #c0392b; }
+  /* collapsed dot view */
+  #collapsed { display: none; width: 72px; height: 72px; align-items: center;
+    justify-content: center; cursor: pointer; }
+  #bigdot { width: 30px; height: 30px; border-radius: 50%; background: #c0392b;
+    box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+  #bigdot.wait { background: #f39c12; }
+  #bigdot.on { background: #2ecc71; }
+  body.mini #panel { display: none; }
+  body.mini #collapsed { display: flex; }
 </style>
 </head>
 <body>
-  <div class="row"><div class="dot" id="dot"></div><span id="status">Connecting…</span></div>
-  <div id="sel">No selection</div>
-  <button id="pair" disabled>Pair with Plumb</button>
-  <div class="hint">Keep this panel open — closing it stops Plumb. Minimize it instead.</div>
+  <div id="panel">
+    <div class="row"><div class="dot" id="dot"></div><span id="status">Connecting…</span></div>
+    <div id="info">No selection</div>
+    <button id="pair" disabled>Pair with Plumb</button>
+    <button id="hide" class="ghost">Hide ▾</button>
+    <div class="warn">
+      <b>Don't close (✕)</b> — that stops Plumb. Click <b>Hide</b> to tuck it
+      into a dot; click the dot to bring it back.
+    </div>
+  </div>
+  <div id="collapsed" title="Click to expand Plumb"><div id="bigdot"></div></div>
 <script>
   var PORTS = [31337, 31338, 31339, 31340, 31341];
   var PLUGIN_VERSION = "0.0.1";
-  var ws = null, paired = false, portIdx = 0, helloTimer = null;
+  var ws = null, paired = false, autoPair = false, portIdx = 0, helloTimer = null;
+  var lastSelection = null, lastInventory = null;
 
   var dot = document.getElementById("dot");
+  var bigdot = document.getElementById("bigdot");
   var statusEl = document.getElementById("status");
-  var selEl = document.getElementById("sel");
+  var infoEl = document.getElementById("info");
   var pairBtn = document.getElementById("pair");
+  var hideBtn = document.getElementById("hide");
+  var collapsed = document.getElementById("collapsed");
 
   function setState(cls, text) {
     dot.className = "dot" + (cls ? " " + cls : "");
+    bigdot.className = cls ? cls : "";
     statusEl.textContent = text;
+  }
+
+  function toMain(msg) { parent.postMessage({ pluginMessage: msg }, "*"); }
+
+  function send(obj) {
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+  }
+
+  function refreshInfo() {
+    var bits = [];
+    if (lastInventory) bits.push(lastInventory.pages.reduce(function (n, p) {
+      return n + p.frames.length; }, 0) + " screens in file");
+    bits.push(lastSelection && lastSelection.nodeName
+      ? "Selected: " + lastSelection.nodeName : "No selection");
+    infoEl.textContent = bits.join(" · ");
   }
 
   function connect() {
     var port = PORTS[portIdx % PORTS.length];
     portIdx++;
-    try {
-      ws = new WebSocket("ws://127.0.0.1:" + port);
-    } catch (e) {
-      setTimeout(connect, 1500);
-      return;
-    }
+    try { ws = new WebSocket("ws://127.0.0.1:" + port); }
+    catch (e) { setTimeout(connect, 1500); return; }
 
     ws.onopen = function () {
-      // Expect a plumb-hello promptly, else this port is not Plumb.
-      helloTimer = setTimeout(function () {
-        try { ws.close(); } catch (e) {}
-      }, 1500);
+      helloTimer = setTimeout(function () { try { ws.close(); } catch (e) {} }, 1500);
     };
 
     ws.onmessage = function (ev) {
@@ -59,18 +91,26 @@
       try { msg = JSON.parse(ev.data); } catch (e) { return; }
       if (msg.t === "plumb-hello") {
         if (helloTimer) { clearTimeout(helloTimer); helloTimer = null; }
-        setState("wait", "Found Plumb — not paired");
-        pairBtn.disabled = false;
+        if (autoPair) {
+          setState("wait", "Pairing…");
+          send({ t: "pair", pluginVersion: PLUGIN_VERSION });
+        } else {
+          setState("wait", "Found Plumb — not paired");
+          pairBtn.disabled = false;
+        }
       } else if (msg.t === "paired") {
         paired = true;
         pairBtn.disabled = true;
         pairBtn.textContent = "Paired ✓";
         setState("on", "Paired");
-        parent.postMessage({ pluginMessage: { type: "resync" } }, "*");
+        toMain({ type: "paired" });
+        toMain({ type: "resync" });
       } else if (msg.t === "pair-rejected") {
         setState("wait", msg.reason || "Pairing rejected");
+      } else if (msg.t === "get-node" || msg.t === "get-assets") {
+        toMain({ type: "server-request", req: msg });
       } else if (msg.t === "ping") {
-        ws.send(JSON.stringify({ t: "pong" }));
+        send({ t: "pong" });
       }
     };
 
@@ -83,31 +123,50 @@
       setTimeout(connect, 1500);
     };
 
-    ws.onerror = function () {
-      try { ws.close(); } catch (e) {}
-    };
+    ws.onerror = function () { try { ws.close(); } catch (e) {} };
   }
 
   pairBtn.onclick = function () {
-    if (ws && ws.readyState === 1) {
-      ws.send(JSON.stringify({ t: "pair", pluginVersion: PLUGIN_VERSION }));
-      setState("wait", "Pairing…");
-    }
+    send({ t: "pair", pluginVersion: PLUGIN_VERSION });
+    setState("wait", "Pairing…");
+  };
+
+  hideBtn.onclick = function () {
+    document.body.classList.add("mini");
+    toMain({ type: "collapse" });
+  };
+
+  collapsed.onclick = function () {
+    document.body.classList.remove("mini");
+    toMain({ type: "expand" });
   };
 
   // Messages from the plugin main thread (code.ts).
   window.onmessage = function (event) {
     var msg = event.data && event.data.pluginMessage;
-    if (!msg || msg.type !== "selection") return;
-    selEl.textContent = msg.nodeName ? "Selected: " + msg.nodeName : "No selection";
-    if (paired && ws && ws.readyState === 1) {
-      ws.send(JSON.stringify({
-        t: "selection",
-        doc: msg.doc,
-        fileName: msg.fileName,
-        pageName: msg.pageName,
-        nodeName: msg.nodeName
-      }));
+    if (!msg || !msg.type) return;
+
+    if (msg.type === "init") {
+      autoPair = msg.autoPair === true;
+      if (autoPair) {
+        document.body.classList.add("mini");
+        toMain({ type: "collapse" });
+      }
+    } else if (msg.type === "selection") {
+      lastSelection = msg;
+      refreshInfo();
+      if (paired) {
+        send({ t: "selection", doc: msg.doc, fileName: msg.fileName,
+          pageName: msg.pageName, nodeName: msg.nodeName });
+      }
+    } else if (msg.type === "inventory") {
+      lastInventory = msg;
+      refreshInfo();
+      if (paired) {
+        send({ t: "inventory", fileName: msg.fileName, pages: msg.pages });
+      }
+    } else if (msg.type === "plugin-reply") {
+      send(msg.reply);
     }
   };
 

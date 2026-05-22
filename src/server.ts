@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SERVER_NAME, SERVER_VERSION } from "./meta";
+import { registerPlumbAssets } from "./tools/assets";
 import { registerPlumbNode } from "./tools/node";
 import { registerPlumbOutline } from "./tools/outline";
 import { registerPlumbSelection } from "./tools/selection";
@@ -13,12 +14,11 @@ export function createServer(): McpServer {
     {
       instructions:
         "Plumb extracts Figma designs as compact, normalized specs for building " +
-        "UI. Call plumb_status first to learn the key legend and what is " +
-        "connected. With the Plumb plugin paired, plumb_selection extracts the " +
-        "user's live Figma selection (no token, no rate limit). Otherwise " +
-        "plumb_outline maps a file and plumb_node extracts a frame by id; " +
-        "plumb_tokens returns the design-token table. Auto-layout is " +
-        "pre-resolved to flexbox.",
+        "UI. Call plumb_status first. With the Plumb plugin paired, plumb_outline " +
+        "lists every screen and plumb_node extracts one by id or name (no token); " +
+        "plumb_selection extracts the live selection; plumb_assets exports a " +
+        "screen's icons and images to local files. Otherwise use the REST path " +
+        "(fileKey + id). Auto-layout is pre-resolved to flexbox.",
     },
   );
 
@@ -27,6 +27,7 @@ export function createServer(): McpServer {
   registerPlumbNode(server);
   registerPlumbTokens(server);
   registerPlumbSelection(server);
+  registerPlumbAssets(server);
 
   return server;
 }

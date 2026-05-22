@@ -3,15 +3,20 @@
 /**
  * Plumb plugin — main thread.
  *
- * Reads the current Figma selection, serializes it into the REST-shaped node
- * model the Plumb server already normalizes, and posts it to the UI iframe,
- * which relays it over the localhost WebSocket. Watches selection/document
- * changes so the spec stays live (plan §8 watch mode).
+ * Streams the current selection, the file's screen inventory, and answers the
+ * server's on-demand requests for any node and its exported assets. The UI
+ * iframe is a pure relay to/from the localhost WebSocket.
  */
 
 const PLUGIN_VERSION = "0.0.1";
+const PANEL = { w: 300, h: 360 };
+const DOT = { w: 72, h: 72 };
 
-figma.showUI(__html__, { width: 264, height: 208, title: "Plumb" });
+figma.showUI(__html__, { width: PANEL.w, height: PANEL.h, title: "Plumb" });
+
+/* ------------------------------------------------------------------ */
+/* Serialization — Figma scene node → the REST-shaped model            */
+/* ------------------------------------------------------------------ */
 
 interface SerialNode {
   id: string;
@@ -21,41 +26,23 @@ interface SerialNode {
 }
 
 const WEIGHTS: Record<string, number> = {
-  thin: 100,
-  hairline: 100,
-  extralight: 200,
-  ultralight: 200,
-  light: 300,
-  normal: 400,
-  regular: 400,
-  book: 400,
-  medium: 500,
-  semibold: 600,
-  demibold: 600,
-  bold: 700,
-  extrabold: 800,
-  ultrabold: 800,
-  black: 900,
-  heavy: 900,
+  thin: 100, hairline: 100, extralight: 200, ultralight: 200, light: 300,
+  normal: 400, regular: 400, book: 400, medium: 500, semibold: 600,
+  demibold: 600, bold: 700, extrabold: 800, ultrabold: 800, black: 900, heavy: 900,
 };
 
 function weightOf(styleName: string): number {
-  const key = styleName.toLowerCase().replace(/\s+|italic|oblique/g, "");
-  return WEIGHTS[key] ?? 400;
+  return WEIGHTS[styleName.toLowerCase().replace(/\s+|italic|oblique/g, "")] ?? 400;
 }
 
-/** Serialize a Figma scene node into the REST-shaped model (src/figma/types). */
 function serialize(node: SceneNode): SerialNode {
-  // Figma's scene-graph properties are dynamic by nature; read them loosely.
   const n = node as unknown as Record<string, any>;
   const out: SerialNode = { id: node.id, name: node.name, type: node.type };
 
   if (n.visible === false) out.visible = false;
 
   const bb = n.absoluteBoundingBox;
-  if (bb) {
-    out.absoluteBoundingBox = { x: bb.x, y: bb.y, width: bb.width, height: bb.height };
-  }
+  if (bb) out.absoluteBoundingBox = { x: bb.x, y: bb.y, width: bb.width, height: bb.height };
 
   if (n.layoutMode && n.layoutMode !== "NONE") {
     out.layoutMode = n.layoutMode;
@@ -67,9 +54,7 @@ function serialize(node: SceneNode): SerialNode {
     out.primaryAxisAlignItems = n.primaryAxisAlignItems;
     out.counterAxisAlignItems = n.counterAxisAlignItems;
     if (n.layoutWrap) out.layoutWrap = n.layoutWrap;
-    if (typeof n.counterAxisSpacing === "number") {
-      out.counterAxisSpacing = n.counterAxisSpacing;
-    }
+    if (typeof n.counterAxisSpacing === "number") out.counterAxisSpacing = n.counterAxisSpacing;
   }
 
   if (Array.isArray(n.fills)) out.fills = n.fills;
@@ -117,7 +102,7 @@ function serialize(node: SceneNode): SerialNode {
       const main = (node as InstanceNode).mainComponent;
       if (main) out.componentId = main.id;
     } catch {
-      // mainComponent access can throw on dynamic-page documents — skip
+      // mainComponent can throw on dynamic-page documents — skip
     }
   }
 
@@ -127,6 +112,48 @@ function serialize(node: SceneNode): SerialNode {
   }
 
   return out;
+}
+
+/* ------------------------------------------------------------------ */
+/* Inventory — every screen in the file                               */
+/* ------------------------------------------------------------------ */
+
+const SCREEN_TYPES = ["FRAME", "COMPONENT", "INSTANCE"];
+
+function frameEntry(n: any): { id: string; name: string; w: number; h: number } {
+  const bb = n.absoluteBoundingBox;
+  return {
+    id: n.id,
+    name: n.name,
+    w: bb ? Math.round(bb.width) : 0,
+    h: bb ? Math.round(bb.height) : 0,
+  };
+}
+
+function collectScreens(page: any): { id: string; name: string; w: number; h: number }[] {
+  const out: { id: string; name: string; w: number; h: number }[] = [];
+  for (const child of page.children) {
+    if (child.visible === false) continue;
+    if (child.type === "SECTION" && Array.isArray(child.children)) {
+      for (const inner of child.children) {
+        if (inner.visible !== false && SCREEN_TYPES.indexOf(inner.type) !== -1) {
+          out.push(frameEntry(inner));
+        }
+      }
+    } else if (SCREEN_TYPES.indexOf(child.type) !== -1) {
+      out.push(frameEntry(child));
+    }
+  }
+  return out;
+}
+
+function pushInventory(): void {
+  const pages = figma.root.children.map((page) => ({
+    id: page.id,
+    name: page.name,
+    frames: collectScreens(page),
+  }));
+  figma.ui.postMessage({ type: "inventory", fileName: figma.root.name, pages });
 }
 
 function pushSelection(): void {
@@ -142,25 +169,187 @@ function pushSelection(): void {
   });
 }
 
-figma.ui.onmessage = (message: { type?: string }) => {
-  if (message && message.type === "resync") pushSelection();
+/* ------------------------------------------------------------------ */
+/* Assets — export icons (SVG) and images (PNG)                        */
+/* ------------------------------------------------------------------ */
+
+interface WireAsset { id: string; name: string; format: "SVG" | "PNG"; dataBase64: string }
+
+const VECTOR_TYPES = ["VECTOR", "BOOLEAN_OPERATION", "STAR", "LINE", "POLYGON"];
+const CONTAINER_TYPES = ["FRAME", "GROUP", "INSTANCE", "COMPONENT"];
+const MAX_ASSETS = 150;
+
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+function toBase64(bytes: Uint8Array): string {
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < bytes.length ? bytes[i + 1] : 0;
+    const b2 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+    out += B64[b0 >> 2];
+    out += B64[((b0 & 3) << 4) | (b1 >> 4)];
+    out += i + 1 < bytes.length ? B64[((b1 & 15) << 2) | (b2 >> 6)] : "=";
+    out += i + 2 < bytes.length ? B64[b2 & 63] : "=";
+  }
+  return out;
+}
+
+function hasImageFill(n: any): boolean {
+  return (
+    Array.isArray(n.fills) &&
+    n.fills.some((f: any) => f && f.type === "IMAGE" && f.visible !== false)
+  );
+}
+
+/** A container counts as an icon/illustration: vector art, no text, small. */
+function isIconSubtree(n: any): boolean {
+  let count = 0;
+  let hasVector = false;
+  let ok = true;
+  function walk(x: any): void {
+    if (!ok) return;
+    if (++count > 60) { ok = false; return; }
+    if (x.type === "TEXT" || hasImageFill(x)) { ok = false; return; }
+    if (VECTOR_TYPES.indexOf(x.type) !== -1) hasVector = true;
+    if (Array.isArray(x.children)) for (const c of x.children) walk(c);
+  }
+  walk(n);
+  return ok && hasVector;
+}
+
+function settingsFormat(n: any): "SVG" | "PNG" {
+  if (Array.isArray(n.exportSettings)) {
+    for (const s of n.exportSettings) if (s && s.format === "SVG") return "SVG";
+  }
+  return "PNG";
+}
+
+async function exportNode(n: any, format: "SVG" | "PNG"): Promise<WireAsset> {
+  const settings: any =
+    format === "SVG"
+      ? { format: "SVG" }
+      : { format: "PNG", constraint: { type: "SCALE", value: 2 } };
+  const bytes: Uint8Array = await n.exportAsync(settings);
+  return { id: n.id, name: n.name, format, dataBase64: toBase64(bytes) };
+}
+
+async function collectAssets(root: SceneNode): Promise<WireAsset[]> {
+  const assets: WireAsset[] = [];
+  async function visit(n: any): Promise<void> {
+    if (assets.length >= MAX_ASSETS || n.visible === false) return;
+    const hasExport = Array.isArray(n.exportSettings) && n.exportSettings.length > 0;
+    if (hasExport) {
+      assets.push(await exportNode(n, settingsFormat(n)));
+      return;
+    }
+    if (VECTOR_TYPES.indexOf(n.type) !== -1) {
+      assets.push(await exportNode(n, "SVG"));
+      return;
+    }
+    if (CONTAINER_TYPES.indexOf(n.type) !== -1 && isIconSubtree(n)) {
+      assets.push(await exportNode(n, "SVG"));
+      return;
+    }
+    if (hasImageFill(n)) {
+      assets.push(await exportNode(n, "PNG"));
+    }
+    if (Array.isArray(n.children)) {
+      for (const c of n.children) await visit(c);
+    }
+  }
+  await visit(root);
+  return assets;
+}
+
+/* ------------------------------------------------------------------ */
+/* Server requests, relayed through the UI iframe                      */
+/* ------------------------------------------------------------------ */
+
+function reply(message: unknown): void {
+  figma.ui.postMessage({ type: "plugin-reply", reply: message });
+}
+
+async function handleServerRequest(req: any): Promise<void> {
+  if (!req || typeof req.t !== "string") return;
+
+  if (req.t === "get-node") {
+    const node = await figma.getNodeByIdAsync(req.nodeId);
+    if (!node || node.type === "PAGE" || node.type === "DOCUMENT") {
+      reply({ t: "node", reqId: req.reqId, doc: null, nodeName: null });
+      return;
+    }
+    const scene = node as SceneNode;
+    reply({ t: "node", reqId: req.reqId, doc: serialize(scene), nodeName: scene.name });
+    return;
+  }
+
+  if (req.t === "get-assets") {
+    try {
+      const node = await figma.getNodeByIdAsync(req.nodeId);
+      if (!node || node.type === "PAGE" || node.type === "DOCUMENT") {
+        reply({ t: "assets", reqId: req.reqId, assets: [], error: "node not found" });
+        return;
+      }
+      const assets = await collectAssets(node as SceneNode);
+      reply({ t: "assets", reqId: req.reqId, assets, error: null });
+    } catch (e) {
+      reply({
+        t: "assets",
+        reqId: req.reqId,
+        assets: [],
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* UI messages + startup                                               */
+/* ------------------------------------------------------------------ */
+
+figma.ui.onmessage = (message: { type?: string; req?: unknown }) => {
+  if (!message || typeof message.type !== "string") return;
+  switch (message.type) {
+    case "resync":
+      pushSelection();
+      pushInventory();
+      break;
+    case "collapse":
+      figma.ui.resize(DOT.w, DOT.h);
+      break;
+    case "expand":
+      figma.ui.resize(PANEL.w, PANEL.h);
+      break;
+    case "paired":
+      void figma.clientStorage.setAsync("plumb-paired", true);
+      break;
+    case "server-request":
+      void handleServerRequest(message.req);
+      break;
+  }
 };
 
-// Debounced watch mode — re-stream after the designer edits.
-let changeTimer: ReturnType<typeof setTimeout> | null = null;
-
 async function start(): Promise<void> {
-  // documentAccess "dynamic-page" requires every page to be loaded before a
-  // document-wide change handler can be registered.
+  // documentAccess "dynamic-page" requires all pages loaded before the
+  // document-wide change handler — and before reading other pages' children.
   await figma.loadAllPagesAsync();
 
+  const wasPaired = (await figma.clientStorage.getAsync("plumb-paired")) === true;
+  figma.ui.postMessage({ type: "init", autoPair: wasPaired });
+
   figma.on("selectionchange", pushSelection);
+
+  let changeTimer: ReturnType<typeof setTimeout> | null = null;
   figma.on("documentchange", () => {
     if (changeTimer !== null) clearTimeout(changeTimer);
-    changeTimer = setTimeout(pushSelection, 400);
+    changeTimer = setTimeout(() => {
+      pushSelection();
+      pushInventory();
+    }, 400);
   });
 
   pushSelection();
+  pushInventory();
 }
 
 void start();
