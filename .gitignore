@@ -1,6 +1,7 @@
 node_modules/
 dist/
 figma-plugin/code.js
+plumb-assets/
 *.log
 .DS_Store
 .env

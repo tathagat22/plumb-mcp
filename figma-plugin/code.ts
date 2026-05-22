@@ -235,29 +235,36 @@ async function exportNode(n: any, format: "SVG" | "PNG"): Promise<WireAsset> {
 
 async function collectAssets(root: SceneNode): Promise<WireAsset[]> {
   const assets: WireAsset[] = [];
-  async function visit(n: any): Promise<void> {
+  async function visit(n: any, isRoot: boolean): Promise<void> {
     if (assets.length >= MAX_ASSETS || n.visible === false) return;
-    const hasExport = Array.isArray(n.exportSettings) && n.exportSettings.length > 0;
-    if (hasExport) {
-      assets.push(await exportNode(n, settingsFormat(n)));
-      return;
+
+    // The root is the screen the agent asked for — never export the whole
+    // screen as one asset; always descend so we collect what is *inside* it.
+    if (!isRoot) {
+      const hasExport = Array.isArray(n.exportSettings) && n.exportSettings.length > 0;
+      if (hasExport) {
+        assets.push(await exportNode(n, settingsFormat(n)));
+        return;
+      }
+      if (VECTOR_TYPES.indexOf(n.type) !== -1) {
+        assets.push(await exportNode(n, "SVG"));
+        return;
+      }
+      if (CONTAINER_TYPES.indexOf(n.type) !== -1 && isIconSubtree(n)) {
+        assets.push(await exportNode(n, "SVG"));
+        return;
+      }
+      if (hasImageFill(n)) {
+        assets.push(await exportNode(n, "PNG"));
+        // fall through to recurse — image-fill nodes can still have children
+      }
     }
-    if (VECTOR_TYPES.indexOf(n.type) !== -1) {
-      assets.push(await exportNode(n, "SVG"));
-      return;
-    }
-    if (CONTAINER_TYPES.indexOf(n.type) !== -1 && isIconSubtree(n)) {
-      assets.push(await exportNode(n, "SVG"));
-      return;
-    }
-    if (hasImageFill(n)) {
-      assets.push(await exportNode(n, "PNG"));
-    }
+
     if (Array.isArray(n.children)) {
-      for (const c of n.children) await visit(c);
+      for (const c of n.children) await visit(c, false);
     }
   }
-  await visit(root);
+  await visit(root, true);
   return assets;
 }
 
