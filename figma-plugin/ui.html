@@ -3,44 +3,55 @@
 <head>
 <meta charset="utf-8" />
 <style>
-  body { font: 12px -apple-system, BlinkMacSystemFont, sans-serif; margin: 0;
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+  body { font: 12px -apple-system, BlinkMacSystemFont, sans-serif;
     color: #1a1a1a; background: #fff; }
-  #panel { padding: 14px; }
-  .row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: #c0392b; flex: none; }
+
+  /* expanded panel */
+  #panel { padding: 12px; display: flex; flex-direction: column;
+    gap: 6px; height: 100%; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%;
+    background: #c0392b; flex: none; }
   .dot.wait { background: #f39c12; }
   .dot.on { background: #2ecc71; }
-  #status { font-weight: 600; }
-  #info { color: #666; margin-bottom: 12px; line-height: 1.5; }
-  button { font: inherit; font-weight: 600; padding: 9px 12px; width: 100%;
-    border: 0; border-radius: 6px; background: #8b6cff; color: #fff; cursor: pointer; }
-  button:disabled { background: #e6e6e6; color: #aaa; cursor: default; }
-  button.ghost { background: #f1f1f4; color: #444; margin-top: 8px; }
-  .warn { color: #9a9a9a; margin-top: 12px; font-size: 11px; line-height: 1.45; }
-  .warn b { color: #c0392b; }
-  /* collapsed dot view */
-  #collapsed { display: none; width: 72px; height: 72px; align-items: center;
-    justify-content: center; cursor: pointer; }
-  #bigdot { width: 30px; height: 30px; border-radius: 50%; background: #c0392b;
-    box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+  #title { font-weight: 600; }
+  #status { color: #666; font-size: 11px; min-height: 14px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #actions { display: flex; gap: 6px; margin-top: auto; }
+  button { font: inherit; font-size: 12px; padding: 7px 10px; flex: 1;
+    border: 0; border-radius: 5px; background: #8b6cff; color: #fff;
+    cursor: pointer; font-weight: 600; }
+  button:disabled { background: #e6e6e6; color: #999; cursor: default;
+    font-weight: 400; }
+  button.ghost { background: #f1f1f4; color: #555; }
+  button.ghost:hover { background: #e8e8ec; }
+
+  /* collapsed dot — fills whatever window size we end up at */
+  #collapsed { display: none; position: absolute; inset: 0;
+    align-items: center; justify-content: center; cursor: pointer; }
+  #bigdot { width: 26px; height: 26px; border-radius: 50%;
+    background: #c0392b; box-shadow: 0 1px 3px rgba(0,0,0,.2);
+    transition: transform .1s; }
   #bigdot.wait { background: #f39c12; }
   #bigdot.on { background: #2ecc71; }
+  #collapsed:hover #bigdot { transform: scale(1.15); }
+
   body.mini #panel { display: none; }
   body.mini #collapsed { display: flex; }
 </style>
 </head>
 <body>
   <div id="panel">
-    <div class="row"><div class="dot" id="dot"></div><span id="status">Connecting…</span></div>
-    <div id="info">No selection</div>
-    <button id="pair" disabled>Pair with Plumb</button>
-    <button id="hide" class="ghost">Hide ▾</button>
-    <div class="warn">
-      <b>Don't close (✕)</b> — that stops Plumb. Click <b>Hide</b> to tuck it
-      into a dot; click the dot to bring it back.
+    <div class="row"><div class="dot" id="dot"></div><span id="title">Plumb</span></div>
+    <div id="status">Connecting…</div>
+    <div id="actions">
+      <button id="pair" disabled>Pair</button>
+      <button id="hide" class="ghost">Minimize</button>
     </div>
   </div>
-  <div id="collapsed" title="Click to expand Plumb"><div id="bigdot"></div></div>
+  <div id="collapsed" title="Click to expand"><div id="bigdot"></div></div>
 <script>
   var PORTS = [31337, 31338, 31339, 31340, 31341];
   var PLUGIN_VERSION = "0.0.1";
@@ -50,7 +61,6 @@
   var dot = document.getElementById("dot");
   var bigdot = document.getElementById("bigdot");
   var statusEl = document.getElementById("status");
-  var infoEl = document.getElementById("info");
   var pairBtn = document.getElementById("pair");
   var hideBtn = document.getElementById("hide");
   var collapsed = document.getElementById("collapsed");
@@ -58,23 +68,27 @@
   function setState(cls, text) {
     dot.className = "dot" + (cls ? " " + cls : "");
     bigdot.className = cls ? cls : "";
-    statusEl.textContent = text;
+    if (text !== undefined) statusEl.textContent = text;
+  }
+
+  function refreshStatus() {
+    if (!paired) return;
+    var bits = [];
+    if (lastInventory) {
+      var n = lastInventory.pages.reduce(function (acc, p) {
+        return acc + p.frames.length;
+      }, 0);
+      bits.push(n + " screens");
+    }
+    if (lastSelection && lastSelection.nodeName) {
+      var s = lastSelection.nodeName;
+      bits.push("· " + (s.length > 22 ? s.slice(0, 22) + "…" : s));
+    }
+    statusEl.textContent = bits.length ? bits.join(" ") : "Paired";
   }
 
   function toMain(msg) { parent.postMessage({ pluginMessage: msg }, "*"); }
-
-  function send(obj) {
-    if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
-  }
-
-  function refreshInfo() {
-    var bits = [];
-    if (lastInventory) bits.push(lastInventory.pages.reduce(function (n, p) {
-      return n + p.frames.length; }, 0) + " screens in file");
-    bits.push(lastSelection && lastSelection.nodeName
-      ? "Selected: " + lastSelection.nodeName : "No selection");
-    infoEl.textContent = bits.join(" · ");
-  }
+  function send(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
 
   function connect() {
     var port = PORTS[portIdx % PORTS.length];
@@ -95,14 +109,15 @@
           setState("wait", "Pairing…");
           send({ t: "pair", pluginVersion: PLUGIN_VERSION });
         } else {
-          setState("wait", "Found Plumb — not paired");
+          setState("wait", "Not paired");
           pairBtn.disabled = false;
         }
       } else if (msg.t === "paired") {
         paired = true;
         pairBtn.disabled = true;
-        pairBtn.textContent = "Paired ✓";
-        setState("on", "Paired");
+        pairBtn.textContent = "Paired";
+        setState("on");
+        refreshStatus();
         toMain({ type: "paired" });
         toMain({ type: "resync" });
       } else if (msg.t === "pair-rejected") {
@@ -118,7 +133,7 @@
       if (helloTimer) { clearTimeout(helloTimer); helloTimer = null; }
       paired = false;
       pairBtn.disabled = true;
-      pairBtn.textContent = "Pair with Plumb";
+      pairBtn.textContent = "Pair";
       setState("", "Disconnected — retrying…");
       setTimeout(connect, 1500);
     };
@@ -141,11 +156,9 @@
     toMain({ type: "expand" });
   };
 
-  // Messages from the plugin main thread (code.ts).
   window.onmessage = function (event) {
     var msg = event.data && event.data.pluginMessage;
     if (!msg || !msg.type) return;
-
     if (msg.type === "init") {
       autoPair = msg.autoPair === true;
       if (autoPair) {
@@ -154,14 +167,14 @@
       }
     } else if (msg.type === "selection") {
       lastSelection = msg;
-      refreshInfo();
+      refreshStatus();
       if (paired) {
         send({ t: "selection", doc: msg.doc, fileName: msg.fileName,
           pageName: msg.pageName, nodeName: msg.nodeName });
       }
     } else if (msg.type === "inventory") {
       lastInventory = msg;
-      refreshInfo();
+      refreshStatus();
       if (paired) {
         send({ t: "inventory", fileName: msg.fileName, pages: msg.pages });
       }

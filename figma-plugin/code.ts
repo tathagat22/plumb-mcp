@@ -9,8 +9,8 @@
  */
 
 const PLUGIN_VERSION = "0.0.1";
-const PANEL = { w: 300, h: 360 };
-const DOT = { w: 72, h: 72 };
+const PANEL = { w: 240, h: 144 };
+const DOT = { w: 60, h: 60 };
 
 figma.showUI(__html__, { width: PANEL.w, height: PANEL.h, title: "Plumb" });
 
@@ -201,20 +201,37 @@ function hasImageFill(n: any): boolean {
   );
 }
 
-/** A container counts as an icon/illustration: vector art, no text, small. */
+/** A container counts as an icon/illustration: vector art, no text, bounded. */
 function isIconSubtree(n: any): boolean {
   let count = 0;
   let hasVector = false;
   let ok = true;
   function walk(x: any): void {
     if (!ok) return;
-    if (++count > 60) { ok = false; return; }
+    if (++count > 200) { ok = false; return; }
     if (x.type === "TEXT" || hasImageFill(x)) { ok = false; return; }
     if (VECTOR_TYPES.indexOf(x.type) !== -1) hasVector = true;
     if (Array.isArray(x.children)) for (const c of x.children) walk(c);
   }
   walk(n);
   return ok && hasVector;
+}
+
+/** Designer-created GROUP nodes are intentional groupings — export the whole
+ *  group as one SVG whenever it contains vectors and no text, regardless of
+ *  size. This preserves multi-layer icon groups instead of fragmenting them. */
+function isVectorGroup(n: any): boolean {
+  if (n.type !== "GROUP") return false;
+  let hasVector = false;
+  let hasText = false;
+  function walk(x: any): void {
+    if (hasText) return;
+    if (x.type === "TEXT") { hasText = true; return; }
+    if (VECTOR_TYPES.indexOf(x.type) !== -1) hasVector = true;
+    if (Array.isArray(x.children)) for (const c of x.children) walk(c);
+  }
+  walk(n);
+  return hasVector && !hasText;
 }
 
 function settingsFormat(n: any): "SVG" | "PNG" {
@@ -244,6 +261,12 @@ async function collectAssets(root: SceneNode): Promise<WireAsset[]> {
       const hasExport = Array.isArray(n.exportSettings) && n.exportSettings.length > 0;
       if (hasExport) {
         assets.push(await exportNode(n, settingsFormat(n)));
+        return;
+      }
+      // GROUP — preserve the designer's grouping; one SVG instead of
+      // splitting it into the individual vectors inside.
+      if (isVectorGroup(n)) {
+        assets.push(await exportNode(n, "SVG"));
         return;
       }
       if (VECTOR_TYPES.indexOf(n.type) !== -1) {
