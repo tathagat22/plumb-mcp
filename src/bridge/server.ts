@@ -4,7 +4,14 @@ import { bridge } from "./store";
 import { PlumbError } from "../errors";
 import { SERVER_VERSION } from "../meta";
 import type { FigmaNode } from "../figma/types";
-import type { PluginMessage, ServerMessage, WireAsset } from "./protocol";
+import type {
+  ComponentInfo,
+  InstanceInfo,
+  PluginMessage,
+  SearchMatch,
+  ServerMessage,
+  WireAsset,
+} from "./protocol";
 
 let pairedSocket: WebSocket | null = null;
 let reqCounter = 0;
@@ -109,6 +116,49 @@ export function requestAssets(
   );
 }
 
+/** Ask the plugin to render a node as PNG/JPG. */
+export function requestScreenshot(
+  nodeId: string,
+  scale?: number,
+  format?: "PNG" | "JPG",
+): Promise<{
+  dataBase64: string;
+  format: string;
+  nodeName: string | null;
+  error: string | null;
+}> {
+  return request(
+    (reqId) => ({ t: "get-screenshot", reqId, nodeId, scale, format }),
+    60_000,
+    "screenshot",
+  );
+}
+
+/** Ask the plugin to find nodes by name and/or type. */
+export function requestSearch(
+  query?: string,
+  type?: string,
+): Promise<{ matches: SearchMatch[]; error: string | null }> {
+  return request(
+    (reqId) => ({ t: "get-search", reqId, query, type }),
+    30_000,
+    "search",
+  );
+}
+
+/** Ask the plugin to gather every component definition + instance usage. */
+export function requestComponents(): Promise<{
+  components: ComponentInfo[];
+  instances: InstanceInfo[];
+  error: string | null;
+}> {
+  return request(
+    (reqId) => ({ t: "get-components", reqId }),
+    60_000,
+    "components",
+  );
+}
+
 function bindPort(port: number): Promise<WebSocketServer | null> {
   return new Promise((resolve) => {
     const wss = new WebSocketServer({ host: "127.0.0.1", port });
@@ -195,6 +245,24 @@ export async function startBridge(): Promise<void> {
           break;
         case "assets":
           resolvePending(msg.reqId, { assets: msg.assets, error: msg.error });
+          break;
+        case "screenshot":
+          resolvePending(msg.reqId, {
+            dataBase64: msg.dataBase64,
+            format: msg.format,
+            nodeName: msg.nodeName,
+            error: msg.error,
+          });
+          break;
+        case "search":
+          resolvePending(msg.reqId, { matches: msg.matches, error: msg.error });
+          break;
+        case "components":
+          resolvePending(msg.reqId, {
+            components: msg.components,
+            instances: msg.instances,
+            error: msg.error,
+          });
           break;
         case "pong":
           break;

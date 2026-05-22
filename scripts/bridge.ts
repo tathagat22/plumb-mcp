@@ -17,6 +17,7 @@ import { bridge } from "../src/bridge/store";
 import { createServer } from "../src/server";
 
 process.env.PLUMB_ASSETS_DIR = join(tmpdir(), `plumb-bridge-${Date.now()}`);
+process.env.PLUMB_SCREENSHOTS_DIR = join(tmpdir(), `plumb-bridge-shots-${Date.now()}`);
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = JSON.parse(
@@ -58,6 +59,45 @@ ws.on("message", (raw) => {
         reqId: msg.reqId,
         doc: fixture,
         nodeName: "Export employees · dialog",
+      }),
+    );
+  }
+  if (msg.t === "get-screenshot") {
+    ws.send(
+      JSON.stringify({
+        t: "screenshot",
+        reqId: msg.reqId,
+        dataBase64: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString("base64"),
+        format: (msg as any).format ?? "PNG",
+        nodeName: "Test Screen",
+        error: null,
+      }),
+    );
+  }
+  if (msg.t === "get-search") {
+    ws.send(
+      JSON.stringify({
+        t: "search",
+        reqId: msg.reqId,
+        error: null,
+        matches: [
+          { id: "a1", name: "Primary Button", type: "INSTANCE", page: "Page 1", w: 120, h: 40 },
+          { id: "a2", name: "Secondary Button", type: "INSTANCE", page: "Page 1", w: 120, h: 40 },
+        ],
+      }),
+    );
+  }
+  if (msg.t === "get-components") {
+    ws.send(
+      JSON.stringify({
+        t: "components",
+        reqId: msg.reqId,
+        error: null,
+        components: [{ id: "c1", name: "Button", page: "Page 1", w: 120, h: 40, instanceCount: 2 }],
+        instances: [
+          { id: "a1", name: "Primary Button", componentId: "c1", page: "Page 1" },
+          { id: "a2", name: "Secondary Button", componentId: "c1", page: "Page 1" },
+        ],
       }),
     );
   }
@@ -190,6 +230,37 @@ check(
     typeof surgical.assets?.[0]?.path === "string" &&
     existsSync(surgical.assets[0].path),
   `${surgical.count} files`,
+);
+
+const shot = parse(
+  await client.callTool({ name: "plumb_screenshot", arguments: { id: "131:6950" } }),
+);
+check(
+  "plumb_screenshot writes a PNG and returns the path",
+  typeof shot.path === "string" &&
+    shot.format === "PNG" &&
+    existsSync(shot.path) &&
+    typeof shot.bytes === "number" &&
+    shot.bytes > 0,
+  shot.path,
+);
+
+const found = parse(
+  await client.callTool({ name: "plumb_search", arguments: { query: "button" } }),
+);
+check(
+  "plumb_search returns matches",
+  found.count === 2 && Array.isArray(found.matches),
+  `${found.count} matches`,
+);
+
+const comps = parse(
+  await client.callTool({ name: "plumb_components", arguments: {} }),
+);
+check(
+  "plumb_components returns components + instances",
+  comps.componentCount === 1 && comps.instanceCount === 2,
+  `${comps.componentCount} comp, ${comps.instanceCount} inst`,
 );
 
 const status = parse(await client.callTool({ name: "plumb_status", arguments: {} }));

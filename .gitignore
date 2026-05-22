@@ -2,6 +2,7 @@ node_modules/
 dist/
 figma-plugin/code.js
 plumb-assets/
+plumb-screenshots/
 *.log
 .DS_Store
 .env

@@ -358,6 +358,141 @@ function reply(message: unknown): void {
   figma.ui.postMessage({ type: "plugin-reply", reply: message });
 }
 
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+async function handleGetScreenshot(
+  reqId: string,
+  nodeId: string,
+  scale?: number,
+  format?: "PNG" | "JPG",
+): Promise<void> {
+  try {
+    const node = await figma.getNodeByIdAsync(nodeId);
+    if (!node || node.type === "PAGE" || node.type === "DOCUMENT") {
+      reply({
+        t: "screenshot",
+        reqId,
+        dataBase64: "",
+        format: "",
+        nodeName: null,
+        error: "node not found",
+      });
+      return;
+    }
+    const f = format ?? "PNG";
+    const s = scale ?? 2;
+    const settings: any = { format: f, constraint: { type: "SCALE", value: s } };
+    const bytes: Uint8Array = await (node as any).exportAsync(settings);
+    reply({
+      t: "screenshot",
+      reqId,
+      dataBase64: toBase64(bytes),
+      format: f,
+      nodeName: (node as any).name ?? null,
+      error: null,
+    });
+  } catch (e) {
+    reply({
+      t: "screenshot",
+      reqId,
+      dataBase64: "",
+      format: "",
+      nodeName: null,
+      error: errMsg(e),
+    });
+  }
+}
+
+async function handleGetSearch(
+  reqId: string,
+  query?: string,
+  type?: string,
+): Promise<void> {
+  try {
+    const q = (query ?? "").trim().toLowerCase();
+    const t = (type ?? "").toUpperCase();
+    const matches: any[] = [];
+    const MAX = 50;
+    function visit(n: any, page: string, parent: string): void {
+      if (matches.length >= MAX) return;
+      if (n.visible === false) return;
+      const nameOk = !q || ((n.name ?? "") as string).toLowerCase().indexOf(q) !== -1;
+      const typeOk = !t || n.type === t;
+      if (nameOk && typeOk && n.type !== "PAGE" && n.type !== "DOCUMENT") {
+        const bb = n.absoluteBoundingBox;
+        const m: any = {
+          id: n.id,
+          name: n.name,
+          type: n.type,
+          page,
+          w: bb ? Math.round(bb.width) : 0,
+          h: bb ? Math.round(bb.height) : 0,
+        };
+        if (parent) m.parentName = parent;
+        matches.push(m);
+      }
+      // Skip INSTANCE children — they are component mirrors that would flood results.
+      if (Array.isArray(n.children) && n.type !== "INSTANCE") {
+        for (const c of n.children) visit(c, page, n.name);
+      }
+    }
+    for (const page of figma.root.children) {
+      for (const child of page.children) visit(child, page.name, "");
+    }
+    reply({ t: "search", reqId, matches, error: null });
+  } catch (e) {
+    reply({ t: "search", reqId, matches: [], error: errMsg(e) });
+  }
+}
+
+async function handleGetComponents(reqId: string): Promise<void> {
+  try {
+    const components: any[] = [];
+    const instances: any[] = [];
+    const instanceCount = new Map<string, number>();
+
+    function visit(n: any, page: string): void {
+      if (n.visible === false) return;
+      if (n.type === "COMPONENT" || n.type === "COMPONENT_SET") {
+        const bb = n.absoluteBoundingBox;
+        const c: any = {
+          id: n.id,
+          name: n.name,
+          page,
+          w: bb ? Math.round(bb.width) : 0,
+          h: bb ? Math.round(bb.height) : 0,
+          instanceCount: 0,
+        };
+        if (n.description) c.description = n.description;
+        components.push(c);
+      } else if (n.type === "INSTANCE") {
+        try {
+          const main = n.mainComponent;
+          if (main) {
+            instances.push({ id: n.id, name: n.name, componentId: main.id, page });
+            instanceCount.set(main.id, (instanceCount.get(main.id) ?? 0) + 1);
+          }
+        } catch {
+          // mainComponent can throw under dynamic-page — skip
+        }
+      }
+      if (Array.isArray(n.children) && n.type !== "INSTANCE") {
+        for (const c of n.children) visit(c, page);
+      }
+    }
+    for (const page of figma.root.children) {
+      for (const child of page.children) visit(child, page.name);
+    }
+    for (const c of components) c.instanceCount = instanceCount.get(c.id) ?? 0;
+
+    reply({ t: "components", reqId, components, instances, error: null });
+  } catch (e) {
+    reply({ t: "components", reqId, components: [], instances: [], error: errMsg(e) });
+  }
+}
+
 async function handleServerRequest(req: any): Promise<void> {
   if (!req || typeof req.t !== "string") return;
 
@@ -398,6 +533,22 @@ async function handleServerRequest(req: any): Promise<void> {
         error: e instanceof Error ? e.message : String(e),
       });
     }
+    return;
+  }
+
+  if (req.t === "get-screenshot") {
+    await handleGetScreenshot(req.reqId, req.nodeId, req.scale, req.format);
+    return;
+  }
+
+  if (req.t === "get-search") {
+    await handleGetSearch(req.reqId, req.query, req.type);
+    return;
+  }
+
+  if (req.t === "get-components") {
+    await handleGetComponents(req.reqId);
+    return;
   }
 }
 
