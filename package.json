@@ -20,6 +20,8 @@
     "typecheck": "tsc --noEmit",
     "prove": "tsx scripts/prove.ts",
     "outline": "tsx scripts/outline.ts",
+    "live": "tsx scripts/live.ts",
+    "check": "tsx scripts/check.ts",
     "smoke": "tsx scripts/smoke.ts"
   },
   "dependencies": {

@@ -1,8 +1,10 @@
 import { z } from "zod";
+import { cacheGet, cacheSet, DEFAULT_TTL_MS } from "../cache";
 import { fetchNodeViaRest } from "../figma/rest";
-import { normalize } from "../normalize/normalize";
+import { normalizeToBudget } from "../normalize/budget";
 import { fail, ok, requireToken } from "./shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { PdsDocument } from "../pds";
 
 const DESCRIPTION =
   "Extract a Figma node as a compact, normalized Plumb Design Spec (PDS): " +
@@ -53,21 +55,32 @@ export function registerPlumbNode(server: McpServer): void {
     },
     async (args) => {
       try {
+        const requestedDepth = args.depth ?? 3;
+        const cacheKey =
+          `node:${args.fileKey}:${args.id}:${requestedDepth}:` +
+          `${args.notes ? 1 : 0}:${args.maxTokens ?? 0}`;
+
+        const hit = cacheGet<PdsDocument>(cacheKey, DEFAULT_TTL_MS);
+        if (hit) return ok({ ...hit.payload, cached: true });
+
         const token = requireToken();
-        const depth = args.depth ?? 3;
         // Fetch one level deeper than we disclose, so boundary nodes get an
         // accurate `more` child count.
         const file = await fetchNodeViaRest({
           fileKey: args.fileKey,
           nodeId: args.id,
-          depth: depth + 1,
+          depth: requestedDepth + 1,
           token,
         });
-        const pds = normalize(file, depth, {
+
+        // Fit-to-budget (plan §6.4): step the disclosure depth down until the
+        // PDS fits maxTokens (a no-op when maxTokens is unset).
+        const pds = normalizeToBudget(file, requestedDepth, args.maxTokens, {
           notes: args.notes,
-          maxTokens: args.maxTokens,
         });
-        return ok(pds);
+
+        cacheSet(cacheKey, file.version, pds);
+        return ok({ ...pds, cached: false });
       } catch (e) {
         return fail(e);
       }

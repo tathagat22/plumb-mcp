@@ -26,6 +26,7 @@ loads `.env` automatically. Or pass the vars inline.
 cp .env.example .env       # then edit: FIGMA_TOKEN + PLUMB_FILE_KEY
 npm run prove              # normalizer depth/token curve
 npm run outline            # the file's pages and top-level frames
+npm run live               # end-to-end MCP test: fit-to-budget + cache
 ```
 
 - `FIGMA_TOKEN` — a read-only Figma personal access token

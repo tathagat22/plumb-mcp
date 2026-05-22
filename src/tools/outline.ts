@@ -1,8 +1,10 @@
 import { z } from "zod";
+import { cacheGet, cacheSet, DEFAULT_TTL_MS } from "../cache";
 import { fetchFileOutline } from "../figma/rest";
 import { buildOutline } from "../normalize/outline";
 import { fail, ok, requireToken } from "./shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { OutlineDocument } from "../normalize/outline";
 
 const DESCRIPTION =
   "Map a Figma file cheaply: its pages and their top-level frames (id, name, " +
@@ -25,15 +27,19 @@ export function registerPlumbOutline(server: McpServer): void {
     },
     async (args) => {
       try {
+        const cacheKey = `outline:${args.fileKey}`;
+        const hit = cacheGet<OutlineDocument>(cacheKey, DEFAULT_TTL_MS);
+        if (hit) return ok({ ...hit.payload, cached: true });
+
         const token = requireToken();
         const file = await fetchFileOutline(args.fileKey, token);
-        return ok(
-          buildOutline(file.document, {
-            key: args.fileKey,
-            name: file.fileName,
-            version: file.version,
-          }),
-        );
+        const outline = buildOutline(file.document, {
+          key: args.fileKey,
+          name: file.fileName,
+          version: file.version,
+        });
+        cacheSet(cacheKey, file.version, outline);
+        return ok({ ...outline, cached: false });
       } catch (e) {
         return fail(e);
       }
