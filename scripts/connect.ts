@@ -111,8 +111,54 @@ if (assets.ambiguous) {
   }
 }
 
+/* --- plumb_screenshot --------------------------------------------------- */
+const shot = parse(
+  await client.callTool({ name: "plumb_screenshot", arguments: { name: target } }),
+);
+if (shot.error) {
+  console.error(`\nplumb_screenshot → ERROR: ${shot.error}`);
+} else if (shot.path) {
+  console.log(
+    `\nplumb_screenshot → ${shot.path}  (${shot.format}, ${shot.bytes}B at ${shot.scale}×)`,
+  );
+}
+
+/* --- plumb_search ------------------------------------------------------- */
+const found = parse(
+  await client.callTool({ name: "plumb_search", arguments: { type: "INSTANCE" } }),
+);
+if (!found.error) {
+  console.log(`\nplumb_search (type=INSTANCE) → ${found.count} match(es):`);
+  for (const m of ((found.matches ?? []) as Array<Record<string, any>>).slice(0, 6)) {
+    console.log(`   · ${m.name} [${m.type}] (${m.w}×${m.h}) on "${m.page}"  [${m.id}]`);
+  }
+  if ((found.matches?.length ?? 0) > 6) {
+    console.log(`   … and ${found.matches.length - 6} more.`);
+  }
+}
+
+/* --- plumb_components --------------------------------------------------- */
+const comps = parse(
+  await client.callTool({ name: "plumb_components", arguments: {} }),
+);
+if (!comps.error) {
+  console.log(
+    `\nplumb_components → ${comps.componentCount} component(s), ${comps.instanceCount} instance(s)`,
+  );
+  for (const c of ((comps.components ?? []) as Array<Record<string, any>>).slice(0, 6)) {
+    console.log(
+      `   · ${c.name}  (${c.w}×${c.h}, used ${c.instanceCount}×)  [${c.id}]`,
+    );
+  }
+  if ((comps.components?.length ?? 0) > 6) {
+    console.log(`   … and ${comps.components.length - 6} more.`);
+  }
+}
+
 await client.close();
 await server.close();
 console.log("─".repeat(64));
-console.log("✓ PASS: live plugin path — inventory + by-name fetch + asset export.");
+console.log(
+  "✓ PASS: live plugin path — inventory · by-name fetch · assets · screenshot · search · components.",
+);
 process.exit(0);
