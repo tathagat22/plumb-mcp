@@ -7,30 +7,7 @@
   "editorType": ["figma"],
   "documentAccess": "dynamic-page",
   "networkAccess": {
-    "allowedDomains": [
-      "http://127.0.0.1:31337",
-      "http://127.0.0.1:31338",
-      "http://127.0.0.1:31339",
-      "http://127.0.0.1:31340",
-      "http://127.0.0.1:31341",
-      "http://localhost:31337",
-      "http://localhost:31338",
-      "http://localhost:31339",
-      "http://localhost:31340",
-      "http://localhost:31341"
-    ],
-    "devAllowedDomains": [
-      "http://127.0.0.1:31337",
-      "http://127.0.0.1:31338",
-      "http://127.0.0.1:31339",
-      "http://127.0.0.1:31340",
-      "http://127.0.0.1:31341",
-      "http://localhost:31337",
-      "http://localhost:31338",
-      "http://localhost:31339",
-      "http://localhost:31340",
-      "http://localhost:31341"
-    ],
-    "reasoning": "Connects only to the local Plumb MCP server on 127.0.0.1 to stream the current selection. No external network access."
+    "allowedDomains": ["*"],
+    "reasoning": "Connects only to the local Plumb MCP server on 127.0.0.1 (ports 31337-31341) to stream the current selection. The wildcard is used for local development; it will be narrowed before any Figma Community submission."
   }
 }
