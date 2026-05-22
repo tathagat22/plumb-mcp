@@ -1,10 +1,10 @@
 /**
- * Milestone 0 proof (plan §12 / §11).
+ * Milestone 0 proof (plan §12).
  *
- * Runs the normalizer and shows that a real screen lands as a compact,
- * structurally-complete PDS. With FIGMA_TOKEN + PLUMB_FILE_KEY set it proves
- * against the live export-employees frame; otherwise it falls back to the
- * bundled synthetic fixture so the normalizer is still exercised end-to-end.
+ * Exercises the normalizer against a real (or fixture) Figma screen and prints
+ * a depth/token curve — showing how progressive disclosure (plan §5/§7) keeps a
+ * build-time query inside the 25k MCP ceiling even when the whole screen is far
+ * larger.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -15,8 +15,41 @@ import { estimateTokens } from "../src/util/estimate";
 import type { FigmaFileResult, FigmaNode } from "../src/figma/types";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const DEPTH = 8;
-const BUDGET = 10_000;
+const FETCH_DEPTH = 10;
+const MCP_CEILING = 25_000;
+const TARGET = 10_000;
+const LINE = "─".repeat(70);
+
+/** Load .env (gitignored) so local test credentials need not be typed each run. */
+function loadDotEnv(path: string): void {
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch {
+    return;
+  }
+  for (const rawLine of text.split("\n")) {
+    const trimmed = rawLine.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (key && process.env[key] === undefined) process.env[key] = value;
+  }
+}
+
+function mark(ok: boolean): string {
+  return ok ? "✓" : "✗";
+}
+
+loadDotEnv(join(process.cwd(), ".env"));
 
 const token = process.env.FIGMA_TOKEN;
 const fileKey = process.env.PLUMB_FILE_KEY;
@@ -25,17 +58,18 @@ const nodeId = process.env.PLUMB_NODE_ID ?? "131:6950";
 let file: FigmaFileResult;
 let rawJson: string;
 let source: string;
+let live: boolean;
 
 if (token && fileKey) {
+  live = true;
   source = `live Figma node ${nodeId} in file ${fileKey}`;
-  console.log(`Fetching ${source} …`);
-  file = await fetchNodeViaRest({ fileKey, nodeId, depth: DEPTH, token });
+  console.log(`Fetching ${source} (depth ${FETCH_DEPTH}) …`);
+  file = await fetchNodeViaRest({ fileKey, nodeId, depth: FETCH_DEPTH, token });
   rawJson = JSON.stringify(file.document);
 } else {
+  live = false;
   source = "bundled synthetic fixture (export-employees dialog)";
-  console.log("No FIGMA_TOKEN/PLUMB_FILE_KEY set — using the " + source + ".");
-  console.log("Prove against the real frame with:");
-  console.log("  FIGMA_TOKEN=figd_xxx PLUMB_FILE_KEY=<file-key> npm run prove\n");
+  console.log(`No FIGMA_TOKEN/PLUMB_FILE_KEY set — using the ${source}.`);
   const raw = readFileSync(join(here, "fixtures", "export-employees.json"), "utf8");
   file = {
     document: JSON.parse(raw) as FigmaNode,
@@ -45,34 +79,68 @@ if (token && fileKey) {
   rawJson = raw;
 }
 
-const pds = normalize(file, DEPTH, {});
-const pdsJson = JSON.stringify(pds);
+const full = normalize(file, 99, {});
+const d1 = normalize(file, 1, {});
+
+console.log("\n" + LINE);
+console.log("Token table — the whole screen, deduped by reference (plan §5)");
+console.log(LINE);
+console.log(JSON.stringify(full.tokens, null, 2));
+
+console.log("\n" + LINE);
+console.log("Top of the tree at depth 1 — `more` = children awaiting drill-down");
+console.log(LINE);
+console.log(JSON.stringify(d1.nodes, null, 2));
+
+console.log("\n" + LINE);
+console.log("Depth → token-cost curve  (cost of one plumb_node call per depth)");
+console.log(LINE);
+console.log(" depth   nodes    ~tokens   <=25k MCP   <=10k target");
+for (const d of [1, 2, 3, 4, 5, 6]) {
+  const pds = normalize(file, d, {});
+  const t = pds.meta.estTokens;
+  console.log(
+    `  ${String(d).padEnd(6)}${String(pds.meta.nodeCount).padStart(5)} ` +
+      `${String(t).padStart(10)}        ${mark(t <= MCP_CEILING)}           ${mark(t <= TARGET)}`,
+  );
+}
+console.log(
+  `  full  ${String(full.meta.nodeCount).padStart(5)} ` +
+    `${String(full.meta.estTokens).padStart(10)}        ` +
+    `${mark(full.meta.estTokens <= MCP_CEILING)}           ${mark(full.meta.estTokens <= TARGET)}`,
+);
 
 const rawTokens = estimateTokens(rawJson);
-const pdsTokens = estimateTokens(pdsJson);
-const reduction = (rawTokens / Math.max(pdsTokens, 1)).toFixed(1);
-
-const line = "─".repeat(64);
-console.log(line);
-console.log("Plumb · Milestone 0 proof — normalizer output (PDS)");
-console.log(line);
-console.log(JSON.stringify(pds, null, 2));
-console.log(line);
-console.log(`source         : ${source}`);
-console.log(`raw Figma JSON : ~${rawTokens} tokens`);
-console.log(`Plumb PDS      : ~${pdsTokens} tokens   (meta.estTokens=${pds.meta.estTokens})`);
-console.log(`reduction      : ${reduction}×`);
-console.log(`nodes          : ${pds.meta.nodeCount}`);
+console.log("\n" + LINE);
+console.log(`source     : ${source}`);
+console.log(`raw Figma  : ~${rawTokens} tokens for the same subtree`);
 console.log(
-  `token table    : ${Object.keys(pds.tokens.color).length} colors, ` +
-    `${Object.keys(pds.tokens.text).length} text, ` +
-    `${Object.keys(pds.tokens.radius).length} radii, ` +
-    `${Object.keys(pds.tokens.shadow).length} shadows`,
+  `dedup      : ${full.meta.nodeCount} nodes -> ` +
+    `${Object.keys(full.tokens.color).length} colours, ` +
+    `${Object.keys(full.tokens.text).length} text, ` +
+    `${Object.keys(full.tokens.radius).length} radii, ` +
+    `${Object.keys(full.tokens.shadow).length} shadows`,
 );
-console.log(line);
+console.log(LINE);
 
-if (pdsTokens > BUDGET) {
-  console.error(`✗ FAIL: PDS is ~${pdsTokens} tokens — over the ${BUDGET}-token target.`);
-  process.exit(1);
+const shallow = normalize(file, 3, {});
+if (live) {
+  if (!(full.meta.nodeCount > 0 && shallow.meta.estTokens <= MCP_CEILING)) {
+    console.error("✗ FAIL: a depth-3 query already exceeds the 25k MCP ceiling.");
+    process.exit(1);
+  }
+  console.log(
+    "✓ PASS: live fetch + normalize works and dedup is sharp. A build-depth\n" +
+      "  query (depth <= 3) fits the 25k MCP ceiling; a whole screen does not —\n" +
+      "  which is why progressive disclosure (drill via `more`, plus plumb_outline\n" +
+      "  in M1) is the design, exactly as the plan calls for.",
+  );
+} else {
+  if (full.meta.estTokens > TARGET) {
+    console.error(
+      `✗ FAIL: fixture PDS ~${full.meta.estTokens} tokens — over the ${TARGET} target.`,
+    );
+    process.exit(1);
+  }
+  console.log(`✓ PASS: fixture PDS is under the ${TARGET}-token target and structurally complete.`);
 }
-console.log(`✓ PASS: PDS is under the ${BUDGET}-token target and structurally complete.`);

@@ -44,9 +44,9 @@ export function normalize(
   const minter = new HandleMinter();
   const nodes: Record<string, PdsNode> = {};
 
-  function walk(fn: FigmaNode, isRoot: boolean): string | undefined {
-    // Prune invisible nodes — but never the requested root.
-    if (!isRoot && fn.visible === false) return undefined;
+  function walk(fn: FigmaNode, level: number): string | undefined {
+    // Prune invisible nodes — but never the requested root (level 0).
+    if (level > 0 && fn.visible === false) return undefined;
 
     const el = minter.mint(fn.name ?? "", fn.type ?? "");
     const node: PdsNode = {
@@ -101,18 +101,26 @@ export function normalize(
       if (notes.length) node.notes = notes;
     }
 
-    const childEls: string[] = [];
-    for (const child of fn.children ?? []) {
-      const childEl = walk(child, false);
-      if (childEl) childEls.push(childEl);
+    // Progressive disclosure (plan §5/§7): expand children only while above the
+    // disclosure depth. At the boundary, record how many children exist via
+    // `more` so the agent knows to drill in with another plumb_node call.
+    const kids = (fn.children ?? []).filter((k) => k.visible !== false);
+    if (level >= depth) {
+      if (kids.length) node.more = kids.length;
+    } else {
+      const childEls: string[] = [];
+      for (const child of kids) {
+        const childEl = walk(child, level + 1);
+        if (childEl) childEls.push(childEl);
+      }
+      if (childEls.length) node.children = childEls;
     }
-    if (childEls.length) node.children = childEls;
 
     nodes[el] = node;
     return el;
   }
 
-  const root = walk(file.document, true);
+  const root = walk(file.document, 0);
   if (!root) {
     // Unreachable: the root is force-included regardless of visibility.
     throw new Error("normalize: root node produced no output");
@@ -134,7 +142,8 @@ export function normalize(
     next:
       "Read `tokens` for the design system, then build the UI from `nodes`. " +
       "Tag each rendered element data-plumb-id=\"<el>\". " +
-      "Call plumb_node again on a child `el` to drill deeper.",
+      "A node with a `more` count has that many children not yet included — " +
+      "call plumb_node again on that node's `id` to expand them.",
   };
 
   if (opts.maxTokens && estTokens > opts.maxTokens) {

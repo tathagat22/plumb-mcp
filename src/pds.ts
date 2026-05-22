@@ -51,8 +51,14 @@ export interface PdsNode {
   chars?: string;
   /** mainComponent id (INSTANCE nodes only). */
   component?: string;
-  /** Child `el` handles — drill in via another plumb_node call (progressive disclosure). */
+  /** Child `el` handles — present when this node's children are included. */
   children?: string[];
+  /**
+   * Set instead of `children` at the disclosure boundary: this many children
+   * exist but were not included. Call plumb_node again on this node's `id`
+   * to expand them (progressive disclosure, plan §5/§7).
+   */
+  more?: number;
   /** Opt-in human-readable hints (plan §7). */
   notes?: string[];
 }

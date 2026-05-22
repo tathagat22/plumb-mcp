@@ -18,8 +18,12 @@ npm run smoke       # in-memory MCP handshake + tools/list
 
 ### Prove against the real export-employees frame
 
+Copy `.env.example` to `.env` (gitignored) and fill it in — `npm run prove`
+loads `.env` automatically. Or pass the vars inline.
+
 ```bash
-FIGMA_TOKEN=figd_xxx PLUMB_FILE_KEY=<file-key> npm run prove
+cp .env.example .env       # then edit: FIGMA_TOKEN + PLUMB_FILE_KEY
+npm run prove
 ```
 
 - `FIGMA_TOKEN` — a read-only Figma personal access token

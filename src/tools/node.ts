@@ -62,10 +62,12 @@ export function registerPlumbNode(server: McpServer): void {
           );
         }
         const depth = args.depth ?? 3;
+        // Fetch one level deeper than we disclose, so boundary nodes get an
+        // accurate `more` child count.
         const file = await fetchNodeViaRest({
           fileKey: args.fileKey,
           nodeId: args.id,
-          depth,
+          depth: depth + 1,
           token,
         });
         const pds = normalize(file, depth, {
