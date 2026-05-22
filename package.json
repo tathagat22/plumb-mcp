@@ -5,31 +5,47 @@
   "type": "module",
   "license": "MIT",
   "author": "Tathagat Maitray",
-  "keywords": ["figma", "mcp", "model-context-protocol", "design-to-code", "ai-agent"],
+  "keywords": [
+    "figma",
+    "mcp",
+    "model-context-protocol",
+    "design-to-code",
+    "ai-agent"
+  ],
   "bin": {
     "plumb-mcp": "dist/index.js"
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && tsx scripts/build-plugin.ts",
+    "build:plugin": "tsx scripts/build-plugin.ts",
     "dev": "tsup --watch",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p figma-plugin/tsconfig.json",
     "prove": "tsx scripts/prove.ts",
     "outline": "tsx scripts/outline.ts",
     "live": "tsx scripts/live.ts",
     "check": "tsx scripts/check.ts",
+    "bridge": "tsx scripts/bridge.ts",
     "smoke": "tsx scripts/smoke.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.0",
+    "ws": "^8.21.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@figma/plugin-typings": "^1.127.0",
     "@types/node": "^20.14.0",
+    "@types/ws": "^8.18.1",
+    "esbuild": "^0.28.0",
     "tsup": "^8.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"

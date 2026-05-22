@@ -1,5 +1,6 @@
 node_modules/
 dist/
+figma-plugin/code.js
 *.log
 .DS_Store
 .env

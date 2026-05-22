@@ -1,6 +1,6 @@
 /**
  * Smoke test: a real MCP handshake over an in-memory transport pair.
- * Confirms all four tools register, plumb_status self-describes (key legend),
+ * Confirms all five tools register, plumb_status self-describes (key legend),
  * and that a tool with no FIGMA_TOKEN returns the instruction-shaped error.
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -19,7 +19,13 @@ const { tools } = await client.listTools();
 const names = tools.map((t) => t.name).sort();
 console.log("tools/list →", names.join(", ") || "(none)");
 
-const expected = ["plumb_node", "plumb_outline", "plumb_status", "plumb_tokens"];
+const expected = [
+  "plumb_node",
+  "plumb_outline",
+  "plumb_selection",
+  "plumb_status",
+  "plumb_tokens",
+];
 const missing = expected.filter((n) => !names.includes(n));
 if (missing.length) {
   console.error("✗ FAIL: missing tools:", missing.join(", "));
@@ -53,4 +59,4 @@ console.log("plumb_node (no token) →", JSON.stringify(noToken.content));
 
 await client.close();
 await server.close();
-console.log("✓ PASS: 4 tools registered; plumb_status self-describes; errors are instruction-shaped.");
+console.log("✓ PASS: 5 tools registered; plumb_status self-describes; errors are instruction-shaped.");

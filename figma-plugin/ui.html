@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  body { font: 12px -apple-system, BlinkMacSystemFont, sans-serif; margin: 0;
+    padding: 14px; color: #1a1a1a; background: #fff; }
+  .row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #c0392b; flex: none; }
+  .dot.wait { background: #f39c12; }
+  .dot.on { background: #2ecc71; }
+  #status { font-weight: 600; }
+  #sel { color: #666; margin-bottom: 12px; word-break: break-word; min-height: 16px; }
+  button { font: inherit; font-weight: 600; padding: 9px 12px; width: 100%;
+    border: 0; border-radius: 6px; background: #8b6cff; color: #fff; cursor: pointer; }
+  button:disabled { background: #e6e6e6; color: #aaa; cursor: default; }
+  .hint { color: #9a9a9a; margin-top: 10px; font-size: 11px; line-height: 1.4; }
+</style>
+</head>
+<body>
+  <div class="row"><div class="dot" id="dot"></div><span id="status">Connecting…</span></div>
+  <div id="sel">No selection</div>
+  <button id="pair" disabled>Pair with Plumb</button>
+  <div class="hint">Keep this panel open — closing it stops Plumb. Minimize it instead.</div>
+<script>
+  var PORTS = [31337, 31338, 31339, 31340, 31341];
+  var PLUGIN_VERSION = "0.0.1";
+  var ws = null, paired = false, portIdx = 0, helloTimer = null;
+
+  var dot = document.getElementById("dot");
+  var statusEl = document.getElementById("status");
+  var selEl = document.getElementById("sel");
+  var pairBtn = document.getElementById("pair");
+
+  function setState(cls, text) {
+    dot.className = "dot" + (cls ? " " + cls : "");
+    statusEl.textContent = text;
+  }
+
+  function connect() {
+    var port = PORTS[portIdx % PORTS.length];
+    portIdx++;
+    try {
+      ws = new WebSocket("ws://127.0.0.1:" + port);
+    } catch (e) {
+      setTimeout(connect, 1500);
+      return;
+    }
+
+    ws.onopen = function () {
+      // Expect a plumb-hello promptly, else this port is not Plumb.
+      helloTimer = setTimeout(function () {
+        try { ws.close(); } catch (e) {}
+      }, 1500);
+    };
+
+    ws.onmessage = function (ev) {
+      var msg;
+      try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      if (msg.t === "plumb-hello") {
+        if (helloTimer) { clearTimeout(helloTimer); helloTimer = null; }
+        setState("wait", "Found Plumb — not paired");
+        pairBtn.disabled = false;
+      } else if (msg.t === "paired") {
+        paired = true;
+        pairBtn.disabled = true;
+        pairBtn.textContent = "Paired ✓";
+        setState("on", "Paired");
+        parent.postMessage({ pluginMessage: { type: "resync" } }, "*");
+      } else if (msg.t === "pair-rejected") {
+        setState("wait", msg.reason || "Pairing rejected");
+      } else if (msg.t === "ping") {
+        ws.send(JSON.stringify({ t: "pong" }));
+      }
+    };
+
+    ws.onclose = function () {
+      if (helloTimer) { clearTimeout(helloTimer); helloTimer = null; }
+      paired = false;
+      pairBtn.disabled = true;
+      pairBtn.textContent = "Pair with Plumb";
+      setState("", "Disconnected — retrying…");
+      setTimeout(connect, 1500);
+    };
+
+    ws.onerror = function () {
+      try { ws.close(); } catch (e) {}
+    };
+  }
+
+  pairBtn.onclick = function () {
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({ t: "pair", pluginVersion: PLUGIN_VERSION }));
+      setState("wait", "Pairing…");
+    }
+  };
+
+  // Messages from the plugin main thread (code.ts).
+  window.onmessage = function (event) {
+    var msg = event.data && event.data.pluginMessage;
+    if (!msg || msg.type !== "selection") return;
+    selEl.textContent = msg.nodeName ? "Selected: " + msg.nodeName : "No selection";
+    if (paired && ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({
+        t: "selection",
+        doc: msg.doc,
+        fileName: msg.fileName,
+        pageName: msg.pageName,
+        nodeName: msg.nodeName
+      }));
+    }
+  };
+
+  connect();
+</script>
+</body>
+</html>
