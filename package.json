@@ -1,0 +1,34 @@
+{
+  "name": "plumb-mcp",
+  "version": "0.0.1",
+  "description": "Local, free, token-frugal Figma to code bridge for AI coding agents.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Tathagat Maitray",
+  "keywords": ["figma", "mcp", "model-context-protocol", "design-to-code", "ai-agent"],
+  "bin": {
+    "plumb-mcp": "dist/index.js"
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "prove": "tsx scripts/prove.ts",
+    "smoke": "tsx scripts/smoke.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsup": "^8.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
