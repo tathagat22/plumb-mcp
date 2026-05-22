@@ -8,10 +8,15 @@ import { fail, ok } from "./shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const DESCRIPTION =
-  "Export every asset in a Figma screen — icons as SVG, images as PNG — to a " +
-  "local folder, and return the file paths. Call this so you build the screen " +
-  "with its real assets, not placeholders. Uses the plugin path; needs the " +
-  "Plumb plugin paired (check plumb_status).";
+  "Export Figma assets — icons as SVG, images as PNG — through the paired " +
+  "plugin. Three modes:\n" +
+  "  • Default — `id` or `name` of a screen → recursive export of every " +
+  "asset in it, written to a local folder.\n" +
+  "  • List — same + `list: true` → just the manifest (id, name, format, " +
+  "parentId) of available assets; no files written. Cheap; use first to see " +
+  "what's there.\n" +
+  "  • Surgical — `ids: [...]` → export exactly those node ids (one file " +
+  "each, no recursion). Preferred once you know what you need.";
 
 /** Registers the `plumb_assets` MCP tool (plan §8). */
 export function registerPlumbAssets(server: McpServer): void {
@@ -24,11 +29,23 @@ export function registerPlumbAssets(server: McpServer): void {
         id: z
           .string()
           .optional()
-          .describe("Screen/node id to export assets from."),
+          .describe("Screen/node id to scope the export to."),
         name: z
           .string()
           .optional()
-          .describe("Screen name — resolved against the file; duplicates are returned to disambiguate."),
+          .describe("Screen name — resolved against the file."),
+        ids: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Surgical — export exactly these node ids (one each, no recursion).",
+          ),
+        list: z
+          .boolean()
+          .optional()
+          .describe(
+            "Manifest only — return id/name/format/parentId per candidate; no file writes.",
+          ),
       },
       annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
     },
@@ -40,16 +57,75 @@ export function registerPlumbAssets(server: McpServer): void {
             "plumb_assets uses the plugin path — run the Plumb plugin in Figma and click 'Pair with Plumb'.",
           );
         }
+
+        const list = args.list === true;
+
+        // --- Surgical mode — specific ids ----------------------------------
+        if (args.ids && args.ids.length > 0) {
+          const { assets, error } = await requestAssets({ ids: args.ids, list });
+          if (error) {
+            throw new PlumbError(
+              `The plugin could not export the requested ids: ${error}`,
+              "Retry; if it persists, the ids may be invalid or deleted.",
+            );
+          }
+          if (list) {
+            return ok({
+              source: "plugin",
+              mode: "list",
+              count: assets.length,
+              manifest: assets.map((a) => ({
+                id: a.id,
+                name: a.name,
+                format: a.format,
+                parentId: a.parentId,
+              })),
+              next:
+                assets.length === 0
+                  ? "None of the supplied ids resolved to exportable nodes."
+                  : "Pick what you need, then call plumb_assets with `ids: [...]` and no `list`.",
+            });
+          }
+          const folder = args.name || (args.id ? screenName(args.id) : "") || "specific";
+          const { dir, written } = writeAssets(folder, assets);
+          return ok({
+            source: "plugin",
+            mode: "specific",
+            dir,
+            count: written.length,
+            assets: written.map((w) => ({
+              id: w.id,
+              name: w.name,
+              format: w.format,
+              path: w.path,
+              bytes: w.bytes,
+              parentId: w.parentId,
+            })),
+            next:
+              written.length === 0
+                ? "None of the supplied ids resolved to exportable nodes."
+                : "Use these file paths when building.",
+          });
+        }
+
+        // --- Screen-scoped modes (default or list) -------------------------
+        if (!args.id && !args.name) {
+          throw new PlumbError(
+            "Provide a screen `id` or `name` — or `ids: [...]` for surgical export.",
+            "Call plumb_outline to list screen names and ids.",
+          );
+        }
+
         const resolved = resolveScreen(args.id, args.name);
         if ("ambiguous" in resolved) {
           return ok({
             ambiguous: true,
             matches: resolved.ambiguous,
-            next: "Several screens share that name. Re-call plumb_assets with one of these `id` values.",
+            next: "Several screens share that name — re-call plumb_assets with one of these `id` values.",
           });
         }
 
-        const { assets, error } = await requestAssets(resolved.id);
+        const { assets, error } = await requestAssets({ nodeId: resolved.id, list });
         if (error) {
           throw new PlumbError(
             `The plugin could not export assets: ${error}`,
@@ -57,7 +133,28 @@ export function registerPlumbAssets(server: McpServer): void {
           );
         }
 
-        const { dir, written } = writeAssets(screenName(resolved.id) || resolved.id, assets);
+        const sname = screenName(resolved.id) || resolved.id;
+
+        if (list) {
+          return ok({
+            source: "plugin",
+            mode: "list",
+            screen: sname,
+            count: assets.length,
+            manifest: assets.map((a) => ({
+              id: a.id,
+              name: a.name,
+              format: a.format,
+              parentId: a.parentId,
+            })),
+            next:
+              assets.length === 0
+                ? "No exportable assets in this screen."
+                : "Pick the ones you actually need, then call plumb_assets with `ids: [...]` (no `list`).",
+          });
+        }
+
+        const { dir, written } = writeAssets(sname, assets);
         return ok({
           source: "plugin",
           dir,
@@ -70,9 +167,10 @@ export function registerPlumbAssets(server: McpServer): void {
             bytes: w.bytes,
             parentId: w.parentId,
           })),
-          next: written.length
-            ? "Use these file paths when building the screen — match them to PDS nodes by `id`."
-            : "No exportable assets (icons/images) were found in this screen.",
+          next:
+            written.length === 0
+              ? "No exportable assets (icons / images) were found in this screen."
+              : "Use these file paths when building. Tip: pass `list: true` first to peek without downloading; then `ids: [...]` to pull just what you need.",
         });
       } catch (e) {
         return fail(e);

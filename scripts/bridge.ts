@@ -62,14 +62,25 @@ ws.on("message", (raw) => {
     );
   }
   if (msg.t === "get-assets") {
-    ws.send(
-      JSON.stringify({
-        t: "assets",
-        reqId: msg.reqId,
-        error: null,
-        assets: [{ id: "i1", name: "star icon", format: "SVG", dataBase64: fakeSvg }],
-      }),
-    );
+    const list = (msg as any).list === true;
+    const ids = Array.isArray((msg as any).ids) ? ((msg as any).ids as string[]) : undefined;
+    let assets: any[];
+    if (ids && ids.length > 0) {
+      assets = ids.map((id) => ({
+        id,
+        name: `node-${id}`,
+        format: "SVG",
+        dataBase64: list ? "" : fakeSvg,
+      }));
+    } else if (list) {
+      assets = [
+        { id: "131:p1", name: "icon-a", format: "SVG", dataBase64: "" },
+        { id: "131:p2", name: "icon-b", format: "SVG", dataBase64: "", parentId: "131:p1" },
+      ];
+    } else {
+      assets = [{ id: "i1", name: "star icon", format: "SVG", dataBase64: fakeSvg }];
+    }
+    ws.send(JSON.stringify({ t: "assets", reqId: msg.reqId, error: null, assets }));
   }
 });
 await once(ws, "open");
@@ -143,12 +154,42 @@ const assets = parse(
   await client.callTool({ name: "plumb_assets", arguments: { id: "131:6950" } }),
 );
 check(
-  "plumb_assets writes asset files and returns paths",
+  "plumb_assets default mode writes asset files and returns paths",
   assets.source === "plugin" &&
     assets.count === 1 &&
     typeof assets.assets?.[0]?.path === "string" &&
     existsSync(assets.assets[0].path),
   assets.assets?.[0]?.path ?? "(no path)",
+);
+
+const listMode = parse(
+  await client.callTool({
+    name: "plumb_assets",
+    arguments: { id: "131:6950", list: true },
+  }),
+);
+check(
+  "plumb_assets list mode returns a manifest without writing files",
+  listMode.mode === "list" &&
+    Array.isArray(listMode.manifest) &&
+    listMode.count === 2 &&
+    typeof listMode.manifest[0]?.id === "string",
+  `${listMode.count} candidates, parentId: ${listMode.manifest?.[1]?.parentId ?? "(none)"}`,
+);
+
+const surgical = parse(
+  await client.callTool({
+    name: "plumb_assets",
+    arguments: { ids: ["131:a1", "131:a2"] },
+  }),
+);
+check(
+  "plumb_assets surgical mode exports exactly the listed ids",
+  surgical.mode === "specific" &&
+    surgical.count === 2 &&
+    typeof surgical.assets?.[0]?.path === "string" &&
+    existsSync(surgical.assets[0].path),
+  `${surgical.count} files`,
 );
 
 const status = parse(await client.callTool({ name: "plumb_status", arguments: {} }));

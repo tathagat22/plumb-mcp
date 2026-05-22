@@ -83,11 +83,30 @@ export function requestNode(
   return request((reqId) => ({ t: "get-node", reqId, nodeId }), 15_000, "node");
 }
 
-/** Ask the plugin to export every asset within a node. */
+export interface RequestAssetsOptions {
+  /** Screen/node to scope the recursive export to. */
+  nodeId?: string;
+  /** Surgical mode — export exactly these ids (no recursion). */
+  ids?: string[];
+  /** Manifest only — no file bytes over the wire. */
+  list?: boolean;
+}
+
+/** Ask the plugin to export assets (default: every asset in `nodeId`). */
 export function requestAssets(
-  nodeId: string,
+  opts: RequestAssetsOptions,
 ): Promise<{ assets: WireAsset[]; error: string | null }> {
-  return request((reqId) => ({ t: "get-assets", reqId, nodeId }), 90_000, "assets");
+  return request(
+    (reqId) => ({
+      t: "get-assets",
+      reqId,
+      nodeId: opts.nodeId ?? "",
+      ids: opts.ids,
+      list: opts.list,
+    }),
+    90_000,
+    "assets",
+  );
 }
 
 function bindPort(port: number): Promise<WebSocketServer | null> {

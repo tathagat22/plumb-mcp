@@ -262,7 +262,38 @@ async function exportNode(n: any, format: "SVG" | "PNG"): Promise<WireAsset> {
   return { id: n.id, name: n.name, format, dataBase64: toBase64(bytes) };
 }
 
-async function collectAssets(root: SceneNode): Promise<WireAsset[]> {
+function pickFormatForNode(n: any): "SVG" | "PNG" {
+  if (Array.isArray(n.exportSettings) && n.exportSettings.length > 0) {
+    return settingsFormat(n);
+  }
+  if (hasImageFill(n)) return "PNG";
+  // Default: SVG — Figma can export almost any node as SVG.
+  return "SVG";
+}
+
+/** Surgical mode — export exactly these ids, one asset each, no recursion. */
+async function collectSpecific(ids: string[], list: boolean): Promise<WireAsset[]> {
+  const assets: WireAsset[] = [];
+  for (const id of ids) {
+    if (assets.length >= MAX_ASSETS) break;
+    const node = await figma.getNodeByIdAsync(id);
+    if (!node || node.type === "PAGE" || node.type === "DOCUMENT") continue;
+    const n = node as any;
+    if (n.visible === false) continue;
+    const format = pickFormatForNode(n);
+    if (list) {
+      assets.push({ id: n.id, name: n.name, format, dataBase64: "" });
+    } else {
+      assets.push(await exportNode(n, format));
+    }
+  }
+  return assets;
+}
+
+async function collectAssets(
+  root: SceneNode,
+  opts: { list?: boolean } = {},
+): Promise<WireAsset[]> {
   const assets: WireAsset[] = [];
 
   /**
@@ -270,6 +301,7 @@ async function collectAssets(root: SceneNode): Promise<WireAsset[]> {
    * The user's spec: "go inside groups, export, go deeper, repeat".
    * Tweak: standalone VECTOR nodes are exported only when no ancestor was
    * exported — otherwise they are already contained in that ancestor's SVG.
+   * With `list: true`, we record the same candidates but skip exportAsync.
    */
   async function visit(
     n: any,
@@ -298,7 +330,9 @@ async function collectAssets(root: SceneNode): Promise<WireAsset[]> {
     let nextAncestorId = ancestorId;
     let exportedHere = false;
     if (format) {
-      const asset = await exportNode(n, format);
+      const asset: WireAsset = opts.list
+        ? { id: n.id, name: n.name, format, dataBase64: "" }
+        : await exportNode(n, format);
       if (ancestorId) asset.parentId = ancestorId;
       assets.push(asset);
       exportedHere = true;
@@ -340,12 +374,21 @@ async function handleServerRequest(req: any): Promise<void> {
 
   if (req.t === "get-assets") {
     try {
+      const list = req.list === true;
+      const ids: string[] | undefined = Array.isArray(req.ids) ? req.ids : undefined;
+
+      if (ids && ids.length > 0) {
+        const assets = await collectSpecific(ids, list);
+        reply({ t: "assets", reqId: req.reqId, assets, error: null });
+        return;
+      }
+
       const node = await figma.getNodeByIdAsync(req.nodeId);
       if (!node || node.type === "PAGE" || node.type === "DOCUMENT") {
         reply({ t: "assets", reqId: req.reqId, assets: [], error: "node not found" });
         return;
       }
-      const assets = await collectAssets(node as SceneNode);
+      const assets = await collectAssets(node as SceneNode, { list });
       reply({ t: "assets", reqId: req.reqId, assets, error: null });
     } catch (e) {
       reply({

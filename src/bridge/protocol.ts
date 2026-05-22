@@ -49,5 +49,5 @@ export type ServerMessage =
   | { t: "paired" }
   | { t: "pair-rejected"; reason: string }
   | { t: "get-node"; reqId: string; nodeId: string }
-  | { t: "get-assets"; reqId: string; nodeId: string }
+  | { t: "get-assets"; reqId: string; nodeId: string; ids?: string[]; list?: boolean }
   | { t: "ping" };
