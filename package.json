@@ -34,6 +34,7 @@
     "live": "tsx scripts/live.ts",
     "check": "tsx scripts/check.ts",
     "bridge": "tsx scripts/bridge.ts",
+    "connect": "tsx scripts/connect.ts",
     "smoke": "tsx scripts/smoke.ts"
   },
   "dependencies": {
