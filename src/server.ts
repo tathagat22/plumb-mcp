@@ -1,8 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { SERVER_NAME, SERVER_VERSION } from "./meta";
 import { registerPlumbNode } from "./tools/node";
-
-export const SERVER_NAME = "plumb-mcp";
-export const SERVER_VERSION = "0.0.1";
+import { registerPlumbOutline } from "./tools/outline";
+import { registerPlumbStatus } from "./tools/status";
+import { registerPlumbTokens } from "./tools/tokens";
 
 /** Builds the Plumb MCP server with all tools registered. */
 export function createServer(): McpServer {
@@ -11,13 +12,16 @@ export function createServer(): McpServer {
     {
       instructions:
         "Plumb extracts Figma designs as compact, normalized specs for building " +
-        "UI. When you are given a Figma file/frame to implement, call plumb_node " +
-        "with the file key and node id — it returns deduplicated design tokens " +
-        "and a CSS-shaped node tree (auto-layout already resolved to flexbox).",
+        "UI. Call plumb_status first to learn the key legend, then plumb_outline " +
+        "to map a file, plumb_node to extract a frame (auto-layout already " +
+        "resolved to flexbox), and plumb_tokens for the design-token table.",
     },
   );
 
+  registerPlumbStatus(server);
+  registerPlumbOutline(server);
   registerPlumbNode(server);
+  registerPlumbTokens(server);
 
   return server;
 }

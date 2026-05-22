@@ -1,5 +1,6 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { createServer, SERVER_VERSION } from "./server";
+import { createServer } from "./server";
+import { SERVER_VERSION } from "./meta";
 
 /**
  * Bin entry for `npx plumb-mcp` — a stdio MCP server.

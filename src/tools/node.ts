@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { fetchNodeViaRest } from "../figma/rest";
 import { normalize } from "../normalize/normalize";
-import { PlumbError, toErrorPayload } from "../errors";
+import { fail, ok, requireToken } from "./shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const DESCRIPTION =
@@ -53,14 +53,7 @@ export function registerPlumbNode(server: McpServer): void {
     },
     async (args) => {
       try {
-        const token = process.env.FIGMA_TOKEN ?? process.env.FIGMA_ACCESS_TOKEN;
-        if (!token) {
-          throw new PlumbError(
-            "No Figma token configured.",
-            "Set FIGMA_TOKEN in the MCP server's env block. Create a read-only " +
-              "token at figma.com → Settings → Security → personal access tokens.",
-          );
-        }
+        const token = requireToken();
         const depth = args.depth ?? 3;
         // Fetch one level deeper than we disclose, so boundary nodes get an
         // accurate `more` child count.
@@ -74,12 +67,9 @@ export function registerPlumbNode(server: McpServer): void {
           notes: args.notes,
           maxTokens: args.maxTokens,
         });
-        return { content: [{ type: "text" as const, text: JSON.stringify(pds) }] };
+        return ok(pds);
       } catch (e) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(toErrorPayload(e)) }],
-          isError: true,
-        };
+        return fail(e);
       }
     },
   );

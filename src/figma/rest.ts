@@ -55,6 +55,50 @@ export async function fetchNodeViaRest(req: RestRequest): Promise<FigmaFileResul
   };
 }
 
+interface RestFileResponse {
+  name?: string;
+  version?: string | number;
+  document?: FigmaNode;
+}
+
+/**
+ * Fetch a file's shallow structure (pages → top-level frames) for plumb_outline.
+ * Depth 2 keeps it cheap: canvases and their frames, nothing deeper.
+ */
+export async function fetchFileOutline(
+  fileKey: string,
+  token: string,
+  depth = 2,
+): Promise<FigmaFileResult> {
+  const url = `https://api.figma.com/v1/files/${encodeURIComponent(fileKey)}?depth=${depth}`;
+
+  let res: Awaited<ReturnType<typeof fetch>>;
+  try {
+    res = await fetch(url, { headers: { "X-Figma-Token": token } });
+  } catch (e) {
+    throw new PlumbError(
+      `Could not reach api.figma.com: ${(e as Error).message}`,
+      "Check your internet connection, then retry.",
+    );
+  }
+
+  if (!res.ok) throw restError(res.status, fileKey);
+
+  const json = (await res.json()) as RestFileResponse;
+  if (!json.document) {
+    throw new PlumbError(
+      `Figma returned no document for file "${fileKey}".`,
+      "Check the file key — the string after /design/ or /file/ in the Figma URL.",
+    );
+  }
+
+  return {
+    document: json.document,
+    fileName: json.name ?? "",
+    version: String(json.version ?? ""),
+  };
+}
+
 function restError(status: number, fileKey: string): PlumbError {
   switch (status) {
     case 401:

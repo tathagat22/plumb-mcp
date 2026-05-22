@@ -3,9 +3,10 @@
 Local, free, token-frugal Figma → code bridge for AI coding agents.
 See [plan.md](./plan.md) for the full design.
 
-> **Status: Milestone 0 — proof.** One MCP tool (`plumb_node`) over the Figma
-> REST path, plus the normalizer that turns raw Figma nodes into the compact
-> **Plumb Design Spec (PDS)** — deduplicated tokens + a CSS-shaped node tree.
+> **Status: Milestone 1 — in progress (REST path).** Four MCP tools —
+> `plumb_status`, `plumb_outline`, `plumb_node`, `plumb_tokens` — over the
+> Figma REST path, plus the normalizer that turns raw Figma nodes into the
+> compact **Plumb Design Spec (PDS)**. The plugin path is next.
 
 ## Try it
 
@@ -23,7 +24,8 @@ loads `.env` automatically. Or pass the vars inline.
 
 ```bash
 cp .env.example .env       # then edit: FIGMA_TOKEN + PLUMB_FILE_KEY
-npm run prove
+npm run prove              # normalizer depth/token curve
+npm run outline            # the file's pages and top-level frames
 ```
 
 - `FIGMA_TOKEN` — a read-only Figma personal access token

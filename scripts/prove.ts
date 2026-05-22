@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { fetchNodeViaRest } from "../src/figma/rest";
 import { normalize } from "../src/normalize/normalize";
 import { estimateTokens } from "../src/util/estimate";
+import { loadDotEnv } from "./_dotenv";
 import type { FigmaFileResult, FigmaNode } from "../src/figma/types";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -19,31 +20,6 @@ const FETCH_DEPTH = 10;
 const MCP_CEILING = 25_000;
 const TARGET = 10_000;
 const LINE = "─".repeat(70);
-
-/** Load .env (gitignored) so local test credentials need not be typed each run. */
-function loadDotEnv(path: string): void {
-  let text: string;
-  try {
-    text = readFileSync(path, "utf8");
-  } catch {
-    return;
-  }
-  for (const rawLine of text.split("\n")) {
-    const trimmed = rawLine.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq === -1) continue;
-    const key = trimmed.slice(0, eq).trim();
-    let value = trimmed.slice(eq + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (key && process.env[key] === undefined) process.env[key] = value;
-  }
-}
 
 function mark(ok: boolean): string {
   return ok ? "✓" : "✗";
