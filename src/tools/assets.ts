@@ -68,6 +68,7 @@ export function registerPlumbAssets(server: McpServer): void {
             format: w.format,
             path: w.path,
             bytes: w.bytes,
+            parentId: w.parentId,
           })),
           next: written.length
             ? "Use these file paths when building the screen — match them to PDS nodes by `id`."

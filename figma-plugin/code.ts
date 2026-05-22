@@ -12,7 +12,12 @@ const PLUGIN_VERSION = "0.0.1";
 const PANEL = { w: 240, h: 144 };
 const DOT = { w: 60, h: 60 };
 
-figma.showUI(__html__, { width: PANEL.w, height: PANEL.h, title: "Plumb" });
+figma.showUI(__html__, {
+  width: PANEL.w,
+  height: PANEL.h,
+  title: "Plumb",
+  themeColors: true, // inherit Figma's light/dark theme via CSS variables
+});
 
 /* ------------------------------------------------------------------ */
 /* Serialization — Figma scene node → the REST-shaped model            */
@@ -173,11 +178,18 @@ function pushSelection(): void {
 /* Assets — export icons (SVG) and images (PNG)                        */
 /* ------------------------------------------------------------------ */
 
-interface WireAsset { id: string; name: string; format: "SVG" | "PNG"; dataBase64: string }
+interface WireAsset {
+  id: string;
+  name: string;
+  format: "SVG" | "PNG";
+  dataBase64: string;
+  /** The id of the nearest ancestor that was also exported. */
+  parentId?: string;
+}
 
 const VECTOR_TYPES = ["VECTOR", "BOOLEAN_OPERATION", "STAR", "LINE", "POLYGON"];
 const CONTAINER_TYPES = ["FRAME", "GROUP", "INSTANCE", "COMPONENT"];
-const MAX_ASSETS = 150;
+const MAX_ASSETS = 300;
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 function toBase64(bytes: Uint8Array): string {
@@ -252,42 +264,55 @@ async function exportNode(n: any, format: "SVG" | "PNG"): Promise<WireAsset> {
 
 async function collectAssets(root: SceneNode): Promise<WireAsset[]> {
   const assets: WireAsset[] = [];
-  async function visit(n: any, isRoot: boolean): Promise<void> {
+
+  /**
+   * Always descend — even after exporting — so nested groups are collected.
+   * The user's spec: "go inside groups, export, go deeper, repeat".
+   * Tweak: standalone VECTOR nodes are exported only when no ancestor was
+   * exported — otherwise they are already contained in that ancestor's SVG.
+   */
+  async function visit(
+    n: any,
+    isRoot: boolean,
+    ancestorExported: boolean,
+    ancestorId: string | undefined,
+  ): Promise<void> {
     if (assets.length >= MAX_ASSETS || n.visible === false) return;
 
-    // The root is the screen the agent asked for — never export the whole
-    // screen as one asset; always descend so we collect what is *inside* it.
+    let format: "SVG" | "PNG" | null = null;
     if (!isRoot) {
       const hasExport = Array.isArray(n.exportSettings) && n.exportSettings.length > 0;
       if (hasExport) {
-        assets.push(await exportNode(n, settingsFormat(n)));
-        return;
-      }
-      // GROUP — preserve the designer's grouping; one SVG instead of
-      // splitting it into the individual vectors inside.
-      if (isVectorGroup(n)) {
-        assets.push(await exportNode(n, "SVG"));
-        return;
-      }
-      if (VECTOR_TYPES.indexOf(n.type) !== -1) {
-        assets.push(await exportNode(n, "SVG"));
-        return;
-      }
-      if (CONTAINER_TYPES.indexOf(n.type) !== -1 && isIconSubtree(n)) {
-        assets.push(await exportNode(n, "SVG"));
-        return;
-      }
-      if (hasImageFill(n)) {
-        assets.push(await exportNode(n, "PNG"));
-        // fall through to recurse — image-fill nodes can still have children
+        format = settingsFormat(n);
+      } else if (isVectorGroup(n)) {
+        format = "SVG";
+      } else if (CONTAINER_TYPES.indexOf(n.type) !== -1 && isIconSubtree(n)) {
+        format = "SVG";
+      } else if (VECTOR_TYPES.indexOf(n.type) !== -1 && !ancestorExported) {
+        format = "SVG";
+      } else if (hasImageFill(n)) {
+        format = "PNG";
       }
     }
 
+    let nextAncestorId = ancestorId;
+    let exportedHere = false;
+    if (format) {
+      const asset = await exportNode(n, format);
+      if (ancestorId) asset.parentId = ancestorId;
+      assets.push(asset);
+      exportedHere = true;
+      nextAncestorId = n.id;
+    }
+
     if (Array.isArray(n.children)) {
-      for (const c of n.children) await visit(c, false);
+      for (const c of n.children) {
+        await visit(c, false, exportedHere || ancestorExported, nextAncestorId);
+      }
     }
   }
-  await visit(root, true);
+
+  await visit(root, true, false, undefined);
   return assets;
 }
 

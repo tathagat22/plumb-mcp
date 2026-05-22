@@ -8,6 +8,8 @@ export interface WrittenAsset {
   format: string;
   path: string;
   bytes: number;
+  /** The id of the nearest ancestor that was also exported. */
+  parentId?: string;
 }
 
 function slug(s: string): string {
@@ -53,6 +55,7 @@ export function writeAssets(
       format: asset.format,
       path: fullPath,
       bytes: buffer.length,
+      parentId: asset.parentId,
     });
   }
   return { dir, written };

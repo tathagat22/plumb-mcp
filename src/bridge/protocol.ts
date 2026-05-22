@@ -23,6 +23,9 @@ export interface WireAsset {
   name: string;
   format: "SVG" | "PNG";
   dataBase64: string;
+  /** The id of the nearest ancestor that was also exported — lets the agent
+   *  navigate the asset hierarchy (e.g. "this icon is inside that header"). */
+  parentId?: string;
 }
 
 /** Messages the plugin (WebSocket client) sends to the server. */

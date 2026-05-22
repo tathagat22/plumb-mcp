@@ -5,8 +5,11 @@
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
-  body { font: 12px -apple-system, BlinkMacSystemFont, sans-serif;
-    color: #1a1a1a; background: #fff; }
+  body {
+    font: 12px -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--figma-color-text, #1a1a1a);
+    background: var(--figma-color-bg, #fff);
+  }
 
   /* expanded panel */
   #panel { padding: 12px; display: flex; flex-direction: column;
@@ -17,23 +20,43 @@
   .dot.wait { background: #f39c12; }
   .dot.on { background: #2ecc71; }
   #title { font-weight: 600; }
-  #status { color: #666; font-size: 11px; min-height: 14px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #status {
+    color: var(--figma-color-text-secondary, #666);
+    font-size: 11px; min-height: 14px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   #actions { display: flex; gap: 6px; margin-top: auto; }
-  button { font: inherit; font-size: 12px; padding: 7px 10px; flex: 1;
-    border: 0; border-radius: 5px; background: #8b6cff; color: #fff;
-    cursor: pointer; font-weight: 600; }
-  button:disabled { background: #e6e6e6; color: #999; cursor: default;
-    font-weight: 400; }
-  button.ghost { background: #f1f1f4; color: #555; }
-  button.ghost:hover { background: #e8e8ec; }
+  button {
+    font: inherit; font-size: 12px; padding: 7px 10px; flex: 1;
+    border: 0; border-radius: 5px;
+    background: var(--figma-color-bg-brand, #8b6cff);
+    color: var(--figma-color-text-onbrand, #fff);
+    cursor: pointer; font-weight: 600;
+  }
+  button:disabled {
+    background: var(--figma-color-bg-disabled, #e6e6e6);
+    color: var(--figma-color-text-disabled, #999);
+    cursor: default; font-weight: 400;
+  }
+  button.ghost {
+    background: var(--figma-color-bg-secondary, #f1f1f4);
+    color: var(--figma-color-text, #555);
+  }
+  button.ghost:hover {
+    background: var(--figma-color-bg-hover, #e8e8ec);
+  }
 
   /* collapsed dot — fills whatever window size we end up at */
-  #collapsed { display: none; position: absolute; inset: 0;
-    align-items: center; justify-content: center; cursor: pointer; }
-  #bigdot { width: 26px; height: 26px; border-radius: 50%;
-    background: #c0392b; box-shadow: 0 1px 3px rgba(0,0,0,.2);
-    transition: transform .1s; }
+  #collapsed {
+    display: none; position: absolute; inset: 0;
+    align-items: center; justify-content: center; cursor: pointer;
+    background: var(--figma-color-bg, #fff);
+  }
+  #bigdot {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: #c0392b; box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+    transition: transform .1s;
+  }
   #bigdot.wait { background: #f39c12; }
   #bigdot.on { background: #2ecc71; }
   #collapsed:hover #bigdot { transform: scale(1.15); }
