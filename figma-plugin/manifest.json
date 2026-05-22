@@ -8,28 +8,28 @@
   "documentAccess": "dynamic-page",
   "networkAccess": {
     "allowedDomains": [
-      "ws://127.0.0.1:31337",
-      "ws://127.0.0.1:31338",
-      "ws://127.0.0.1:31339",
-      "ws://127.0.0.1:31340",
-      "ws://127.0.0.1:31341",
-      "ws://localhost:31337",
-      "ws://localhost:31338",
-      "ws://localhost:31339",
-      "ws://localhost:31340",
-      "ws://localhost:31341"
+      "http://127.0.0.1:31337",
+      "http://127.0.0.1:31338",
+      "http://127.0.0.1:31339",
+      "http://127.0.0.1:31340",
+      "http://127.0.0.1:31341",
+      "http://localhost:31337",
+      "http://localhost:31338",
+      "http://localhost:31339",
+      "http://localhost:31340",
+      "http://localhost:31341"
     ],
     "devAllowedDomains": [
-      "ws://127.0.0.1:31337",
-      "ws://127.0.0.1:31338",
-      "ws://127.0.0.1:31339",
-      "ws://127.0.0.1:31340",
-      "ws://127.0.0.1:31341",
-      "ws://localhost:31337",
-      "ws://localhost:31338",
-      "ws://localhost:31339",
-      "ws://localhost:31340",
-      "ws://localhost:31341"
+      "http://127.0.0.1:31337",
+      "http://127.0.0.1:31338",
+      "http://127.0.0.1:31339",
+      "http://127.0.0.1:31340",
+      "http://127.0.0.1:31341",
+      "http://localhost:31337",
+      "http://localhost:31338",
+      "http://localhost:31339",
+      "http://localhost:31340",
+      "http://localhost:31341"
     ],
     "reasoning": "Connects only to the local Plumb MCP server on 127.0.0.1 to stream the current selection. No external network access."
   }
