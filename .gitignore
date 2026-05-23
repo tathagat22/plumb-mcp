@@ -7,3 +7,5 @@ plumb-screenshots/
 .DS_Store
 .env
 .cache/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
