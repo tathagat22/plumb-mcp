@@ -51,6 +51,30 @@ accurate (auto-layout pre-resolved to flexbox, design tokens deduped).
 
 ---
 
+## Battle-tested
+
+Run against a real, production-scale design file (a large internal product —
+identity withheld):
+
+| Metric | Result |
+|---|---|
+| Screens in inventory | **665** |
+| Component definitions | **111** |
+| Component instances enumerated | **14,608** |
+| Assets exported from one screen (icons + images) | **106** |
+| `plumb_assets` wall time (106 assets, ack-serialized) | **424 ms** |
+| `plumb_screenshot` 4× PNG of a 1440×1045 frame | 1.0 MB |
+| `plumb_node` PDS for a 31-node screen at depth 2 | **~1.7k tokens** |
+| `plumb_verify` self-check (40 elements) | 40/40 matched, **0 errors** |
+
+All seven plugin-path tools — outline · node · assets · screenshot · search ·
+components · verify — passed end-to-end on the file. The earlier transport
+choked Figma's IPC at this scale; the current binary-upload + per-asset-ack
+path runs cleanly. See [the M3+ commit](https://github.com/tathagat22/plumb-mcp/commit/aef8c8b)
+for the bug autopsy.
+
+---
+
 ## Quick start
 
 ```bash
@@ -154,12 +178,18 @@ Figma (desktop or browser, any plan)
   │    • reads document + variables (Figma Plugin API, no rate limits)
   │    • one-time "Pair with Plumb" click; collapses to a dot
   ▼
-  ws://127.0.0.1:31337   (loopback, single paired slot, Origin-aware)
+  ws://127.0.0.1:31337    JSON control channel (paired, Origin-aware)
+   +   /upload/:key.:ext  loopback HTTP for binary blobs — screenshots,
+                          assets — POSTed straight to disk, no base64,
+                          per-item ack for array uploads to keep Figma's
+                          IPC from buffering and redelivering
   ▼
 Plumb MCP server  —  `npx plumb-mcp` / `node dist/index.js`
   │  • REST + plugin ingest
   │  • Normalizer → Plumb Design Spec (PDS):
-  │      auto-layout → flexbox, tokens deduped, stable `el` handles
+  │      auto-layout → flexbox, tokens deduped, depth-stable `el` handles
+  │      (mints handles in a full pre-walk so the same node gets the same
+  │       el regardless of the requested depth — `plumb_verify` needs this)
   │  • Version-keyed cache, fit-to-budget (maxTokens → auto-depth)
   │  • Ten MCP tools (status / outline / node / tokens / selection /
   │    assets / screenshot / search / components / verify)
