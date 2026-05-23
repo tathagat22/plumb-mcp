@@ -1,3 +1,8 @@
+---
+title: MCP tool reference — Plumb Figma MCP server
+description: Twelve Model Context Protocol tools that expose Figma to Claude Code, Cursor, Windsurf, and other AI coding agents. Outline, node, assets, screenshot, search, components, verify, and more.
+---
+
 # Tools
 
 Plumb exposes **twelve** MCP tools. Each one has a focused, single responsibility — the agent composes them.

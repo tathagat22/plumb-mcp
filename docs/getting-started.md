@@ -1,3 +1,8 @@
+---
+title: Get started — Plumb Figma MCP server
+description: Install the Plumb MCP server (npm), sideload the Figma plugin, configure Claude Code or Cursor or Windsurf, and pair in one click.
+---
+
 # Get started
 
 Plumb has two halves that talk to each other on your local machine:

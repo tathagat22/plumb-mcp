@@ -1,9 +1,11 @@
 ---
+title: Plumb — Figma MCP server for Claude Code, Cursor & Windsurf
+description: A Model Context Protocol (MCP) server that connects AI coding agents to Figma files. Token-efficient, no REST rate limits, on any Figma plan.
 layout: home
 hero:
   name: Plumb
-  text: A Model Context Protocol server for Figma.
-  tagline: Give your AI coding agent accurate, token-efficient access to any Figma file — on any plan, without leaving your machine.
+  text: Figma MCP server for AI coding agents.
+  tagline: Connect Claude Code, Cursor, Windsurf, and any other Model-Context-Protocol-compatible AI coding agent to your Figma files — token-efficient, no REST rate limits, on any Figma plan including Free.
   actions:
     - theme: brand
       text: Get started

@@ -1,6 +1,6 @@
 # Plumb (`plumb-mcp`)
 
-**A Model Context Protocol server that gives AI coding agents accurate, token-efficient access to Figma files.**
+**A Model Context Protocol (MCP) server for Figma — used with Claude Code, Cursor, Windsurf, and any other MCP-compatible AI coding agent.**
 
 📖 Full docs: **<https://tathagat22.github.io/plumb-mcp/>** &nbsp;·&nbsp; 📦 npm: [`plumb-mcp`](https://www.npmjs.com/package/plumb-mcp)
 
@@ -14,19 +14,53 @@ demand. Works on any Figma plan, including Free.
 
 ## Why Plumb
 
-Building UI from Figma with an AI agent today means choosing between two bad
-options:
+Plumb's pitch in one line: **biggest Figma MCP surface that works on any plan,
+runs locally, and closes the design-to-code loop with structural verification.**
 
 - **Figma's official Dev Mode MCP server** is plan-gated (6 tool calls/month
   on Starter), token-explodes on real screens (351,378 tokens observed
   against a 25k client cap), reported "85–90% wrong" on complex designs,
   needs the desktop app open with the right selection, and is metered.
-- **Framelink (`figma-developer-mcp`)** is REST-based — better, but it still
-  inherits REST rate limits, has long-standing weakness on design tokens, and
-  shipped a real RCE (CVE-2025-53967).
+- **Framelink (`figma-developer-mcp`)** has a small, mature surface — two
+  tools (`get_figma_data`, `download_figma_images`) over Figma's REST API.
+  Inherits REST rate limits, can't reach Variables on non-Enterprise plans,
+  and offers no `plumb_verify`-style design-vs-code diff or live-selection
+  awareness.
 
-Plumb's pitch is **all four of**: free on any plan · local · token-frugal ·
-accurate (auto-layout pre-resolved to flexbox, design tokens deduped).
+Plumb runs locally, reads through a companion plugin (no rate limits, on any
+plan including Free), exposes twelve focused tools, and ships an offline
+`.fig` parser for headless / CI use. Auto-layout is pre-resolved to flexbox,
+design tokens are deduped, and `plumb_verify` returns structured deltas
+between what the agent built and what's in Figma.
+
+---
+
+## Compare
+
+If you've already tried other Figma MCP servers, here's the honest positioning.
+
+| Capability | Plumb | Figma's Dev Mode MCP | Framelink | claude-talk-to-figma |
+|---|---|---|---|---|
+| Tools exposed | **12** | small | 2 | small |
+| Works on Figma Free plan | ✅ | Limited | ✅ (no Variables) | ✅ |
+| Reads via | Plugin · REST · `.fig` | REST | REST | Plugin |
+| Plugin-path rate limit | **None** | n/a | n/a | None |
+| Variables on non-Enterprise | ✅ via plugin | Limited | ❌ | ✅ |
+| Writes back into Figma | ❌ | ✅ | ❌ | ✅ |
+| Design-vs-code diff (`verify`) | ✅ | ❌ | ❌ | ❌ |
+| Live `selection` awareness | ✅ | ✅ | ❌ | ✅ |
+| Component / instance inventory | ✅ | partial | ❌ | partial |
+| Offline `.fig` parse for CI | ✅ | ❌ | ❌ | ❌ |
+| Token-frugal PDS (auto-layout→flex, deduped) | ✅ | ❌ | partial | ❌ |
+| Local-only, zero telemetry | ✅ | cloud | ✅ | ✅ |
+| Transport | stdio | stdio | stdio + HTTP/SSE | stdio |
+| License | MIT | proprietary | MIT | MIT |
+
+**Pick Plumb** for the widest surface on any plan and to verify your code
+against the design. **Pick Framelink** if you need HTTP/SSE transport for
+hosted MCP setups and only need raw layout data. **Pick the official Dev Mode
+server** if your team is on Organization/Enterprise and you specifically need
+agents to *write* into Figma.
 
 ---
 

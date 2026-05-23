@@ -1,12 +1,34 @@
 import { defineConfig } from "vitepress";
 
+const SITE_URL = "https://tathagat22.github.io/plumb-mcp/";
+const SITE_TITLE = "Plumb — Figma MCP server for AI coding agents";
+const SITE_DESCRIPTION =
+  "A Model Context Protocol (MCP) server for Figma. Connect Claude Code, " +
+  "Cursor, Windsurf, and any other MCP-compatible AI coding agent to your " +
+  "Figma files — token-efficient, no REST rate limits, on any plan including " +
+  "Free.";
+
 export default defineConfig({
   title: "Plumb",
-  description:
-    "A Model Context Protocol server that gives AI coding agents access to Figma files.",
+  description: SITE_DESCRIPTION,
   base: "/plumb-mcp/",
   cleanUrls: true,
   lastUpdated: true,
+  sitemap: { hostname: SITE_URL },
+  head: [
+    ["link", { rel: "icon", type: "image/svg+xml", href: "/plumb-mcp/favicon.svg" }],
+    ["meta", { name: "theme-color", content: "#0c8ce9" }],
+    ["meta", { name: "author", content: "Tathagat Maitray" }],
+    ["meta", { name: "keywords", content: "figma, mcp, model context protocol, design to code, claude code, cursor, windsurf, ai coding agent, figma mcp server, dev mode" }],
+    ["meta", { property: "og:type", content: "website" }],
+    ["meta", { property: "og:title", content: SITE_TITLE }],
+    ["meta", { property: "og:description", content: SITE_DESCRIPTION }],
+    ["meta", { property: "og:url", content: SITE_URL }],
+    ["meta", { property: "og:site_name", content: "Plumb" }],
+    ["meta", { name: "twitter:card", content: "summary_large_image" }],
+    ["meta", { name: "twitter:title", content: SITE_TITLE }],
+    ["meta", { name: "twitter:description", content: SITE_DESCRIPTION }],
+  ],
   themeConfig: {
     nav: [
       { text: "Get started", link: "/getting-started" },
