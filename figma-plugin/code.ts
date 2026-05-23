@@ -484,18 +484,29 @@ async function handleGetComponents(reqId: string): Promise<void> {
     }
 
     // Under documentAccess: "dynamic-page", `n.mainComponent` (sync) throws.
-    // Use the async variant so we actually get componentId for each instance.
-    const instances: any[] = [];
-    for (const { node: n, page } of instanceNodes) {
-      try {
-        const main = await (n as InstanceNode).getMainComponentAsync();
-        if (main) {
-          instances.push({ id: n.id, name: n.name, componentId: main.id, page });
-          instanceCount.set(main.id, (instanceCount.get(main.id) ?? 0) + 1);
-        }
-      } catch {
-        // Component fully unresolvable (deleted/orphaned) — skip.
+    // Use the async variant — and resolve them in parallel batches, because
+    // sequential `await` over 10k+ instances will time out the MCP client
+    // (the 60s default isn't enough at 5–50 ms per page-load).
+    const BATCH = 64;
+    const resolved: Array<{ n: any; page: string; main: any | null }> = [];
+    for (let i = 0; i < instanceNodes.length; i += BATCH) {
+      const slice = instanceNodes.slice(i, i + BATCH);
+      const mains = await Promise.all(
+        slice.map(({ node: n }) =>
+          (n as InstanceNode)
+            .getMainComponentAsync()
+            .catch(() => null),
+        ),
+      );
+      for (let j = 0; j < slice.length; j++) {
+        resolved.push({ n: slice[j]!.node, page: slice[j]!.page, main: mains[j] });
       }
+    }
+    const instances: any[] = [];
+    for (const { n, page, main } of resolved) {
+      if (!main) continue; // deleted / orphaned / unresolvable
+      instances.push({ id: n.id, name: n.name, componentId: main.id, page });
+      instanceCount.set(main.id, (instanceCount.get(main.id) ?? 0) + 1);
     }
     for (const c of components) c.instanceCount = instanceCount.get(c.id) ?? 0;
 

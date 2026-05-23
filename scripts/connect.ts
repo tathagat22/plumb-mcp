@@ -170,7 +170,7 @@ if (!found.error) {
 
 /* --- plumb_components --------------------------------------------------- */
 const comps = parse(
-  await client.callTool({ name: "plumb_components", arguments: {} }),
+  await client.callTool({ name: "plumb_components", arguments: {} }, undefined, HEAVY),
 );
 if (!comps.error) {
   console.log(

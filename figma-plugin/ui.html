@@ -118,7 +118,7 @@
     var port = PORTS[portIdx % PORTS.length];
     portIdx++;
     connectedPort = port;
-    try { ws = new WebSocket("ws://127.0.0.1:" + port); }
+    try { ws = new WebSocket("ws://localhost:" + port); }
     catch (e) { setTimeout(connect, 1500); return; }
 
     ws.onopen = function () {
@@ -246,7 +246,7 @@
   // screenshot promise once it sees the matching `screenshot` WS reply below.
   function uploadScreenshot(msg) {
     var ext = (msg.format || "PNG").toLowerCase();
-    var url = "http://127.0.0.1:" + connectedPort + "/upload/" + msg.reqId + "." + ext;
+    var url = "http://localhost:" + connectedPort + "/upload/" + msg.reqId + "." + ext;
     postBinary(url, msg.bytes)
       .then(function () {
         send({
@@ -276,7 +276,7 @@
   // duplicate POSTs that race the manifest reply.
   function uploadAsset(msg) {
     var ext = msg.ext || "bin";
-    var url = "http://127.0.0.1:" + connectedPort +
+    var url = "http://localhost:" + connectedPort +
       "/upload/" + msg.reqId + "-" + msg.index + "." + ext;
     var p = postBinary(url, msg.bytes);
     if (!pendingAssetUploads[msg.reqId]) pendingAssetUploads[msg.reqId] = [];
