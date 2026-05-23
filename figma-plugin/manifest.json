@@ -7,7 +7,18 @@
   "editorType": ["figma"],
   "documentAccess": "dynamic-page",
   "networkAccess": {
-    "allowedDomains": ["*"],
-    "reasoning": "Connects only to the local Plumb MCP server on 127.0.0.1 (ports 31337-31341) to stream the current selection. The wildcard is used for local development; it will be narrowed before any Figma Community submission."
+    "allowedDomains": [
+      "http://127.0.0.1:31337",
+      "http://127.0.0.1:31338",
+      "http://127.0.0.1:31339",
+      "http://127.0.0.1:31340",
+      "http://127.0.0.1:31341",
+      "ws://127.0.0.1:31337",
+      "ws://127.0.0.1:31338",
+      "ws://127.0.0.1:31339",
+      "ws://127.0.0.1:31340",
+      "ws://127.0.0.1:31341"
+    ],
+    "reasoning": "Plumb pairs the plugin with a local MCP server running on the same machine (127.0.0.1, on one of ports 31337–31341). The WebSocket carries the control channel (which screens to read, which assets to export); the HTTP channel carries binary uploads (screenshots and exported icons/images) so they never have to be base64-encoded over the WebSocket. No request ever leaves the user's machine. No analytics, no third-party endpoints. The MCP server it talks to is open source: https://github.com/tathagat22/plumb-mcp."
   }
 }
