@@ -2,7 +2,7 @@
 
 **A Model Context Protocol (MCP) server for Figma — used with Claude Code, Cursor, Windsurf, and any other MCP-compatible AI coding agent.**
 
-📖 Full docs: **<https://tathagat22.github.io/plumb-mcp/>** &nbsp;·&nbsp; 📦 npm: [`plumb-mcp`](https://www.npmjs.com/package/plumb-mcp)
+📖 Full docs: **<https://tathagat22.github.io/plumb-mcp/>** &nbsp;·&nbsp; 📦 npm: [`plumb-mcp`](https://www.npmjs.com/package/plumb-mcp) &nbsp;·&nbsp; 🇨🇳 [简体中文](./README.zh-cn.md) &nbsp;·&nbsp; 🇯🇵 [日本語](./README.ja.md) &nbsp;·&nbsp; 🇰🇷 [한국어](./README.ko.md)
 
 Plumb reads a Figma file through a companion plugin running inside the desktop
 app — no REST rate limits, no metered billing, no plan gating. It returns a
