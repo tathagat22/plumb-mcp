@@ -4,6 +4,7 @@ import { pluginOutline } from "../bridge/inventory";
 import { bridge } from "../bridge/store";
 import { PlumbError } from "../errors";
 import { fetchFileOutline } from "../figma/rest";
+import { resolveFigmaTarget } from "../figma/url";
 import { buildOutline } from "../normalize/outline";
 import { fail, ok, requireToken } from "./shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -27,31 +28,39 @@ export function registerPlumbOutline(server: McpServer): void {
           .string()
           .optional()
           .describe("Figma file key — for the REST path. Omit when the Plumb plugin is paired."),
+        url: z
+          .string()
+          .optional()
+          .describe(
+            "Paste a full Figma URL — fileKey is auto-extracted. Accepts /design/, /file/, /proto/, and branch URLs.",
+          ),
       },
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     },
     async (args) => {
       try {
+        const { fileKey } = resolveFigmaTarget({ url: args.url, fileKey: args.fileKey });
+
         // Plugin path — the live inventory, no file key.
-        if (bridge.paired && bridge.inventory) {
+        if (bridge.paired && bridge.inventory && !fileKey) {
           return ok(pluginOutline());
         }
 
         // REST path.
-        if (!args.fileKey) {
+        if (!fileKey) {
           throw new PlumbError(
-            "plumb_outline needs the Plumb plugin paired, or a fileKey for the REST path.",
-            "Pair the Plumb plugin in Figma, or pass a fileKey.",
+            "plumb_outline needs the Plumb plugin paired, or a fileKey / url for the REST path.",
+            "Pair the Plumb plugin in Figma, paste a Figma URL via `url`, or pass a fileKey.",
           );
         }
-        const cacheKey = `outline:${args.fileKey}`;
+        const cacheKey = `outline:${fileKey}`;
         const hit = cacheGet<OutlineDocument>(cacheKey, DEFAULT_TTL_MS);
         if (hit) return ok({ ...hit.payload, cached: true });
 
         const token = requireToken();
-        const file = await fetchFileOutline(args.fileKey, token);
+        const file = await fetchFileOutline(fileKey, token);
         const outline = buildOutline(file.document, {
-          key: args.fileKey,
+          key: fileKey,
           name: file.fileName,
           version: file.version,
         });

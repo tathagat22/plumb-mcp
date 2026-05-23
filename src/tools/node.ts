@@ -5,6 +5,7 @@ import { requestNode } from "../bridge/server";
 import { bridge } from "../bridge/store";
 import { PlumbError } from "../errors";
 import { fetchNodeViaRest } from "../figma/rest";
+import { resolveFigmaTarget } from "../figma/url";
 import { normalizeToBudget } from "../normalize/budget";
 import { fail, ok, requireToken } from "./shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -30,6 +31,12 @@ export function registerPlumbNode(server: McpServer): void {
           .string()
           .optional()
           .describe("Figma file key — REST path. Omit when the Plumb plugin is paired."),
+        url: z
+          .string()
+          .optional()
+          .describe(
+            "Paste a full Figma URL — fileKey and node-id are auto-extracted (the `-` separator is normalised to `:`).",
+          ),
         id: z.string().optional().describe("Node/screen id to extract."),
         name: z
           .string()
@@ -58,10 +65,15 @@ export function registerPlumbNode(server: McpServer): void {
     async (args) => {
       try {
         const depth = args.depth ?? 3;
+        const { fileKey, id } = resolveFigmaTarget({
+          url: args.url,
+          fileKey: args.fileKey,
+          id: args.id,
+        });
 
         // Plugin path — no file key, plugin paired.
-        if (!args.fileKey && bridge.paired) {
-          const resolved = resolveScreen(args.id, args.name);
+        if (!fileKey && bridge.paired) {
+          const resolved = resolveScreen(id, args.name);
           if ("ambiguous" in resolved) {
             return ok({
               ambiguous: true,
@@ -86,22 +98,22 @@ export function registerPlumbNode(server: McpServer): void {
         }
 
         // REST path — needs fileKey + id.
-        if (!args.fileKey || !args.id) {
+        if (!fileKey || !id) {
           throw new PlumbError(
-            "plumb_node needs the Plumb plugin paired, or a fileKey + id for the REST path.",
-            "Pair the Plumb plugin in Figma, or pass both fileKey and id.",
+            "plumb_node needs the Plumb plugin paired, or a fileKey + id (or a Figma url) for the REST path.",
+            "Pair the Plumb plugin in Figma, paste a Figma URL via `url`, or pass both fileKey and id.",
           );
         }
         const cacheKey =
-          `node:${args.fileKey}:${args.id}:${depth}:` +
+          `node:${fileKey}:${id}:${depth}:` +
           `${args.notes ? 1 : 0}:${args.maxTokens ?? 0}`;
         const hit = cacheGet<PdsDocument>(cacheKey, DEFAULT_TTL_MS);
         if (hit) return ok({ ...hit.payload, source: "rest", cached: true });
 
         const token = requireToken();
         const file = await fetchNodeViaRest({
-          fileKey: args.fileKey,
-          nodeId: args.id,
+          fileKey,
+          nodeId: id,
           depth: depth + 1,
           token,
         });
