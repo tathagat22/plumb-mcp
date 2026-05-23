@@ -1,6 +1,6 @@
 # Tools
 
-Plumb exposes **ten** MCP tools. Each one has a focused, single responsibility — the agent composes them.
+Plumb exposes **twelve** MCP tools. Each one has a focused, single responsibility — the agent composes them.
 
 | Tool | What it does |
 |---|---|
@@ -14,6 +14,8 @@ Plumb exposes **ten** MCP tools. Each one has a focused, single responsibility �
 | [`plumb_search`](/tools/plumb_search) | Find nodes by name and/or type. |
 | [`plumb_components`](/tools/plumb_components) | List components + instance usages. |
 | [`plumb_verify`](/tools/plumb_verify) | Diff your rendered layout against the design. |
+| [`plumb_fig_outline`](/tools/plumb_fig_outline) | Headless: list every screen in a saved `.fig` file from disk. |
+| [`plumb_fig_node`](/tools/plumb_fig_node) | Headless: fetch one node from a saved `.fig` file by id. |
 
 ## Tool selection
 

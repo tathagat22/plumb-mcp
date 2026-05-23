@@ -22,7 +22,7 @@ features:
   - title: Everything local
     details: Plugin and server talk over the loopback interface. Nothing about your design ever leaves your machine. No analytics, no third-party endpoints.
   - title: Built for agents
-    details: Ten focused tools — outline, node, assets, screenshot, search, components, verify, and more — exposed over MCP for Claude Code, Cursor, Windsurf, and any other MCP-compatible client.
+    details: Twelve focused tools — outline, node, assets, screenshot, search, components, verify, plus an offline `.fig` parser — exposed over MCP for Claude Code, Cursor, Windsurf, and any other MCP-compatible client.
   - title: Battle-tested at scale
     details: Validated against a 665-screen production design system with 14,608 component instances. plumb_assets exports 106 icons & images in ~600 ms. plumb_verify produces structured deltas in milliseconds.
   - title: Open source

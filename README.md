@@ -28,7 +28,7 @@ accurate (auto-layout pre-resolved to flexbox, design tokens deduped).
 
 ---
 
-## The ten tools
+## The twelve tools
 
 | Tool | What it does |
 |---|---|
@@ -42,6 +42,8 @@ accurate (auto-layout pre-resolved to flexbox, design tokens deduped).
 | `plumb_search` | Find nodes by name and/or type. |
 | `plumb_components` | List components + instance usages. |
 | `plumb_verify` | Diff your rendered layout against the design — structured deltas, no pixel diff. |
+| `plumb_fig_outline` | Headless: read a saved `.fig` file from disk and list every screen. No Figma desktop, no token. |
+| `plumb_fig_node` | Headless: fetch one node from a saved `.fig` file by id. |
 
 ---
 
@@ -185,8 +187,9 @@ Plumb MCP server  —  `npx plumb-mcp` / `node dist/index.js`
   │      (mints handles in a full pre-walk so the same node gets the same
   │       el regardless of the requested depth — `plumb_verify` needs this)
   │  • Version-keyed cache, fit-to-budget (maxTokens → auto-depth)
-  │  • Ten MCP tools (status / outline / node / tokens / selection /
-  │    assets / screenshot / search / components / verify)
+  │  • Twelve MCP tools (status / outline / node / tokens / selection /
+  │    assets / screenshot / search / components / verify /
+  │    fig_outline / fig_node)
   ▼
   stdio MCP
   ▼
@@ -218,7 +221,7 @@ Cache and outputs:
 ```bash
 npm run typecheck   # strict TS (server + plugin)
 npm run build       # bundle server + plugin
-npm run smoke       # MCP handshake; expects 10 tools
+npm run smoke       # MCP handshake; expects 12 tools
 npm run check       # offline fit-to-budget + cache verification
 npm run bridge      # simulated plugin + every tool offline
 npm run prove       # normalizer depth/token curve (fixture or live)
@@ -234,7 +237,7 @@ npm run connect     # live end-to-end against a paired plugin
 plumb-mcp/
 ├── src/
 │   ├── index.ts          # bin entry: stdio MCP server + bridge
-│   ├── server.ts         # registers the ten tools
+│   ├── server.ts         # registers the twelve tools
 │   ├── verify.ts         # the plumb_verify comparison engine
 │   ├── cache.ts          # on-disk version-keyed result cache
 │   ├── assets.ts         # writes exported assets to disk

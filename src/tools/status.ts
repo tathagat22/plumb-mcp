@@ -58,6 +58,8 @@ export function registerPlumbStatus(server: McpServer): void {
           "plumb_search",
           "plumb_components",
           "plumb_verify",
+          "plumb_fig_outline",
+          "plumb_fig_node",
         ],
         legend: KEY_LEGEND,
         budget: {

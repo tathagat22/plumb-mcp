@@ -40,6 +40,8 @@ export default defineConfig({
           { text: "plumb_search", link: "/tools/plumb_search" },
           { text: "plumb_components", link: "/tools/plumb_components" },
           { text: "plumb_verify", link: "/tools/plumb_verify" },
+          { text: "plumb_fig_outline", link: "/tools/plumb_fig_outline" },
+          { text: "plumb_fig_node", link: "/tools/plumb_fig_node" },
         ],
       },
     ],

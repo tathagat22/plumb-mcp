@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SERVER_NAME, SERVER_VERSION } from "./meta";
 import { registerPlumbAssets } from "./tools/assets";
 import { registerPlumbComponents } from "./tools/components";
+import { registerPlumbFigNode, registerPlumbFigOutline } from "./tools/fig";
 import { registerPlumbNode } from "./tools/node";
 import { registerPlumbOutline } from "./tools/outline";
 import { registerPlumbScreenshot } from "./tools/screenshot";
@@ -40,6 +41,8 @@ export function createServer(): McpServer {
   registerPlumbSearch(server);
   registerPlumbComponents(server);
   registerPlumbVerify(server);
+  registerPlumbFigOutline(server);
+  registerPlumbFigNode(server);
 
   return server;
 }

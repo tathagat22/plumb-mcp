@@ -64,4 +64,4 @@ console.log("plumb_node (no token) →", JSON.stringify(noToken.content));
 
 await client.close();
 await server.close();
-console.log("✓ PASS: 10 tools registered; plumb_status self-describes; errors are instruction-shaped.");
+console.log("✓ PASS: 12 tools registered; plumb_status self-describes; errors are instruction-shaped.");
