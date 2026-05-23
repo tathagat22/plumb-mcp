@@ -1,6 +1,6 @@
 {
   "name": "plumb-mcp",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Local, free, token-frugal Figma to code bridge for AI coding agents.",
   "type": "module",
   "license": "MIT",
@@ -25,6 +25,10 @@
   },
   "files": [
     "dist",
+    "figma-plugin/code.js",
+    "figma-plugin/ui.html",
+    "figma-plugin/manifest.json",
+    "figma-plugin/README.md",
     "README.md",
     "LICENSE"
   ],
