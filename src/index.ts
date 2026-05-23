@@ -4,17 +4,57 @@ import { runInit } from "./cli/init";
 import { SERVER_VERSION } from "./meta";
 import { createServer } from "./server";
 
+const HELP = `plumb-mcp ${SERVER_VERSION} — Figma MCP server for AI coding agents
+
+Usage:
+  plumb-mcp                Run the stdio MCP server (+ the local plugin bridge).
+                           This is what your MCP client (Claude Code, Cursor,
+                           Windsurf, etc.) spawns.
+
+  plumb-mcp init           Detect your installed editor(s) and write the
+                           correct MCP config block into each — Claude Code,
+                           Cursor, VS Code, Windsurf. Existing entries are
+                           preserved.
+
+  plumb-mcp --help, -h     Print this message and exit.
+  plumb-mcp --version, -v  Print the version and exit.
+
+Twelve tools exposed once running: plumb_status, plumb_outline, plumb_node,
+plumb_tokens, plumb_selection, plumb_assets, plumb_screenshot, plumb_search,
+plumb_components, plumb_verify, plumb_fig_outline, plumb_fig_node.
+
+Docs:    https://tathagat22.github.io/plumb-mcp/
+Source:  https://github.com/tathagat22/plumb-mcp
+`;
+
 /**
  * Bin entry for `plumb-mcp`.
  *   plumb-mcp init   → write editor MCP config, then exit
  *   plumb-mcp        → run the stdio MCP server (+ the plugin bridge)
  *
- * stdout is the JSON-RPC channel for the server, so all logging goes to stderr.
+ * stdout is the JSON-RPC channel for the server once it starts, so all
+ * logging once we're past arg-parsing goes to stderr.
  */
 async function main(): Promise<void> {
-  if (process.argv[2] === "init") {
+  const arg = process.argv[2];
+
+  if (arg === "--help" || arg === "-h" || arg === "help") {
+    process.stdout.write(HELP);
+    return;
+  }
+  if (arg === "--version" || arg === "-v") {
+    process.stdout.write(`${SERVER_VERSION}\n`);
+    return;
+  }
+  if (arg === "init") {
     runInit();
     return;
+  }
+  if (arg && arg.startsWith("-")) {
+    process.stderr.write(
+      `plumb-mcp: unknown flag "${arg}". Run \`plumb-mcp --help\` for usage.\n`,
+    );
+    process.exit(2);
   }
 
   const server = createServer();
