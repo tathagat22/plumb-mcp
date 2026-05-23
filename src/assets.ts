@@ -12,6 +12,16 @@ export interface WrittenAsset {
   parentId?: string;
 }
 
+function extForFormat(format: string): string {
+  switch (format) {
+    case "SVG": return "svg";
+    case "JPG": return "jpg";
+    case "GIF": return "gif";
+    case "WEBP": return "webp";
+    default: return "png";
+  }
+}
+
 function slug(s: string): string {
   return (
     s
@@ -41,7 +51,7 @@ export function writeAssets(
   const written: WrittenAsset[] = [];
   for (const asset of assets) {
     if (!asset.path) continue; // list mode or upload failed — skip silently
-    const ext = asset.format === "SVG" ? "svg" : "png";
+    const ext = extForFormat(asset.format);
     const base = slug(asset.name) || "asset";
     let file = `${base}.${ext}`;
     let n = 2;

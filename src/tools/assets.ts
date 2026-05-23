@@ -46,6 +46,12 @@ export function registerPlumbAssets(server: McpServer): void {
           .describe(
             "Manifest only — return id/name/format/parentId per candidate; no file writes.",
           ),
+        raw: z
+          .boolean()
+          .optional()
+          .describe(
+            "For nodes with IMAGE fills, export the original uploaded bytes (JPG/PNG/GIF/WEBP) via getImageByHash, instead of a 2× rasterised PNG render. Other nodes (icons, vectors) export the same as default.",
+          ),
       },
       annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
     },
@@ -59,10 +65,11 @@ export function registerPlumbAssets(server: McpServer): void {
         }
 
         const list = args.list === true;
+        const raw = args.raw === true;
 
         // --- Surgical mode — specific ids ----------------------------------
         if (args.ids && args.ids.length > 0) {
-          const { assets, error } = await requestAssets({ ids: args.ids, list });
+          const { assets, error } = await requestAssets({ ids: args.ids, list, raw });
           if (error) {
             throw new PlumbError(
               `The plugin could not export the requested ids: ${error}`,
@@ -125,7 +132,7 @@ export function registerPlumbAssets(server: McpServer): void {
           });
         }
 
-        const { assets, error } = await requestAssets({ nodeId: resolved.id, list });
+        const { assets, error } = await requestAssets({ nodeId: resolved.id, list, raw });
         if (error) {
           throw new PlumbError(
             `The plugin could not export assets: ${error}`,

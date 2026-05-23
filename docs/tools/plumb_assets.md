@@ -10,6 +10,7 @@ Export icons (SVG) and images (PNG) to disk. Three modes — recursive, list, su
 | `name` | string · optional | Screen name (resolved against the outline). |
 | `ids` | string[] · optional | **Surgical mode**: export exactly these node ids. |
 | `list` | boolean · optional | **List mode**: return the manifest only, no files written. |
+| `raw` | boolean · optional | **Raw mode**: for nodes with IMAGE fills, ship the original uploaded bytes (JPG/PNG/GIF/WEBP) via `getImageByHash` instead of a rasterised PNG render. Icons and vectors export the same as default. |
 
 ## Modes
 

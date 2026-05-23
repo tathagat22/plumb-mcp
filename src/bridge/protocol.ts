@@ -54,7 +54,7 @@ export interface InstanceInfo {
 export interface WireAsset {
   id: string;
   name: string;
-  format: "SVG" | "PNG";
+  format: "SVG" | "PNG" | "JPG" | "GIF" | "WEBP";
   path: string | null;
   /** The id of the nearest ancestor that was also exported — lets the agent
    *  navigate the asset hierarchy (e.g. "this icon is inside that header"). */
@@ -97,7 +97,16 @@ export type ServerMessage =
   | { t: "paired" }
   | { t: "pair-rejected"; reason: string }
   | { t: "get-node"; reqId: string; nodeId: string }
-  | { t: "get-assets"; reqId: string; nodeId: string; ids?: string[]; list?: boolean }
+  | {
+      t: "get-assets";
+      reqId: string;
+      nodeId: string;
+      ids?: string[];
+      list?: boolean;
+      /** When true, IMAGE-fill nodes are exported as the original uploaded
+       *  bytes (via getImageByHash) instead of a rasterised PNG render. */
+      raw?: boolean;
+    }
   | {
       t: "get-screenshot";
       reqId: string;

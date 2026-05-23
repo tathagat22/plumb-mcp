@@ -111,6 +111,9 @@ export interface RequestAssetsOptions {
   ids?: string[];
   /** Manifest only — no file bytes over the wire. */
   list?: boolean;
+  /** When true, image-fill nodes ship their original uploaded bytes
+   *  (via getImageByHash) instead of a rasterised PNG render. */
+  raw?: boolean;
 }
 
 /** reqId → timestamp of the get-assets request, used to time-stamp uploads. */
@@ -129,6 +132,7 @@ export function requestAssets(
         nodeId: opts.nodeId ?? "",
         ids: opts.ids,
         list: opts.list,
+        raw: opts.raw,
       };
     },
     180_000,
