@@ -1,18 +1,12 @@
 # Plumb (`plumb-mcp`)
 
-**A local, free, token-frugal Figma → code bridge for AI coding agents.**
+**A Model Context Protocol server that gives AI coding agents accurate, token-efficient access to Figma files.**
 
-Plumb reads your Figma file *locally* — through a companion plugin, with no
-rate limits and no metered billing — and hands your coding agent a compact,
-accurate design spec instead of a 350,000-token JSON dump. Pixel-perfect
-screens, a fraction of the tokens, on any Figma plan including Free.
-
-> **Status: Milestone 3 — done.** Ten MCP tools, full plugin path, recursive
-> asset export (SVG icons + PNG images), screen-by-name lookup, and structural
-> design-diff (`plumb_verify`). The closer works.
-
-See [`plan.md`](./plan.md) for the full design — agent contract, protocol,
-Figma→CSS mapping table.
+Plumb reads a Figma file through a companion plugin running inside the desktop
+app — no REST rate limits, no metered billing, no plan gating. It returns a
+compact, normalised design spec instead of the multi-hundred-thousand-token
+JSON the Figma API emits, and exports SVG icons and PNG images to disk on
+demand. Works on any Figma plan, including Free.
 
 ---
 
@@ -259,21 +253,8 @@ plumb-mcp/
 │   ├── code.ts           # main thread — reads, serializes, exports
 │   └── ui.html           # the panel (dot + pair button)
 ├── scripts/              # smoke · check · bridge · connect · prove · outline
-├── plan.md               # the full design (read this if you're contributing)
 └── README.md             # you are here
 ```
-
----
-
-## Status & roadmap
-
-- ✅ **M0** — stdio MCP server + normalizer proof
-- ✅ **M1** — REST tool surface + cache + `plumb init`
-- ✅ **M1.5** — plugin full-file access · query by name · asset export · hide-to-dot
-- ✅ **M2** — `plumb_screenshot`, `plumb_search`, `plumb_components`
-- ✅ **M3** — `plumb_verify` (the closer)
-- ⬜ **M4** — `.fig` offline parser · docs site · Figma Community submission
-- ⬜ Polish — framework-aware PDS output (Tailwind), untokenized-value detection, watch-mode push
 
 ---
 

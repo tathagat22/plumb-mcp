@@ -1,7 +1,7 @@
 {
   "name": "plumb-mcp",
   "version": "0.1.0",
-  "description": "Local, free, token-frugal Figma to code bridge for AI coding agents.",
+  "description": "A Model Context Protocol server that gives AI coding agents access to Figma files.",
   "type": "module",
   "license": "MIT",
   "author": "Tathagat Maitray",
