@@ -9,3 +9,9 @@ plumb-screenshots/
 .cache/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+
+# Internal submission scaffolding — listing copy / personal contact details /
+# anything you'd paste into a third-party form. Keep on disk, off the repo.
+docs/community/LISTING.md
+docs/community/notes.md
+docs/community/private/
