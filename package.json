@@ -1,6 +1,6 @@
 {
   "name": "plumb-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A Model Context Protocol server that gives AI coding agents access to Figma files.",
   "type": "module",
   "license": "MIT",
