@@ -1,71 +1,263 @@
 # Plumb (`plumb-mcp`)
 
-Local, free, token-frugal Figma → code bridge for AI coding agents.
-See [plan.md](./plan.md) for the full design.
+**A local, free, token-frugal Figma → code bridge for AI coding agents.**
 
-> **Status: Milestone 1.5 — done.** Six MCP tools — `plumb_status`,
-> `plumb_outline`, `plumb_node`, `plumb_tokens`, `plumb_selection`, and
-> `plumb_assets` — plus the normalizer that turns raw Figma nodes into the
-> compact **Plumb Design Spec (PDS)**, a version-keyed cache, the localhost
-> plugin bridge with one-time-confirm pairing (collapses to a dot when not
-> needed), full file access through the paired plugin (every screen, query
-> by name, duplicates returned for disambiguation), asset export to a local
-> folder (SVG for icons, PNG for images), and `plumb-mcp init`.
-> See [`figma-plugin/`](./figma-plugin/) for the companion plugin.
+Plumb reads your Figma file *locally* — through a companion plugin, with no
+rate limits and no metered billing — and hands your coding agent a compact,
+accurate design spec instead of a 350,000-token JSON dump. Pixel-perfect
+screens, a fraction of the tokens, on any Figma plan including Free.
 
-## Try it
+> **Status: Milestone 3 — done.** Ten MCP tools, full plugin path, recursive
+> asset export (SVG icons + PNG images), screen-by-name lookup, and structural
+> design-diff (`plumb_verify`). The closer works.
+
+See [`plan.md`](./plan.md) for the full design — agent contract, protocol,
+Figma→CSS mapping table.
+
+---
+
+## Why Plumb
+
+Building UI from Figma with an AI agent today means choosing between two bad
+options:
+
+- **Figma's official Dev Mode MCP server** is plan-gated (6 tool calls/month
+  on Starter), token-explodes on real screens (351,378 tokens observed
+  against a 25k client cap), reported "85–90% wrong" on complex designs,
+  needs the desktop app open with the right selection, and is metered.
+- **Framelink (`figma-developer-mcp`)** is REST-based — better, but it still
+  inherits REST rate limits, has long-standing weakness on design tokens, and
+  shipped a real RCE (CVE-2025-53967).
+
+Plumb's pitch is **all four of**: free on any plan · local · token-frugal ·
+accurate (auto-layout pre-resolved to flexbox, design tokens deduped).
+
+---
+
+## The ten tools
+
+| Tool | What it does |
+|---|---|
+| `plumb_status` | Self-description, key legend, connection state. Call first. |
+| `plumb_outline` | Every screen in the file (id, name, size). |
+| `plumb_node` | Extract a screen as compact PDS — by id or by name. |
+| `plumb_tokens` | Design-token table (colours, type, radii, shadows). |
+| `plumb_selection` | The user's live Figma selection. |
+| `plumb_assets` | Export icons (SVG) + images (PNG) — three modes: recursive, list (manifest only), or surgical by ids. |
+| `plumb_screenshot` | Render any node to PNG/JPG. |
+| `plumb_search` | Find nodes by name and/or type. |
+| `plumb_components` | List components + instance usages. |
+| `plumb_verify` | Diff your rendered layout against the design — structured deltas, no pixel diff. |
+
+---
+
+## Quick start
 
 ```bash
+git clone https://github.com/tathagat22/plumb-mcp.git
+cd plumb-mcp
 npm install
-npm run build       # → dist/index.js  (npx-runnable stdio MCP server)
-npm run prove       # run the normalizer on the bundled fixture
-npm run smoke       # in-memory MCP handshake + tools/list
+npm run build       # builds server (dist/index.js) + plugin (figma-plugin/code.js)
 ```
 
-### Prove against the real export-employees frame
+**Sideload the Figma plugin** (desktop app required for sideload):
 
-Copy `.env.example` to `.env` (gitignored) and fill it in — `npm run prove`
-loads `.env` automatically. Or pass the vars inline.
+1. Open Figma desktop → **Plugins → Development → Import plugin from manifest…**
+2. Select `figma-plugin/manifest.json`.
+3. Run **Plumb** from the Plugins menu. The panel opens — click **Pair with Plumb**.
+4. The plugin remembers the pairing — future runs start as a small dot.
+
+**Wire Plumb into your editor:**
 
 ```bash
-cp .env.example .env       # then edit: FIGMA_TOKEN + PLUMB_FILE_KEY
-npm run prove              # normalizer depth/token curve
-npm run outline            # the file's pages and top-level frames
-npm run live               # end-to-end MCP test: fit-to-budget + cache
+node dist/index.js init
 ```
 
-- `FIGMA_TOKEN` — a read-only Figma personal access token
-  (figma.com → Settings → Security → personal access tokens).
-- `PLUMB_FILE_KEY` — the string after `/design/` in the file URL.
-- `PLUMB_NODE_ID` — defaults to `131:6950`.
+`plumb init` detects Claude Code / Cursor / VS Code / Windsurf and writes the
+correct MCP config in each (`mcpServers` vs `servers` keyed appropriately;
+existing servers are preserved, not clobbered).
 
-With no token set, `prove` falls back to the bundled synthetic fixture so the
-normalizer is still exercised end-to-end.
+---
 
-## MCP client config
+## The agent's flow
 
-```jsonc
-{
-  "mcpServers": {
-    "plumb": {
-      "command": "node",
-      "args": ["<abs-path>/dist/index.js"],
-      "env": { "FIGMA_TOKEN": "figd_xxx" }
-    }
-  }
-}
+```js
+// 1. See what's in the file (no token needed, plugin path)
+plumb_outline()
+// → { pages: [{ name, screens: [{ id, el, name, box }] }] }
+
+// 2. Extract a screen by name
+plumb_node({ name: "Settings" })
+// → { tokens: {...}, nodes: { ... PDS ... }, source: "plugin" }
+
+// 3. Peek at every available asset cheaply (no downloads, no base64 on the wire)
+plumb_assets({ name: "Settings", list: true })
+// → { manifest: [{ id, name, format, parentId }], count: 41 }
+
+// 4. Pull only the assets you need
+plumb_assets({ ids: ["131:6900", "131:6905"] })
+// → { dir: "plumb-assets/specific", assets: [{ id, name, path, format, bytes }] }
+
+// 5. Optional: a visual reference
+plumb_screenshot({ name: "Settings" })
+// → { path: "plumb-screenshots/settings.png", bytes, scale }
+
+// 6. Build the UI — tag each element data-plumb-id="<el>" using the el from PDS
+
+// 7. Verify what you built — structural diff, no pixel comparison
+const rendered = Array.from(document.querySelectorAll("[data-plumb-id]")).map((el) => {
+  const r = el.getBoundingClientRect();
+  const s = getComputedStyle(el);
+  return {
+    el: el.dataset.plumbId,
+    box: { x: r.x, y: r.y, w: r.width, h: r.height },
+    text: el.textContent?.trim(),
+    styles: {
+      backgroundColor: s.backgroundColor, color: s.color,
+      fontFamily: s.fontFamily, fontSize: s.fontSize,
+      fontWeight: s.fontWeight, lineHeight: s.lineHeight,
+      paddingTop: s.paddingTop, paddingRight: s.paddingRight,
+      paddingBottom: s.paddingBottom, paddingLeft: s.paddingLeft,
+      gap: s.gap, flexDirection: s.flexDirection,
+      justifyContent: s.justifyContent, alignItems: s.alignItems,
+      borderRadius: s.borderRadius, borderColor: s.borderColor,
+      borderWidth: s.borderWidth, opacity: s.opacity,
+    },
+  };
+});
+plumb_verify({ name: "Settings", rendered })
+// → { ok, matched, deltas: [{ kind, expected, actual, severity }], next }
 ```
 
-Then ask your agent to call `plumb_node` with a `fileKey` + node `id`.
+---
+
+## Two data paths
+
+| | Plugin (primary) | REST (secondary, headless) |
+|---|---|---|
+| Rate-limited | **No.** Reads the in-memory document. | Yes. Free/Starter workspaces get very low budgets. |
+| Token required | No. | Yes — `FIGMA_TOKEN` (figma.com → Settings → Security). |
+| Variables | **Yes**, even on Free plans. | No — Variables REST API is Enterprise-only. |
+| Headless / CI | No (needs Figma open). | Yes. |
+
+Tools auto-pick the path. With the plugin paired, omit `fileKey` and pass
+`id` or `name`. For the REST path, pass `fileKey` + `id`.
+
+---
+
+## Architecture
+
+```
+Figma (desktop or browser, any plan)
+  │
+  │  Plumb plugin
+  │    • reads document + variables (Figma Plugin API, no rate limits)
+  │    • one-time "Pair with Plumb" click; collapses to a dot
+  ▼
+  ws://127.0.0.1:31337   (loopback, single paired slot, Origin-aware)
+  ▼
+Plumb MCP server  —  `npx plumb-mcp` / `node dist/index.js`
+  │  • REST + plugin ingest
+  │  • Normalizer → Plumb Design Spec (PDS):
+  │      auto-layout → flexbox, tokens deduped, stable `el` handles
+  │  • Version-keyed cache, fit-to-budget (maxTokens → auto-depth)
+  │  • Ten MCP tools (status / outline / node / tokens / selection /
+  │    assets / screenshot / search / components / verify)
+  ▼
+  stdio MCP
+  ▼
+Claude Code · Cursor · VS Code · Windsurf
+```
+
+---
+
+## Configuration
+
+`.env` (gitignored — never commit secrets):
+
+```bash
+FIGMA_TOKEN=figd_your_read_only_token   # REST path only
+PLUMB_FILE_KEY=…                        # for `npm run outline` etc.
+PLUMB_NODE_ID=131:6950                  # demo target
+```
+
+Cache and outputs:
+
+- **Cache** — `~/.cache/plumb/v1/` (TTL'd; override with `PLUMB_CACHE_DIR`).
+- **Assets** — `./plumb-assets/<screen>/` (override with `PLUMB_ASSETS_DIR`).
+- **Screenshots** — `./plumb-screenshots/` (override with `PLUMB_SCREENSHOTS_DIR`).
+
+---
+
+## Testing
+
+```bash
+npm run typecheck   # strict TS (server + plugin)
+npm run build       # bundle server + plugin
+npm run smoke       # MCP handshake; expects 10 tools
+npm run check       # offline fit-to-budget + cache verification
+npm run bridge      # simulated plugin + every tool offline
+npm run prove       # normalizer depth/token curve (fixture or live)
+npm run outline     # live: list every screen in your file (needs .env)
+npm run connect     # live end-to-end against a paired plugin
+```
+
+---
 
 ## Layout
 
-| Path | Role |
-|---|---|
-| `src/figma/` | REST ingest + raw Figma node types |
-| `src/normalize/` | raw nodes → PDS (token dedup, `el` handles, auto-layout → flex) |
-| `src/tools/` | MCP tool definitions |
-| `src/server.ts`, `src/index.ts` | MCP server + stdio bin entry |
-| `scripts/` | `prove` (normalizer proof) and `smoke` (MCP handshake) |
+```
+plumb-mcp/
+├── src/
+│   ├── index.ts          # bin entry: stdio MCP server + bridge
+│   ├── server.ts         # registers the ten tools
+│   ├── verify.ts         # the plumb_verify comparison engine
+│   ├── cache.ts          # on-disk version-keyed result cache
+│   ├── assets.ts         # writes exported assets to disk
+│   ├── pds.ts            # Plumb Design Spec types
+│   ├── keylegend.ts      # the compact-key legend (self-description)
+│   ├── meta.ts           # server name + version
+│   ├── errors.ts         # instruction-shaped error payloads
+│   ├── figma/            # REST ingest + raw Figma types
+│   ├── bridge/           # localhost WebSocket bridge to the plugin
+│   ├── normalize/        # raw Figma → PDS (handles, layout, paint, …)
+│   ├── tools/            # the ten MCP tools (one file each)
+│   ├── cli/init.ts       # `plumb init` — write editor MCP configs
+│   └── util/             # round, estimateTokens, …
+├── figma-plugin/
+│   ├── manifest.json
+│   ├── code.ts           # main thread — reads, serializes, exports
+│   └── ui.html           # the panel (dot + pair button)
+├── scripts/              # smoke · check · bridge · connect · prove · outline
+├── plan.md               # the full design (read this if you're contributing)
+└── README.md             # you are here
+```
 
-MIT © Tathagat Maitray
+---
+
+## Status & roadmap
+
+- ✅ **M0** — stdio MCP server + normalizer proof
+- ✅ **M1** — REST tool surface + cache + `plumb init`
+- ✅ **M1.5** — plugin full-file access · query by name · asset export · hide-to-dot
+- ✅ **M2** — `plumb_screenshot`, `plumb_search`, `plumb_components`
+- ✅ **M3** — `plumb_verify` (the closer)
+- ⬜ **M4** — `.fig` offline parser · docs site · Figma Community submission
+- ⬜ Polish — framework-aware PDS output (Tailwind), untokenized-value detection, watch-mode push
+
+---
+
+## Security
+
+- Loopback-only WebSocket bridge.
+- Single paired plugin at a time; pairing is a deliberate click in the plugin
+  panel (one-time, then remembered via `figma.clientStorage`).
+- Zero telemetry.
+- No personal-access token needed for the plugin path; the REST path's token
+  is consumed only by the server's own outbound `fetch` calls.
+
+---
+
+## License
+
+MIT © Tathagat Maitray. See [`LICENSE`](./LICENSE).

@@ -5,6 +5,14 @@
   "type": "module",
   "license": "MIT",
   "author": "Tathagat Maitray",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tathagat22/plumb-mcp.git"
+  },
+  "homepage": "https://github.com/tathagat22/plumb-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/tathagat22/plumb-mcp/issues"
+  },
   "keywords": [
     "figma",
     "mcp",
