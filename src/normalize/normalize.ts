@@ -2,7 +2,7 @@ import { HandleMinter } from "./handles";
 import { toLayout } from "./layout";
 import { TokenInterner } from "./tokens";
 import { estimateTokens } from "../util/estimate";
-import { round } from "../util/num";
+import { cleanPx, round } from "../util/num";
 import type { FigmaFileResult, FigmaNode } from "../figma/types";
 import type { PdsDocument, PdsNode } from "../pds";
 
@@ -58,7 +58,7 @@ export function normalize(
   }
   preWalk(file.document, 0);
 
-  function walk(fn: FigmaNode, level: number): string | undefined {
+  function walk(fn: FigmaNode, level: number, parent?: FigmaNode): string | undefined {
     // Prune invisible nodes — but never the requested root (level 0).
     if (level > 0 && fn.visible === false) return undefined;
 
@@ -74,6 +74,9 @@ export function normalize(
       },
     };
 
+    const pos = relativePos(parent, fn);
+    if (pos) node.pos = pos;
+
     const layout = toLayout(fn);
     if (layout) node.layout = layout;
 
@@ -83,11 +86,14 @@ export function normalize(
     const stroke = interner.internColor(fn.strokes);
     if (stroke) {
       node.stroke = stroke;
-      if (fn.strokeWeight) node.strokeW = fn.strokeWeight;
+      if (fn.strokeWeight) {
+        const w = cleanPx(fn.strokeWeight);
+        if (w) node.strokeW = w;
+      }
     }
 
-    const radius = cornerRadius(fn);
-    if (typeof radius === "number") {
+    const radius = cornerRadius(fn, node.box);
+    if (typeof radius === "number" || radius === "full") {
       const ref = interner.internRadius(radius);
       if (ref) node.radius = ref;
     } else if (radius) {
@@ -124,7 +130,7 @@ export function normalize(
     } else {
       const childEls: string[] = [];
       for (const child of kids) {
-        const childEl = walk(child, level + 1);
+        const childEl = walk(child, level + 1, fn);
         if (childEl) childEls.push(childEl);
       }
       if (childEls.length) node.children = childEls;
@@ -170,15 +176,61 @@ export function normalize(
   return doc;
 }
 
+/**
+ * Position of `child` relative to `parent`'s top-left, in CSS pixels. Returns
+ * undefined when the parent's auto-layout resolves placement (so emitting x/y
+ * would be redundant noise) or when bounding boxes are missing. The "Absolute
+ * position" toggle on an auto-layout child surfaces as layoutPositioning ===
+ * "ABSOLUTE" — we honour that override.
+ */
+function relativePos(
+  parent: FigmaNode | undefined,
+  child: FigmaNode,
+): { x: number; y: number } | undefined {
+  if (!parent) return undefined;
+  const pbb = parent.absoluteBoundingBox;
+  const cbb = child.absoluteBoundingBox;
+  if (!pbb || !cbb) return undefined;
+  const parentMode = parent.layoutMode;
+  const autoLayoutParent = parentMode === "HORIZONTAL" || parentMode === "VERTICAL";
+  const absoluteChild =
+    (child as { layoutPositioning?: string }).layoutPositioning === "ABSOLUTE";
+  if (autoLayoutParent && !absoluteChild) return undefined;
+  return { x: round(cbb.x - pbb.x), y: round(cbb.y - pbb.y) };
+}
+
+/**
+ * Figma stores "fully rounded" (pill / circle) as a sentinel integer that's
+ * either far larger than any reasonable px value (`21243700`, `33990048`,
+ * `105.157…` against a 60px tall pill) or any radius >= half the smaller box
+ * dimension. Either way, CSS would round to a circle — surface that intent.
+ */
+function isFullRadius(r: number, box: { w: number; h: number }): boolean {
+  if (!Number.isFinite(r) || r <= 0) return false;
+  const minSide = Math.min(box.w, box.h);
+  if (minSide > 0 && r >= minSide / 2) return true;
+  return r >= 9999;
+}
+
 function cornerRadius(
   fn: FigmaNode,
-): number | [number, number, number, number] | undefined {
+  box: { w: number; h: number },
+): number | "full" | [number, number, number, number] | undefined {
   if (fn.rectangleCornerRadii) {
     const [a, b, c, d] = fn.rectangleCornerRadii;
-    if (a === b && b === c && c === d) return a || undefined;
-    return fn.rectangleCornerRadii;
+    if (a === b && b === c && c === d) {
+      if (!a) return undefined;
+      return isFullRadius(a, box) ? "full" : cleanPx(a);
+    }
+    const halfMin = Math.min(box.w, box.h) / 2;
+    return fn.rectangleCornerRadii.map((r) =>
+      cleanPx(isFullRadius(r, box) ? halfMin : r),
+    ) as [number, number, number, number];
   }
-  if (typeof fn.cornerRadius === "number") return fn.cornerRadius || undefined;
+  if (typeof fn.cornerRadius === "number") {
+    if (!fn.cornerRadius) return undefined;
+    return isFullRadius(fn.cornerRadius, box) ? "full" : cleanPx(fn.cornerRadius);
+  }
   return undefined;
 }
 

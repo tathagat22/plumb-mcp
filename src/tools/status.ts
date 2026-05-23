@@ -55,6 +55,7 @@ export function registerPlumbStatus(server: McpServer): void {
           "plumb_selection",
           "plumb_assets",
           "plumb_screenshot",
+          "plumb_describe",
           "plumb_search",
           "plumb_components",
           "plumb_verify",

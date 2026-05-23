@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { cacheGet, cacheSet, DEFAULT_TTL_MS } from "../cache";
-import { resolveScreen } from "../bridge/inventory";
+import { formatScreenMatches, resolveScreen } from "../bridge/inventory";
 import { requestNode } from "../bridge/server";
 import { bridge } from "../bridge/store";
 import { PlumbError } from "../errors";
@@ -49,6 +49,15 @@ export function registerPlumbNode(server: McpServer): void {
           .max(12)
           .optional()
           .describe("Levels to disclose. Default 3."),
+        expandAll: z
+          .boolean()
+          .optional()
+          .describe(
+            "Walk the entire subtree in one call, ignoring `depth`. Subject " +
+              "to `maxTokens` (defaults to 60000 if omitted); if the spec " +
+              "exceeds the budget, depth is auto-trimmed and `meta.truncated` " +
+              "is set. Use this to skip the drill-loop on dense screens.",
+          ),
         notes: z
           .boolean()
           .optional()
@@ -64,7 +73,12 @@ export function registerPlumbNode(server: McpServer): void {
     },
     async (args) => {
       try {
-        const depth = args.depth ?? 3;
+        const expandAll = args.expandAll === true;
+        const depth = expandAll ? 12 : (args.depth ?? 3);
+        // Always cap expandAll responses — agents can blow the context window
+        // pulling a 47-node screen at depth 12 otherwise.
+        const maxTokens =
+          args.maxTokens ?? (expandAll ? 60_000 : undefined);
         const { fileKey, id } = resolveFigmaTarget({
           url: args.url,
           fileKey: args.fileKey,
@@ -77,8 +91,10 @@ export function registerPlumbNode(server: McpServer): void {
           if ("ambiguous" in resolved) {
             return ok({
               ambiguous: true,
-              matches: resolved.ambiguous,
-              next: "Several screens share that name — re-call plumb_node with one of these `id` values.",
+              matches: formatScreenMatches(resolved.ambiguous),
+              next:
+                "Several screens share that name. Each row shows `page` and " +
+                "`box` (w×h) — pick the one you want and re-call plumb_node with its `id`.",
             });
           }
           const { doc, nodeName } = await requestNode(resolved.id);
@@ -93,7 +109,7 @@ export function registerPlumbNode(server: McpServer): void {
             fileName: bridge.inventory?.fileName ?? "",
             version: `plugin-${Date.now()}`,
           };
-          const pds = normalizeToBudget(file, depth, args.maxTokens, { notes: args.notes });
+          const pds = normalizeToBudget(file, depth, maxTokens, { notes: args.notes });
           return ok({ ...pds, source: "plugin", node: nodeName });
         }
 
@@ -106,7 +122,7 @@ export function registerPlumbNode(server: McpServer): void {
         }
         const cacheKey =
           `node:${fileKey}:${id}:${depth}:` +
-          `${args.notes ? 1 : 0}:${args.maxTokens ?? 0}`;
+          `${args.notes ? 1 : 0}:${maxTokens ?? 0}:${expandAll ? 1 : 0}`;
         const hit = cacheGet<PdsDocument>(cacheKey, DEFAULT_TTL_MS);
         if (hit) return ok({ ...hit.payload, source: "rest", cached: true });
 
@@ -114,10 +130,10 @@ export function registerPlumbNode(server: McpServer): void {
         const file = await fetchNodeViaRest({
           fileKey,
           nodeId: id,
-          depth: depth + 1,
+          depth: expandAll ? 12 : depth + 1,
           token,
         });
-        const pds = normalizeToBudget(file, depth, args.maxTokens, { notes: args.notes });
+        const pds = normalizeToBudget(file, depth, maxTokens, { notes: args.notes });
         cacheSet(cacheKey, file.version, pds);
         return ok({ ...pds, source: "rest", cached: false });
       } catch (e) {

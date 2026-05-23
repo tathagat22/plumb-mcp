@@ -19,9 +19,9 @@ Usage:
   plumb-mcp --help, -h     Print this message and exit.
   plumb-mcp --version, -v  Print the version and exit.
 
-Twelve tools exposed once running: plumb_status, plumb_outline, plumb_node,
-plumb_tokens, plumb_selection, plumb_assets, plumb_screenshot, plumb_search,
-plumb_components, plumb_verify, plumb_fig_outline, plumb_fig_node.
+Thirteen tools exposed once running: plumb_status, plumb_outline, plumb_node,
+plumb_tokens, plumb_selection, plumb_assets, plumb_screenshot, plumb_describe,
+plumb_search, plumb_components, plumb_verify, plumb_fig_outline, plumb_fig_node.
 
 Docs:    https://tathagat22.github.io/plumb-mcp/
 Source:  https://github.com/tathagat22/plumb-mcp

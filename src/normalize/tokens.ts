@@ -24,8 +24,10 @@ export class TokenInterner {
     return v === undefined ? undefined : this.intern(this.text, "t", v);
   }
 
-  internRadius(r: number | undefined): string | undefined {
-    if (!r || r <= 0) return undefined;
+  internRadius(r: number | "full" | undefined): string | undefined {
+    if (r === undefined) return undefined;
+    if (r === "full") return this.intern(this.radius, "r", "full");
+    if (r <= 0) return undefined;
     return this.intern(this.radius, "r", String(r));
   }
 
@@ -47,7 +49,10 @@ export class TokenInterner {
       color: invert(this.color),
       text: invert(this.text),
       radius: Object.fromEntries(
-        [...this.radius].map(([value, id]) => [id, Number(value)]),
+        [...this.radius].map(([value, id]) => [
+          id,
+          value === "full" ? "full" : Number(value),
+        ] as [string, number | "full"]),
       ),
       shadow: invert(this.shadow),
     };

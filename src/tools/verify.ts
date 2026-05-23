@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { resolveScreen } from "../bridge/inventory";
+import { formatScreenMatches, resolveScreen } from "../bridge/inventory";
 import { requestNode } from "../bridge/server";
 import { bridge } from "../bridge/store";
 import { PlumbError } from "../errors";
@@ -103,8 +103,10 @@ export function registerPlumbVerify(server: McpServer): void {
           if ("ambiguous" in resolved) {
             return ok({
               ambiguous: true,
-              matches: resolved.ambiguous,
-              next: "Several screens share that name — re-call plumb_verify with one of these `id` values.",
+              matches: formatScreenMatches(resolved.ambiguous),
+              next:
+                "Several screens share that name. Each row shows `page` and " +
+                "`box` (w×h) — pick the one you want and re-call plumb_verify with its `id`.",
             });
           }
           const { doc, nodeName } = await requestNode(resolved.id);

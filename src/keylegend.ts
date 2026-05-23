@@ -7,6 +7,7 @@ export const KEY_LEGEND: Record<string, string> = {
   el: 'stable node handle — tag rendered DOM with data-plumb-id="<el>"',
   id: "raw Figma node id — pass to plumb_node to drill into this node",
   box: "{ w, h } size in CSS px",
+  pos: "{ x, y } position relative to parent (omitted when parent has auto-layout)",
   "layout.flow": "flex-direction — 'row' or 'col'",
   "layout.gap": "flex gap in px (Figma itemSpacing)",
   "layout.pad": "padding [top, right, bottom, left] in px",
@@ -16,7 +17,8 @@ export const KEY_LEGEND: Record<string, string> = {
   fill: "background — token ref $cN into tokens.color, or 'gradient' / 'image'",
   stroke: "border colour — token ref $cN into tokens.color",
   strokeW: "border width in px",
-  radius: "border-radius — token ref $rN into tokens.radius, or [tl,tr,br,bl]",
+  radius:
+    "border-radius — token ref $rN into tokens.radius (value is px or \"full\" for pill/circle), or per-corner [tl,tr,br,bl]",
   shadow: "CSS box-shadow string",
   text: "type style — token ref $tN into tokens.text ('weight size/lh family')",
   chars: "literal text content of a TEXT node",

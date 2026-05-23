@@ -61,6 +61,7 @@ function serialize(node: SceneNode): SerialNode {
     if (n.layoutWrap) out.layoutWrap = n.layoutWrap;
     if (typeof n.counterAxisSpacing === "number") out.counterAxisSpacing = n.counterAxisSpacing;
   }
+  if (n.layoutPositioning === "ABSOLUTE") out.layoutPositioning = "ABSOLUTE";
 
   if (Array.isArray(n.fills)) out.fills = n.fills;
   if (Array.isArray(n.strokes)) out.strokes = n.strokes;

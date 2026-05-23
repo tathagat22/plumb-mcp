@@ -1,4 +1,11 @@
-import { mkdirSync, renameSync, statSync, copyFileSync, unlinkSync } from "node:fs";
+import {
+  mkdirSync,
+  renameSync,
+  statSync,
+  copyFileSync,
+  unlinkSync,
+  readFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import type { WireAsset } from "./bridge/protocol";
 
@@ -10,6 +17,49 @@ export interface WrittenAsset {
   bytes: number;
   /** The id of the nearest ancestor that was also exported. */
   parentId?: string;
+  /**
+   * Inline source — SVG markup as a string, or a `data:` URI for small
+   * bitmaps. Present only when `inline:true` was requested on the export and
+   * the asset is within the size cap. Use this to drop icons straight into
+   * components without re-reading the file from disk.
+   */
+  source?: string;
+}
+
+/** Bitmaps above this many bytes are not base64-inlined (kept on disk only). */
+export const INLINE_MAX_BYTES = 64 * 1024;
+
+const MIME_FOR_FORMAT: Record<string, string> = {
+  SVG: "image/svg+xml",
+  PNG: "image/png",
+  JPG: "image/jpeg",
+  GIF: "image/gif",
+  WEBP: "image/webp",
+};
+
+/**
+ * Build the inline `source` string for a freshly written asset. SVGs come back
+ * as raw markup (always — they're text and tiny); bitmaps come back as
+ * `data:image/<fmt>;base64,…` only when under INLINE_MAX_BYTES so we don't
+ * blow up the agent's context with a megabyte of base64.
+ */
+function buildInlineSource(format: string, path: string, bytes: number): string | undefined {
+  if (format === "SVG") {
+    try {
+      return readFileSync(path, "utf8");
+    } catch {
+      return undefined;
+    }
+  }
+  if (bytes > INLINE_MAX_BYTES) return undefined;
+  const mime = MIME_FOR_FORMAT[format];
+  if (!mime) return undefined;
+  try {
+    const buf = readFileSync(path);
+    return `data:${mime};base64,${buf.toString("base64")}`;
+  } catch {
+    return undefined;
+  }
 }
 
 function extForFormat(format: string): string {
@@ -42,6 +92,7 @@ function slug(s: string): string {
 export function writeAssets(
   screenName: string,
   assets: WireAsset[],
+  opts: { inline?: boolean } = {},
 ): { dir: string; written: WrittenAsset[] } {
   const root = process.env.PLUMB_ASSETS_DIR ?? join(process.cwd(), "plumb-assets");
   const dir = join(root, slug(screenName) || "screen");
@@ -66,14 +117,20 @@ export function writeAssets(
       copyFileSync(asset.path, fullPath);
       try { unlinkSync(asset.path); } catch { /* best-effort */ }
     }
-    written.push({
+    const bytes = statSync(fullPath).size;
+    const out: WrittenAsset = {
       id: asset.id,
       name: asset.name,
       format: asset.format,
       path: fullPath,
-      bytes: statSync(fullPath).size,
+      bytes,
       parentId: asset.parentId,
-    });
+    };
+    if (opts.inline) {
+      const source = buildInlineSource(asset.format, fullPath, bytes);
+      if (source !== undefined) out.source = source;
+    }
+    written.push(out);
   }
   return { dir, written };
 }

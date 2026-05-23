@@ -277,12 +277,29 @@ function compareOne(
 
   // --- Border radius -----------------------------------------------------
   if (node.radius !== undefined && styles.borderRadius) {
-    let expected: number | null = null;
+    let expected: number | "full" | null = null;
     if (typeof node.radius === "string") expected = tokens.radius[node.radius] ?? null;
     else if (Array.isArray(node.radius)) expected = node.radius[0] ?? null;
     if (expected !== null) {
       const v = parsePx(styles.borderRadius);
-      if (v !== null) pushPx("radius", expected, v);
+      if (v !== null) {
+        if (expected === "full") {
+          const minSide = Math.min(node.box.w, node.box.h);
+          // Anything >= half the smaller side is visually a pill/circle.
+          if (minSide > 0 && v + tol.px.ok < minSide / 2) {
+            deltas.push({
+              el: node.el,
+              name: node.name,
+              kind: "radius",
+              expected: `full (>= ${Math.round((minSide / 2) * 100) / 100}px)`,
+              actual: v,
+              severity: v + tol.px.warn < minSide / 2 ? "error" : "warn",
+            });
+          }
+        } else {
+          pushPx("radius", expected, v);
+        }
+      }
     }
   }
 

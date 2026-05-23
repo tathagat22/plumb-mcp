@@ -33,8 +33,13 @@ export interface PdsNode {
   type: string;
   box: { w: number; h: number };
   layout?: PdsLayout;
-  /** Set when the node is not laid out by its parent's auto-layout. */
-  pos?: "absolute";
+  /**
+   * Position relative to the parent's top-left, in CSS pixels. Emitted when
+   * the parent has no auto-layout (so children are absolutely positioned)
+   * or when the child overrides layout with Figma's "Absolute position"
+   * toggle. Omitted when the parent's auto-layout resolves placement.
+   */
+  pos?: { x: number; y: number };
   /** Token ref into tokens.color, or "gradient" / "image". */
   fill?: string;
   stroke?: string;
@@ -66,7 +71,13 @@ export interface PdsNode {
 export interface TokenTable {
   color: Record<string, string>;
   text: Record<string, string>;
-  radius: Record<string, number>;
+  /**
+   * Pixel radii, or the literal string "full" for fully-rounded shapes (pill /
+   * circle). Figma stores "fully rounded" as a giant sentinel integer
+   * (`21243700`, `33990048`, …) — Plumb normalises those to "full" so an
+   * agent never has to guess whether `21243700` is literal pixels.
+   */
+  radius: Record<string, number | "full">;
   shadow: Record<string, string>;
 }
 

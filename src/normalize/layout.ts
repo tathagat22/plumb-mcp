@@ -1,3 +1,4 @@
+import { cleanPx } from "../util/num";
 import type { FigmaNode } from "../figma/types";
 import type { Flow, PdsLayout } from "../pds";
 
@@ -28,18 +29,24 @@ export function toLayout(n: FigmaNode): PdsLayout | undefined {
   const layout: PdsLayout = {
     flow,
     pad: [
-      n.paddingTop ?? 0,
-      n.paddingRight ?? 0,
-      n.paddingBottom ?? 0,
-      n.paddingLeft ?? 0,
+      cleanPx(n.paddingTop ?? 0),
+      cleanPx(n.paddingRight ?? 0),
+      cleanPx(n.paddingBottom ?? 0),
+      cleanPx(n.paddingLeft ?? 0),
     ],
   };
 
-  if (n.itemSpacing) layout.gap = n.itemSpacing;
+  if (n.itemSpacing) {
+    const gap = cleanPx(n.itemSpacing);
+    if (gap) layout.gap = gap;
+  }
 
   if (n.layoutWrap === "WRAP") {
     layout.wrap = true;
-    if (n.counterAxisSpacing) layout.gapCross = n.counterAxisSpacing;
+    if (n.counterAxisSpacing) {
+      const gapCross = cleanPx(n.counterAxisSpacing);
+      if (gapCross) layout.gapCross = gapCross;
+    }
   }
 
   // Drop MIN (the flex default) to keep the spec terse.

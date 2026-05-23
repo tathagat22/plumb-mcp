@@ -48,6 +48,7 @@ export interface FigmaNode {
 
   // Auto-layout
   layoutMode?: "NONE" | "HORIZONTAL" | "VERTICAL";
+  layoutPositioning?: "AUTO" | "ABSOLUTE";
   layoutWrap?: "NO_WRAP" | "WRAP";
   itemSpacing?: number;
   counterAxisSpacing?: number;

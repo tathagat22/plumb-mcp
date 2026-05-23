@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { resolveScreen, screenName } from "../bridge/inventory";
+import { formatScreenMatches, resolveScreen, screenName } from "../bridge/inventory";
 import { requestAssets } from "../bridge/server";
 import { bridge } from "../bridge/store";
 import { writeAssets } from "../assets";
@@ -52,6 +52,15 @@ export function registerPlumbAssets(server: McpServer): void {
           .describe(
             "For nodes with IMAGE fills, export the original uploaded bytes (JPG/PNG/GIF/WEBP) via getImageByHash, instead of a 2× rasterised PNG render. Other nodes (icons, vectors) export the same as default.",
           ),
+        inline: z
+          .boolean()
+          .optional()
+          .describe(
+            "Return asset bytes inline on each row: SVGs as raw markup, " +
+              "bitmaps under 64KB as a data: URI. Useful for dropping SVG " +
+              "icons straight into JSX without re-reading from disk. Files " +
+              "are still written; this is additive.",
+          ),
       },
       annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
     },
@@ -66,6 +75,7 @@ export function registerPlumbAssets(server: McpServer): void {
 
         const list = args.list === true;
         const raw = args.raw === true;
+        const inline = args.inline === true;
 
         // --- Surgical mode — specific ids ----------------------------------
         if (args.ids && args.ids.length > 0) {
@@ -94,7 +104,7 @@ export function registerPlumbAssets(server: McpServer): void {
             });
           }
           const folder = args.name || (args.id ? screenName(args.id) : "") || "specific";
-          const { dir, written } = writeAssets(folder, assets);
+          const { dir, written } = writeAssets(folder, assets, { inline });
           return ok({
             source: "plugin",
             mode: "specific",
@@ -107,11 +117,14 @@ export function registerPlumbAssets(server: McpServer): void {
               path: w.path,
               bytes: w.bytes,
               parentId: w.parentId,
+              ...(w.source !== undefined ? { source: w.source } : {}),
             })),
             next:
               written.length === 0
                 ? "None of the supplied ids resolved to exportable nodes."
-                : "Use these file paths when building.",
+                : inline
+                  ? "Each row has either `source` (SVG markup or data: URI) or just `path`. Drop SVG `source` straight into JSX."
+                  : "Use these file paths when building.",
           });
         }
 
@@ -127,8 +140,10 @@ export function registerPlumbAssets(server: McpServer): void {
         if ("ambiguous" in resolved) {
           return ok({
             ambiguous: true,
-            matches: resolved.ambiguous,
-            next: "Several screens share that name — re-call plumb_assets with one of these `id` values.",
+            matches: formatScreenMatches(resolved.ambiguous),
+            next:
+              "Several screens share that name. Each row shows `page` and " +
+              "`box` (w×h) — pick the one you want and re-call plumb_assets with its `id`.",
           });
         }
 
@@ -161,7 +176,7 @@ export function registerPlumbAssets(server: McpServer): void {
           });
         }
 
-        const { dir, written } = writeAssets(sname, assets);
+        const { dir, written } = writeAssets(sname, assets, { inline });
         return ok({
           source: "plugin",
           dir,
@@ -173,11 +188,14 @@ export function registerPlumbAssets(server: McpServer): void {
             path: w.path,
             bytes: w.bytes,
             parentId: w.parentId,
+            ...(w.source !== undefined ? { source: w.source } : {}),
           })),
           next:
             written.length === 0
               ? "No exportable assets (icons / images) were found in this screen."
-              : "Use these file paths when building. Tip: pass `list: true` first to peek without downloading; then `ids: [...]` to pull just what you need.",
+              : inline
+                ? "Each row has either `source` (SVG markup or data: URI) or just `path`. Drop SVG `source` straight into JSX."
+                : "Use these file paths when building. Tip: pass `list: true` first to peek without downloading; then `ids: [...]` to pull just what you need.",
         });
       } catch (e) {
         return fail(e);

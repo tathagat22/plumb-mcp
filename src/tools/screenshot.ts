@@ -1,7 +1,14 @@
-import { mkdirSync, renameSync, copyFileSync, statSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
+import {
+  mkdirSync,
+  renameSync,
+  copyFileSync,
+  statSync,
+  unlinkSync,
+  existsSync,
+} from "node:fs";
+import { isAbsolute, join, parse } from "node:path";
 import { z } from "zod";
-import { resolveScreen, screenName } from "../bridge/inventory";
+import { formatScreenMatches, resolveScreen, screenName } from "../bridge/inventory";
 import { requestScreenshot } from "../bridge/server";
 import { bridge } from "../bridge/store";
 import { PlumbError } from "../errors";
@@ -25,6 +32,46 @@ function slug(s: string): string {
   );
 }
 
+/**
+ * Pick a non-colliding path under `root`. If `path` is free, return it;
+ * otherwise insert `-2`, `-3`, … before the extension until one is.
+ */
+function uniquePath(path: string): string {
+  if (!existsSync(path)) return path;
+  const { dir, name, ext } = parse(path);
+  for (let i = 2; i < 1000; i++) {
+    const next = join(dir, `${name}-${i}${ext}`);
+    if (!existsSync(next)) return next;
+  }
+  return path;
+}
+
+/**
+ * Resolve the final on-disk path. `out` accepts either an absolute path or
+ * a filename (relative to `root`); extension is normalised to match the
+ * actual rendered format. Without `out`, default to
+ * `<slug(name)>-<slug(id)>.<ext>` and auto-suffix on collision so back-to-back
+ * exports of two screens that share a name don't overwrite each other.
+ */
+function pickPath(
+  root: string,
+  ext: string,
+  nodeName: string,
+  nodeId: string,
+  out: string | undefined,
+): string {
+  if (out) {
+    const explicit = isAbsolute(out) ? out : join(root, out);
+    const parsed = parse(explicit);
+    const fixed = parsed.ext.toLowerCase() === `.${ext}` ? explicit : `${explicit}.${ext}`;
+    return uniquePath(fixed);
+  }
+  const idSlug = slug(nodeId);
+  const nameSlug = slug(nodeName);
+  const file = `${nameSlug}-${idSlug}.${ext}`;
+  return uniquePath(join(root, file));
+}
+
 /** Registers the `plumb_screenshot` MCP tool (plan §8). */
 export function registerPlumbScreenshot(server: McpServer): void {
   server.registerTool(
@@ -45,6 +92,14 @@ export function registerPlumbScreenshot(server: McpServer): void {
           .enum(["PNG", "JPG"])
           .optional()
           .describe("Output format. Default PNG."),
+        out: z
+          .string()
+          .optional()
+          .describe(
+            "Output path or filename. Absolute paths are honoured as-is; " +
+              "bare filenames are placed under the screenshots directory. " +
+              "Defaults to '<name>-<id>.<ext>', auto-suffixed on collision.",
+          ),
       },
       annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
     },
@@ -60,8 +115,10 @@ export function registerPlumbScreenshot(server: McpServer): void {
         if ("ambiguous" in resolved) {
           return ok({
             ambiguous: true,
-            matches: resolved.ambiguous,
-            next: "Several screens share that name — re-call plumb_screenshot with one of these `id` values.",
+            matches: formatScreenMatches(resolved.ambiguous),
+            next:
+              "Several screens share that name. Each row shows `page` and " +
+              "`box` (w×h) — pick the one you want and re-call plumb_screenshot with its `id`.",
           });
         }
         const { path: tempPath, format, nodeName, error } = await requestScreenshot(
@@ -83,10 +140,15 @@ export function registerPlumbScreenshot(server: McpServer): void {
         }
         const root =
           process.env.PLUMB_SCREENSHOTS_DIR ?? join(process.cwd(), "plumb-screenshots");
-        mkdirSync(root, { recursive: true });
         const ext = format.toLowerCase();
-        const file = slug(nodeName || screenName(resolved.id) || resolved.id) + "." + ext;
-        const path = join(root, file);
+        const path = pickPath(
+          root,
+          ext,
+          nodeName || screenName(resolved.id) || resolved.id,
+          resolved.id,
+          args.out,
+        );
+        mkdirSync(parse(path).dir, { recursive: true });
         // Prefer rename (same filesystem — atomic), fall back to copy+unlink if
         // the OS temp dir is on a different volume.
         try {

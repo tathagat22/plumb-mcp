@@ -3,13 +3,30 @@ import { estimateTokens } from "../util/estimate";
 import { HandleMinter } from "../normalize/handles";
 import { bridge } from "./store";
 
-/** One screen in a flattened, page-annotated list. */
+/** One screen in a flattened, page-annotated list (internal shape). */
 export interface ScreenMatch {
   id: string;
   name: string;
   page: string;
   w: number;
   h: number;
+}
+
+/** Agent-facing row shape: PDS-consistent `box: {w,h}`, page surfaced. */
+export interface ScreenMatchRow {
+  id: string;
+  name: string;
+  page: string;
+  box: { w: number; h: number };
+}
+
+export function formatScreenMatches(matches: ScreenMatch[]): ScreenMatchRow[] {
+  return matches.map((m) => ({
+    id: m.id,
+    name: m.name,
+    page: m.page,
+    box: { w: m.w, h: m.h },
+  }));
 }
 
 /** All screens across all pages, flattened. */
