@@ -2,6 +2,8 @@
 
 **A Model Context Protocol server that gives AI coding agents accurate, token-efficient access to Figma files.**
 
+📖 Full docs: **<https://tathagat22.github.io/plumb-mcp/>** &nbsp;·&nbsp; 📦 npm: [`plumb-mcp`](https://www.npmjs.com/package/plumb-mcp)
+
 Plumb reads a Figma file through a companion plugin running inside the desktop
 app — no REST rate limits, no metered billing, no plan gating. It returns a
 compact, normalised design spec instead of the multi-hundred-thousand-token
@@ -248,7 +250,7 @@ plumb-mcp/
 │   ├── figma/            # REST ingest + raw Figma types
 │   ├── bridge/           # localhost WebSocket bridge to the plugin
 │   ├── normalize/        # raw Figma → PDS (handles, layout, paint, …)
-│   ├── tools/            # the ten MCP tools (one file each)
+│   ├── tools/            # the twelve MCP tools (one file each)
 │   ├── cli/init.ts       # `plumb init` — write editor MCP configs
 │   └── util/             # round, estimateTokens, …
 ├── figma-plugin/
