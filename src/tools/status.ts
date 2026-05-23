@@ -27,7 +27,7 @@ export function registerPlumbStatus(server: McpServer): void {
       );
       const screenCount = bridge.inventory ? flatScreens().length : 0;
       return ok({
-        server: { name: SERVER_NAME, version: SERVER_VERSION, milestone: "M2" },
+        server: { name: SERVER_NAME, version: SERVER_VERSION, milestone: "M3" },
         plugin: {
           connected: bridge.paired,
           bridgePort: bridge.port,
@@ -57,6 +57,7 @@ export function registerPlumbStatus(server: McpServer): void {
           "plumb_screenshot",
           "plumb_search",
           "plumb_components",
+          "plumb_verify",
         ],
         legend: KEY_LEGEND,
         budget: {

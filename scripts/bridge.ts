@@ -263,6 +263,95 @@ check(
   `${comps.componentCount} comp, ${comps.instanceCount} inst`,
 );
 
+/* --- plumb_verify ------------------------------------------------------- */
+// Build a rendered layout that mostly matches the fixture but has three known
+// discrepancies (width off, font size off, ghost element) so we can assert
+// the verifier classifies each correctly.
+const renderedOk = parse(
+  await client.callTool({
+    name: "plumb_verify",
+    arguments: {
+      id: "131:6950",
+      rendered: [
+        {
+          el: "export-employees-dialog",
+          box: { x: 0, y: 0, w: 528, h: 578 },
+          styles: {
+            backgroundColor: "rgb(247, 247, 251)",
+            borderRadius: "21px",
+            flexDirection: "column",
+          },
+        },
+        {
+          el: "title",
+          box: { x: 20, y: 20, w: 220, h: 24 },
+          text: "Export employees",
+          styles: {
+            color: "rgb(18, 18, 18)",
+            fontWeight: "700",
+            fontSize: "20px",
+            lineHeight: "24px",
+            fontFamily: "Inter, sans-serif",
+          },
+        },
+      ],
+    },
+  }),
+);
+check(
+  "plumb_verify on a matching layout returns ok with zero errors",
+  renderedOk.ok === true && renderedOk.matched === 2 &&
+    !renderedOk.deltas.some((d: any) => d.severity === "error"),
+  `${renderedOk.matched} matched, ${renderedOk.deltas?.length ?? 0} deltas`,
+);
+
+const renderedBad = parse(
+  await client.callTool({
+    name: "plumb_verify",
+    arguments: {
+      id: "131:6950",
+      rendered: [
+        {
+          el: "export-employees-dialog",
+          box: { x: 0, y: 0, w: 540, h: 578 }, // w off by 12 — error
+          styles: {
+            backgroundColor: "rgb(255, 0, 0)", // very wrong colour — error
+            borderRadius: "21px",
+          },
+        },
+        {
+          el: "title",
+          box: { x: 20, y: 20, w: 220, h: 24 },
+          text: "Export employees",
+          styles: {
+            color: "rgb(18, 18, 18)",
+            fontWeight: "500", // off by 200 — error
+            fontSize: "16px", // off by 4 — error
+            lineHeight: "20px",
+            fontFamily: "Inter",
+          },
+        },
+        {
+          el: "ghost-element", // doesn't exist in PDS — flagged
+          box: { x: 0, y: 0, w: 100, h: 100 },
+        },
+      ],
+    },
+  }),
+);
+check(
+  "plumb_verify catches size, colour, weight, font-size, and missing-in-pds",
+  renderedBad.ok === false &&
+    renderedBad.matched === 2 &&
+    renderedBad.unmatched === 1 &&
+    renderedBad.deltas.some((d: any) => d.kind === "size.w" && d.severity === "error") &&
+    renderedBad.deltas.some((d: any) => d.kind === "fill" && d.severity === "error") &&
+    renderedBad.deltas.some((d: any) => d.kind === "text.weight") &&
+    renderedBad.deltas.some((d: any) => d.kind === "text.size" && d.severity === "error") &&
+    renderedBad.deltas.some((d: any) => d.kind === "missing-in-pds"),
+  `${renderedBad.deltas.length} deltas, unmatched=${renderedBad.unmatched}`,
+);
+
 const status = parse(await client.callTool({ name: "plumb_status", arguments: {} }));
 check("plumb_status reports the screen count", status.plugin?.screens === 3);
 

@@ -29,6 +29,7 @@ const expected = [
   "plumb_selection",
   "plumb_status",
   "plumb_tokens",
+  "plumb_verify",
 ];
 const missing = expected.filter((n) => !names.includes(n));
 if (missing.length) {
@@ -63,4 +64,4 @@ console.log("plumb_node (no token) →", JSON.stringify(noToken.content));
 
 await client.close();
 await server.close();
-console.log("✓ PASS: 9 tools registered; plumb_status self-describes; errors are instruction-shaped.");
+console.log("✓ PASS: 10 tools registered; plumb_status self-describes; errors are instruction-shaped.");
