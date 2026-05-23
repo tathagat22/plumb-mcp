@@ -44,11 +44,25 @@ export function normalize(
   const minter = new HandleMinter();
   const nodes: Record<string, PdsNode> = {};
 
+  // Pre-pass: walk the entire visible tree (ignoring `depth`) so every node
+  // gets its el assigned in a deterministic, depth-independent order. Without
+  // this, a deeper walk visits more sibling/descendant nodes named "vector"
+  // or "group" between two same-named cousins, shifting which one gets the
+  // un-suffixed handle — which broke plumb_verify across different depths.
+  const elById = new Map<string, string>();
+  function preWalk(fn: FigmaNode, level: number): void {
+    if (level > 0 && fn.visible === false) return;
+    elById.set(fn.id, minter.mint(fn.name ?? "", fn.type ?? ""));
+    const kids = (fn.children ?? []).filter((k) => k.visible !== false);
+    for (const child of kids) preWalk(child, level + 1);
+  }
+  preWalk(file.document, 0);
+
   function walk(fn: FigmaNode, level: number): string | undefined {
     // Prune invisible nodes — but never the requested root (level 0).
     if (level > 0 && fn.visible === false) return undefined;
 
-    const el = minter.mint(fn.name ?? "", fn.type ?? "");
+    const el = elById.get(fn.id) ?? minter.mint(fn.name ?? "", fn.type ?? "");
     const node: PdsNode = {
       id: fn.id,
       el,

@@ -80,6 +80,7 @@
   var PLUGIN_VERSION = "0.0.1";
   var ws = null, paired = false, autoPair = false, portIdx = 0, helloTimer = null;
   var lastSelection = null, lastInventory = null;
+  var connectedPort = 0; // set on each connect attempt — used for /upload POSTs
 
   var dot = document.getElementById("dot");
   var bigdot = document.getElementById("bigdot");
@@ -116,6 +117,7 @@
   function connect() {
     var port = PORTS[portIdx % PORTS.length];
     portIdx++;
+    connectedPort = port;
     try { ws = new WebSocket("ws://127.0.0.1:" + port); }
     catch (e) { setTimeout(connect, 1500); return; }
 
@@ -145,7 +147,10 @@
         toMain({ type: "resync" });
       } else if (msg.t === "pair-rejected") {
         setState("wait", msg.reason || "Pairing rejected");
-      } else if (msg.t === "get-node" || msg.t === "get-assets") {
+      } else if (msg.reqId && typeof msg.t === "string" && msg.t.indexOf("get-") === 0) {
+        // Forward every server-side `get-*` request that carries a reqId to the
+        // plugin worker. Earlier this only routed get-node/get-assets, which
+        // silently dropped get-screenshot/get-search/get-components.
         toMain({ type: "server-request", req: msg });
       } else if (msg.t === "ping") {
         send({ t: "pong" });
@@ -202,9 +207,91 @@
         send({ t: "inventory", fileName: msg.fileName, pages: msg.pages });
       }
     } else if (msg.type === "plugin-reply") {
-      send(msg.reply);
+      forwardReply(msg.reply);
+    } else if (msg.type === "upload-screenshot") {
+      uploadScreenshot(msg);
+    } else if (msg.type === "upload-asset") {
+      uploadAsset(msg);
     }
   };
+
+  // Tracks in-flight asset POSTs per reqId so the matching assets reply can
+  // wait for every upload to land before going out over the wire — otherwise
+  // the bridge sees the manifest before some files exist on disk.
+  var pendingAssetUploads = Object.create(null);
+
+  function forwardReply(reply) {
+    if (reply && reply.t === "assets" && pendingAssetUploads[reply.reqId]) {
+      var promises = pendingAssetUploads[reply.reqId];
+      delete pendingAssetUploads[reply.reqId];
+      Promise.all(promises).then(function () { send(reply); });
+      return;
+    }
+    send(reply);
+  }
+
+  function postBinary(url, bytes) {
+    try {
+      return fetch(url, { method: "POST", body: bytes })
+        .then(function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+        });
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  }
+
+  // Ship raw screenshot bytes over loopback HTTP — no base64, no JSON framing.
+  // The bridge writes the body straight to disk and resolves the pending
+  // screenshot promise once it sees the matching `screenshot` WS reply below.
+  function uploadScreenshot(msg) {
+    var ext = (msg.format || "PNG").toLowerCase();
+    var url = "http://127.0.0.1:" + connectedPort + "/upload/" + msg.reqId + "." + ext;
+    postBinary(url, msg.bytes)
+      .then(function () {
+        send({
+          t: "screenshot",
+          reqId: msg.reqId,
+          format: msg.format || "",
+          nodeName: msg.nodeName || null,
+          error: null,
+        });
+      })
+      .catch(function (e) {
+        send({
+          t: "screenshot",
+          reqId: msg.reqId,
+          format: msg.format || "",
+          nodeName: msg.nodeName || null,
+          error: String(e && e.message || e),
+        });
+      });
+  }
+
+  // Asset bytes ride the same loopback HTTP channel as screenshots — one POST
+  // per asset, keyed by `${reqId}-${index}` so the bridge can match them to
+  // the manifest entries that follow in the assets WS reply. The plugin
+  // serialises uploads by waiting for an upload-ack postMessage between each;
+  // without that gating, Figma's IPC buffers and redelivers messages, causing
+  // duplicate POSTs that race the manifest reply.
+  function uploadAsset(msg) {
+    var ext = msg.ext || "bin";
+    var url = "http://127.0.0.1:" + connectedPort +
+      "/upload/" + msg.reqId + "-" + msg.index + "." + ext;
+    var p = postBinary(url, msg.bytes);
+    if (!pendingAssetUploads[msg.reqId]) pendingAssetUploads[msg.reqId] = [];
+    pendingAssetUploads[msg.reqId].push(p);
+    p.then(function () {
+      toMain({ type: "upload-ack", reqId: msg.reqId, index: msg.index, error: null });
+    }).catch(function (e) {
+      toMain({
+        type: "upload-ack",
+        reqId: msg.reqId,
+        index: msg.index,
+        error: String(e && e.message || e),
+      });
+    });
+  }
 
   connect();
 </script>

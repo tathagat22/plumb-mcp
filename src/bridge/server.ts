@@ -1,3 +1,7 @@
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { createWriteStream } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { WebSocketServer, type WebSocket } from "ws";
 import { BRIDGE_PORTS } from "./protocol";
 import { bridge } from "./store";
@@ -15,6 +19,11 @@ import type {
 
 let pairedSocket: WebSocket | null = null;
 let reqCounter = 0;
+
+/** reqId → path the plugin's binary upload was written to. Drained when the
+ *  matching `screenshot` WS reply arrives, so the resolved promise can carry
+ *  the on-disk path instead of a base64 string. */
+const uploadMap = new Map<string, { path: string }>();
 
 interface Pending {
   resolve: (value: unknown) => void;
@@ -38,7 +47,12 @@ function log(line: string): void {
 
 function resolvePending(reqId: string, value: unknown): void {
   const p = pending.get(reqId);
-  if (!p) return;
+  if (!p) {
+    // Reply arrived after we already timed out — surface it so we can tell
+    // a slow-but-eventual reply from a genuine hang during debugging.
+    log(`late reply for ${reqId} (already timed out or unknown)`);
+    return;
+  }
   clearTimeout(p.timer);
   pending.delete(reqId);
   p.resolve(value);
@@ -87,7 +101,7 @@ function request<T>(
 export function requestNode(
   nodeId: string,
 ): Promise<{ doc: FigmaNode | null; nodeName: string | null }> {
-  return request((reqId) => ({ t: "get-node", reqId, nodeId }), 15_000, "node");
+  return request((reqId) => ({ t: "get-node", reqId, nodeId }), 60_000, "node");
 }
 
 export interface RequestAssetsOptions {
@@ -99,37 +113,45 @@ export interface RequestAssetsOptions {
   list?: boolean;
 }
 
+/** reqId → timestamp of the get-assets request, used to time-stamp uploads. */
+const assetRequestStart = new Map<string, number>();
+
 /** Ask the plugin to export assets (default: every asset in `nodeId`). */
 export function requestAssets(
   opts: RequestAssetsOptions,
 ): Promise<{ assets: WireAsset[]; error: string | null }> {
   return request(
-    (reqId) => ({
-      t: "get-assets",
-      reqId,
-      nodeId: opts.nodeId ?? "",
-      ids: opts.ids,
-      list: opts.list,
-    }),
-    90_000,
+    (reqId) => {
+      assetRequestStart.set(reqId, Date.now());
+      return {
+        t: "get-assets",
+        reqId,
+        nodeId: opts.nodeId ?? "",
+        ids: opts.ids,
+        list: opts.list,
+      };
+    },
+    180_000,
     "assets",
   );
 }
 
-/** Ask the plugin to render a node as PNG/JPG. */
+/** Ask the plugin to render a node as PNG/JPG. The image bytes arrive over a
+ *  side-channel HTTP POST from the plugin UI — the WS reply is just metadata.
+ *  Resolved `path` is a temp file the caller should rename/move. */
 export function requestScreenshot(
   nodeId: string,
   scale?: number,
   format?: "PNG" | "JPG",
 ): Promise<{
-  dataBase64: string;
+  path: string | null;
   format: string;
   nodeName: string | null;
   error: string | null;
 }> {
   return request(
     (reqId) => ({ t: "get-screenshot", reqId, nodeId, scale, format }),
-    60_000,
+    240_000,
     "screenshot",
   );
 }
@@ -159,11 +181,48 @@ export function requestComponents(): Promise<{
   );
 }
 
-function bindPort(port: number): Promise<WebSocketServer | null> {
+/** HTTP request handler for the bridge's loopback server. Serves CORS preflight
+ *  and the `/upload/:reqId.:ext` POST that the plugin UI uses to ship raw
+ *  screenshot bytes — no base64 anywhere in the hot path. */
+function handleHttp(req: IncomingMessage, res: ServerResponse): void {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+  const m = req.url && /^\/upload\/([A-Za-z0-9_-]+)\.([a-z0-9]+)$/.exec(req.url);
+  if (!m || req.method !== "POST") {
+    res.writeHead(404);
+    res.end();
+    return;
+  }
+  const reqId = m[1]!;
+  const ext = m[2]!;
+  const path = join(tmpdir(), `plumb-${reqId}.${ext}`);
+  const out = createWriteStream(path);
+  req.pipe(out);
+  out.on("finish", () => {
+    uploadMap.set(reqId, { path });
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+  });
+  out.on("error", (err) => {
+    log(`upload write failed: ${err.message}`);
+    res.writeHead(500);
+    res.end();
+  });
+}
+
+function bindPort(port: number): Promise<{ wss: WebSocketServer; http: Server } | null> {
   return new Promise((resolve) => {
-    const wss = new WebSocketServer({ host: "127.0.0.1", port });
-    wss.once("listening", () => resolve(wss));
-    wss.once("error", () => resolve(null));
+    const http = createServer(handleHttp);
+    const wss = new WebSocketServer({ server: http });
+    http.once("listening", () => resolve({ wss, http }));
+    http.once("error", () => resolve(null));
+    http.listen(port, "127.0.0.1");
   });
 }
 
@@ -179,8 +238,9 @@ export async function startBridge(): Promise<void> {
   let wss: WebSocketServer | null = null;
   let chosen = 0;
   for (const port of BRIDGE_PORTS) {
-    wss = await bindPort(port);
-    if (wss) {
+    const bound = await bindPort(port);
+    if (bound) {
+      wss = bound.wss;
       chosen = port;
       break;
     }
@@ -243,17 +303,37 @@ export async function startBridge(): Promise<void> {
         case "node":
           resolvePending(msg.reqId, { doc: msg.doc, nodeName: msg.nodeName });
           break;
-        case "assets":
-          resolvePending(msg.reqId, { assets: msg.assets, error: msg.error });
+        case "assets": {
+          // Plugin streams bytes via HTTP /upload/${reqId}-${i}.${ext}, then
+          // sends this manifest over WS with `path: null`. Pull the bridge's
+          // on-disk temp path for each asset by index. `list: true` mode skips
+          // uploads — those entries keep path = null.
+          const filled = msg.assets.map((a, i) => {
+            if (a.path !== null) return a;
+            const key = `${msg.reqId}-${i}`;
+            const upload = uploadMap.get(key);
+            uploadMap.delete(key);
+            return { ...a, path: upload?.path ?? null };
+          });
+          const startedAt = assetRequestStart.get(msg.reqId);
+          assetRequestStart.delete(msg.reqId);
+          if (startedAt !== undefined) {
+            log(`assets reply: ${filled.length} asset(s) in ${Date.now() - startedAt}ms`);
+          }
+          resolvePending(msg.reqId, { assets: filled, error: msg.error });
           break;
-        case "screenshot":
+        }
+        case "screenshot": {
+          const upload = uploadMap.get(msg.reqId);
+          uploadMap.delete(msg.reqId);
           resolvePending(msg.reqId, {
-            dataBase64: msg.dataBase64,
+            path: upload?.path ?? null,
             format: msg.format,
             nodeName: msg.nodeName,
             error: msg.error,
           });
           break;
+        }
         case "search":
           resolvePending(msg.reqId, { matches: msg.matches, error: msg.error });
           break;

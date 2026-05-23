@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, copyFileSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { resolveScreen, screenName } from "../bridge/inventory";
@@ -64,7 +64,7 @@ export function registerPlumbScreenshot(server: McpServer): void {
             next: "Several screens share that name — re-call plumb_screenshot with one of these `id` values.",
           });
         }
-        const { dataBase64, format, nodeName, error } = await requestScreenshot(
+        const { path: tempPath, format, nodeName, error } = await requestScreenshot(
           resolved.id,
           args.scale,
           args.format,
@@ -75,20 +75,33 @@ export function registerPlumbScreenshot(server: McpServer): void {
             "Retry; if it persists, the node may have been deleted or renamed.",
           );
         }
+        if (!tempPath) {
+          throw new PlumbError(
+            "The plugin reported a screenshot but no image bytes arrived.",
+            "Re-run the Plumb plugin and retry; if it persists, file a bug.",
+          );
+        }
         const root =
           process.env.PLUMB_SCREENSHOTS_DIR ?? join(process.cwd(), "plumb-screenshots");
         mkdirSync(root, { recursive: true });
         const ext = format.toLowerCase();
         const file = slug(nodeName || screenName(resolved.id) || resolved.id) + "." + ext;
         const path = join(root, file);
-        const buffer = Buffer.from(dataBase64, "base64");
-        writeFileSync(path, buffer);
+        // Prefer rename (same filesystem — atomic), fall back to copy+unlink if
+        // the OS temp dir is on a different volume.
+        try {
+          renameSync(tempPath, path);
+        } catch {
+          copyFileSync(tempPath, path);
+          try { unlinkSync(tempPath); } catch { /* leave the temp file */ }
+        }
+        const bytes = statSync(path).size;
         return ok({
           source: "plugin",
           screen: nodeName,
           path,
           format,
-          bytes: buffer.length,
+          bytes,
           scale: args.scale ?? 2,
           next: "Use this image as the visual reference of the design — compare it against what you build.",
         });

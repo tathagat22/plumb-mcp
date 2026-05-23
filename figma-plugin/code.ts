@@ -182,7 +182,8 @@ interface WireAsset {
   id: string;
   name: string;
   format: "SVG" | "PNG";
-  dataBase64: string;
+  /** Bridge fills this in from the HTTP upload — plugin always sends null. */
+  path: null;
   /** The id of the nearest ancestor that was also exported. */
   parentId?: string;
 }
@@ -190,21 +191,6 @@ interface WireAsset {
 const VECTOR_TYPES = ["VECTOR", "BOOLEAN_OPERATION", "STAR", "LINE", "POLYGON"];
 const CONTAINER_TYPES = ["FRAME", "GROUP", "INSTANCE", "COMPONENT"];
 const MAX_ASSETS = 300;
-
-const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-function toBase64(bytes: Uint8Array): string {
-  let out = "";
-  for (let i = 0; i < bytes.length; i += 3) {
-    const b0 = bytes[i];
-    const b1 = i + 1 < bytes.length ? bytes[i + 1] : 0;
-    const b2 = i + 2 < bytes.length ? bytes[i + 2] : 0;
-    out += B64[b0 >> 2];
-    out += B64[((b0 & 3) << 4) | (b1 >> 4)];
-    out += i + 1 < bytes.length ? B64[((b1 & 15) << 2) | (b2 >> 6)] : "=";
-    out += i + 2 < bytes.length ? B64[b2 & 63] : "=";
-  }
-  return out;
-}
 
 function hasImageFill(n: any): boolean {
   return (
@@ -253,13 +239,38 @@ function settingsFormat(n: any): "SVG" | "PNG" {
   return "PNG";
 }
 
-async function exportNode(n: any, format: "SVG" | "PNG"): Promise<WireAsset> {
+/** ackKey (`${reqId}-${index}`) → resolver that fires when the UI confirms
+ *  the matching /upload POST completed. Serialising on this ack keeps Figma's
+ *  postMessage IPC from buffering 100+ Uint8Arrays and redelivering them. */
+const uploadAcks = new Map<string, (error: string | null) => void>();
+
+/** Export a node and ship its bytes over the HTTP binary-upload channel.
+ *  The returned manifest entry never carries bytes — the bridge will fill in
+ *  `path` from the matching `${reqId}-${index}` upload before resolving. */
+async function exportAndUpload(
+  n: any,
+  format: "SVG" | "PNG",
+  reqId: string,
+  index: number,
+): Promise<WireAsset> {
   const settings: any =
     format === "SVG"
       ? { format: "SVG" }
       : { format: "PNG", constraint: { type: "SCALE", value: 2 } };
   const bytes: Uint8Array = await n.exportAsync(settings);
-  return { id: n.id, name: n.name, format, dataBase64: toBase64(bytes) };
+  const ackKey = `${reqId}-${index}`;
+  const ack = new Promise<void>((resolve, reject) => {
+    uploadAcks.set(ackKey, (error) => (error ? reject(new Error(error)) : resolve()));
+  });
+  figma.ui.postMessage({
+    type: "upload-asset",
+    reqId,
+    index,
+    bytes,
+    ext: format === "SVG" ? "svg" : "png",
+  });
+  await ack;
+  return { id: n.id, name: n.name, format, path: null };
 }
 
 function pickFormatForNode(n: any): "SVG" | "PNG" {
@@ -272,7 +283,11 @@ function pickFormatForNode(n: any): "SVG" | "PNG" {
 }
 
 /** Surgical mode — export exactly these ids, one asset each, no recursion. */
-async function collectSpecific(ids: string[], list: boolean): Promise<WireAsset[]> {
+async function collectSpecific(
+  ids: string[],
+  reqId: string,
+  list: boolean,
+): Promise<WireAsset[]> {
   const assets: WireAsset[] = [];
   for (const id of ids) {
     if (assets.length >= MAX_ASSETS) break;
@@ -282,9 +297,9 @@ async function collectSpecific(ids: string[], list: boolean): Promise<WireAsset[
     if (n.visible === false) continue;
     const format = pickFormatForNode(n);
     if (list) {
-      assets.push({ id: n.id, name: n.name, format, dataBase64: "" });
+      assets.push({ id: n.id, name: n.name, format, path: null });
     } else {
-      assets.push(await exportNode(n, format));
+      assets.push(await exportAndUpload(n, format, reqId, assets.length));
     }
   }
   return assets;
@@ -292,6 +307,7 @@ async function collectSpecific(ids: string[], list: boolean): Promise<WireAsset[
 
 async function collectAssets(
   root: SceneNode,
+  reqId: string,
   opts: { list?: boolean } = {},
 ): Promise<WireAsset[]> {
   const assets: WireAsset[] = [];
@@ -331,8 +347,8 @@ async function collectAssets(
     let exportedHere = false;
     if (format) {
       const asset: WireAsset = opts.list
-        ? { id: n.id, name: n.name, format, dataBase64: "" }
-        : await exportNode(n, format);
+        ? { id: n.id, name: n.name, format, path: null }
+        : await exportAndUpload(n, format, reqId, assets.length);
       if (ancestorId) asset.parentId = ancestorId;
       assets.push(asset);
       exportedHere = true;
@@ -371,37 +387,26 @@ async function handleGetScreenshot(
   try {
     const node = await figma.getNodeByIdAsync(nodeId);
     if (!node || node.type === "PAGE" || node.type === "DOCUMENT") {
-      reply({
-        t: "screenshot",
-        reqId,
-        dataBase64: "",
-        format: "",
-        nodeName: null,
-        error: "node not found",
-      });
+      reply({ t: "screenshot", reqId, format: "", nodeName: null, error: "node not found" });
       return;
     }
     const f = format ?? "PNG";
     const s = scale ?? 2;
     const settings: any = { format: f, constraint: { type: "SCALE", value: s } };
     const bytes: Uint8Array = await (node as any).exportAsync(settings);
-    reply({
-      t: "screenshot",
+    // Ship the raw bytes through the UI iframe and out over loopback HTTP — no
+    // base64. The UI will send the matching `screenshot` WS reply once the
+    // upload completes; the bridge resolves the pending promise with the
+    // on-disk path it wrote.
+    figma.ui.postMessage({
+      type: "upload-screenshot",
       reqId,
-      dataBase64: toBase64(bytes),
+      bytes,
       format: f,
       nodeName: (node as any).name ?? null,
-      error: null,
     });
   } catch (e) {
-    reply({
-      t: "screenshot",
-      reqId,
-      dataBase64: "",
-      format: "",
-      nodeName: null,
-      error: errMsg(e),
-    });
+    reply({ t: "screenshot", reqId, format: "", nodeName: null, error: errMsg(e) });
   }
 }
 
@@ -450,7 +455,7 @@ async function handleGetSearch(
 async function handleGetComponents(reqId: string): Promise<void> {
   try {
     const components: any[] = [];
-    const instances: any[] = [];
+    const instanceNodes: any[] = []; // collect first, resolve mainComponent after
     const instanceCount = new Map<string, number>();
 
     function visit(n: any, page: string): void {
@@ -468,15 +473,7 @@ async function handleGetComponents(reqId: string): Promise<void> {
         if (n.description) c.description = n.description;
         components.push(c);
       } else if (n.type === "INSTANCE") {
-        try {
-          const main = n.mainComponent;
-          if (main) {
-            instances.push({ id: n.id, name: n.name, componentId: main.id, page });
-            instanceCount.set(main.id, (instanceCount.get(main.id) ?? 0) + 1);
-          }
-        } catch {
-          // mainComponent can throw under dynamic-page — skip
-        }
+        instanceNodes.push({ node: n, page });
       }
       if (Array.isArray(n.children) && n.type !== "INSTANCE") {
         for (const c of n.children) visit(c, page);
@@ -484,6 +481,21 @@ async function handleGetComponents(reqId: string): Promise<void> {
     }
     for (const page of figma.root.children) {
       for (const child of page.children) visit(child, page.name);
+    }
+
+    // Under documentAccess: "dynamic-page", `n.mainComponent` (sync) throws.
+    // Use the async variant so we actually get componentId for each instance.
+    const instances: any[] = [];
+    for (const { node: n, page } of instanceNodes) {
+      try {
+        const main = await (n as InstanceNode).getMainComponentAsync();
+        if (main) {
+          instances.push({ id: n.id, name: n.name, componentId: main.id, page });
+          instanceCount.set(main.id, (instanceCount.get(main.id) ?? 0) + 1);
+        }
+      } catch {
+        // Component fully unresolvable (deleted/orphaned) — skip.
+      }
     }
     for (const c of components) c.instanceCount = instanceCount.get(c.id) ?? 0;
 
@@ -513,7 +525,7 @@ async function handleServerRequest(req: any): Promise<void> {
       const ids: string[] | undefined = Array.isArray(req.ids) ? req.ids : undefined;
 
       if (ids && ids.length > 0) {
-        const assets = await collectSpecific(ids, list);
+        const assets = await collectSpecific(ids, req.reqId, list);
         reply({ t: "assets", reqId: req.reqId, assets, error: null });
         return;
       }
@@ -523,7 +535,7 @@ async function handleServerRequest(req: any): Promise<void> {
         reply({ t: "assets", reqId: req.reqId, assets: [], error: "node not found" });
         return;
       }
-      const assets = await collectAssets(node as SceneNode, { list });
+      const assets = await collectAssets(node as SceneNode, req.reqId, { list });
       reply({ t: "assets", reqId: req.reqId, assets, error: null });
     } catch (e) {
       reply({
@@ -556,7 +568,13 @@ async function handleServerRequest(req: any): Promise<void> {
 /* UI messages + startup                                               */
 /* ------------------------------------------------------------------ */
 
-figma.ui.onmessage = (message: { type?: string; req?: unknown }) => {
+figma.ui.onmessage = (message: {
+  type?: string;
+  req?: unknown;
+  reqId?: string;
+  index?: number;
+  error?: string | null;
+}) => {
   if (!message || typeof message.type !== "string") return;
   switch (message.type) {
     case "resync":
@@ -575,6 +593,15 @@ figma.ui.onmessage = (message: { type?: string; req?: unknown }) => {
     case "server-request":
       void handleServerRequest(message.req);
       break;
+    case "upload-ack": {
+      const key = `${message.reqId}-${message.index}`;
+      const resolve = uploadAcks.get(key);
+      if (resolve) {
+        uploadAcks.delete(key);
+        resolve(message.error ?? null);
+      }
+      break;
+    }
   }
 };
 

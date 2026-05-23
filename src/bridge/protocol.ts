@@ -48,12 +48,14 @@ export interface InstanceInfo {
   overrides?: string[];
 }
 
-/** An exported asset, carried base64-encoded over the bridge. */
+/** An exported asset. Bytes ride the binary HTTP upload channel; this
+ *  manifest entry just carries metadata and the on-disk temp path the bridge
+ *  wrote. `path` is null in `list: true` mode (no bytes shipped). */
 export interface WireAsset {
   id: string;
   name: string;
   format: "SVG" | "PNG";
-  dataBase64: string;
+  path: string | null;
   /** The id of the nearest ancestor that was also exported — lets the agent
    *  navigate the asset hierarchy (e.g. "this icon is inside that header"). */
   parentId?: string;
@@ -75,7 +77,6 @@ export type PluginMessage =
   | {
       t: "screenshot";
       reqId: string;
-      dataBase64: string;
       format: string;
       nodeName: string | null;
       error: string | null;

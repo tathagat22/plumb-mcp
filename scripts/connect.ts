@@ -10,6 +10,9 @@ import { bridge } from "../src/bridge/store";
 import { createServer } from "../src/server";
 
 const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+/** Heavy tools (screenshot of a full screen, asset export of many icons) can
+ *  take well over the MCP client's default 60s timeout. */
+const HEAVY = { timeout: 240_000 };
 
 function parse(res: unknown): Record<string, any> {
   const content = (res as { content?: { text?: string }[] }).content ?? [];
@@ -63,7 +66,21 @@ for (const s of screens.slice(0, 12)) {
 if (screens.length > 12) console.log(`   … and ${screens.length - 12} more.`);
 
 /* --- plumb_node by name ------------------------------------------------- */
-const target = bridge.selection?.nodeName || screens[0]?.name || "";
+// Pick a target that exists as a top-level screen and is unique by name so
+// the by-name calls don't bail out with "no match" or "ambiguous".
+const screenNames = screens.map((s) => s.name);
+const nameCount = screenNames.reduce<Record<string, number>>((acc, n) => {
+  acc[n] = (acc[n] ?? 0) + 1;
+  return acc;
+}, {});
+const selectionIsScreen =
+  bridge.selection?.nodeName &&
+  nameCount[bridge.selection.nodeName] === 1;
+const target = selectionIsScreen
+  ? bridge.selection!.nodeName
+  : screens.find((s) => nameCount[s.name] === 1)?.name ||
+    screens[0]?.name ||
+    "";
 if (!target) {
   console.error("\n✗ No screen to demo on.");
   process.exit(1);
@@ -95,7 +112,11 @@ if (node.ambiguous) {
 
 /* --- plumb_assets ------------------------------------------------------- */
 const assets = parse(
-  await client.callTool({ name: "plumb_assets", arguments: { name: target } }),
+  await client.callTool(
+    { name: "plumb_assets", arguments: { name: target } },
+    undefined,
+    HEAVY,
+  ),
 );
 if (assets.ambiguous) {
   console.log(`\nplumb_assets → ambiguous: ${assets.matches.length} screens.`);
@@ -112,10 +133,20 @@ if (assets.ambiguous) {
 }
 
 /* --- plumb_screenshot --------------------------------------------------- */
+// Full 4× PNG — the binary upload path (POST /upload) ships raw bytes over
+// loopback HTTP, so there's no longer a reason to ask for a downsized image.
 const shot = parse(
-  await client.callTool({ name: "plumb_screenshot", arguments: { name: target } }),
+  await client.callTool(
+    { name: "plumb_screenshot", arguments: { name: target, scale: 4, format: "PNG" } },
+    undefined,
+    HEAVY,
+  ),
 );
-if (shot.error) {
+if (shot.ambiguous) {
+  console.log(
+    `\nplumb_screenshot → ambiguous: ${shot.matches.length} screens named "${target}".`,
+  );
+} else if (shot.error) {
   console.error(`\nplumb_screenshot → ERROR: ${shot.error}`);
 } else if (shot.path) {
   console.log(
@@ -155,10 +186,75 @@ if (!comps.error) {
   }
 }
 
+/* --- plumb_verify ------------------------------------------------------- */
+// Build a "rendered" layout straight from the live PDS — sizes match by
+// construction. Should produce zero errors (the verifier must not see ghosts
+// where there are none). Then break one element and add a ghost to prove it
+// catches real mistakes too.
+const pdsForVerify = parse(
+  await client.callTool({ name: "plumb_node", arguments: { name: target, depth: 4 } }),
+);
+if (!pdsForVerify.error && pdsForVerify.nodes) {
+  const renderedFromPds = Object.entries(pdsForVerify.nodes as Record<string, any>)
+    .filter(([_, n]) => n.box && (n.box.w > 0 || n.box.h > 0))
+    .slice(0, 40)
+    .map(([el, n]) => ({ el, box: { x: 0, y: 0, w: n.box.w, h: n.box.h } }));
+
+  const goodVerify = parse(
+    await client.callTool(
+      {
+        name: "plumb_verify",
+        arguments: { name: target, depth: 6, rendered: renderedFromPds },
+      },
+      undefined,
+      HEAVY,
+    ),
+  );
+  const goodErrors =
+    (goodVerify.deltas ?? []).filter((d: any) => d.severity === "error").length;
+  console.log(
+    `\nplumb_verify (self-verify) → ${goodVerify.matched}/${renderedFromPds.length} matched, ` +
+      `${goodErrors} errors, ok=${goodVerify.ok}`,
+  );
+  // If self-verify reports any deltas, surface them — the rendered came from
+  // PDS, so any non-zero diff is a real signal about the verifier itself.
+  for (const d of ((goodVerify.deltas ?? []) as Array<Record<string, any>>).slice(0, 4)) {
+    const diff = d.diff !== undefined ? ` (diff ${d.diff})` : "";
+    console.log(`    · [${d.severity}] ${d.kind} on "${d.el}": ${d.expected} → ${d.actual}${diff}`);
+  }
+
+  const broken = renderedFromPds.map((r, i) =>
+    i === 0 ? { ...r, box: { ...r.box, w: r.box.w + 24 } } : r,
+  );
+  broken.push({ el: "definitely-not-a-real-el", box: { x: 0, y: 0, w: 1, h: 1 } });
+
+  const badVerify = parse(
+    await client.callTool(
+      {
+        name: "plumb_verify",
+        arguments: { name: target, depth: 6, rendered: broken },
+      },
+      undefined,
+      HEAVY,
+    ),
+  );
+  const badErrors = (badVerify.deltas ?? []).filter(
+    (d: any) => d.severity === "error",
+  ).length;
+  console.log(
+    `plumb_verify (broken)      → ${badVerify.matched}/${broken.length} matched, ` +
+      `${badVerify.unmatched} unmatched, ${badErrors} errors, ok=${badVerify.ok}`,
+  );
+  for (const d of ((badVerify.deltas ?? []) as Array<Record<string, any>>).slice(0, 4)) {
+    const diff = d.diff !== undefined ? ` (diff ${d.diff})` : "";
+    console.log(`    · [${d.severity}] ${d.kind} on "${d.el}": ${d.expected} → ${d.actual}${diff}`);
+  }
+}
+
 await client.close();
 await server.close();
 console.log("─".repeat(64));
 console.log(
-  "✓ PASS: live plugin path — inventory · by-name fetch · assets · screenshot · search · components.",
+  "✓ PASS: live plugin path — inventory · by-name · assets · screenshot · search · components · verify.",
 );
 process.exit(0);

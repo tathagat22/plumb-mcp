@@ -41,9 +41,17 @@ await startBridge();
 check("bridge bound a localhost port", bridge.port !== null, `port ${bridge.port}`);
 
 // --- simulated Figma plugin ---------------------------------------------
-const fakeSvg = Buffer.from(
+const fakeSvgBytes = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>',
-).toString("base64");
+);
+
+async function uploadAssetBytes(reqId: string, index: number): Promise<void> {
+  const res = await fetch(
+    `http://127.0.0.1:${bridge.port}/upload/${reqId}-${index}.svg`,
+    { method: "POST", body: fakeSvgBytes },
+  );
+  if (!res.ok) throw new Error(`mock upload HTTP ${res.status}`);
+}
 
 const ws = new WebSocket(`ws://127.0.0.1:${bridge.port}`);
 let gotHello = false;
@@ -63,16 +71,25 @@ ws.on("message", (raw) => {
     );
   }
   if (msg.t === "get-screenshot") {
-    ws.send(
-      JSON.stringify({
-        t: "screenshot",
-        reqId: msg.reqId,
-        dataBase64: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString("base64"),
-        format: (msg as any).format ?? "PNG",
-        nodeName: "Test Screen",
-        error: null,
-      }),
-    );
+    // Mirror the real plugin: POST raw bytes to the bridge's /upload route,
+    // then send the metadata WS reply once the upload completes.
+    const fmt = ((msg as any).format ?? "PNG") as string;
+    const ext = fmt.toLowerCase();
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    fetch(`http://127.0.0.1:${bridge.port}/upload/${msg.reqId}.${ext}`, {
+      method: "POST",
+      body: bytes,
+    }).then(() => {
+      ws.send(
+        JSON.stringify({
+          t: "screenshot",
+          reqId: msg.reqId,
+          format: fmt,
+          nodeName: "Test Screen",
+          error: null,
+        }),
+      );
+    });
   }
   if (msg.t === "get-search") {
     ws.send(
@@ -104,23 +121,26 @@ ws.on("message", (raw) => {
   if (msg.t === "get-assets") {
     const list = (msg as any).list === true;
     const ids = Array.isArray((msg as any).ids) ? ((msg as any).ids as string[]) : undefined;
-    let assets: any[];
-    if (ids && ids.length > 0) {
-      assets = ids.map((id) => ({
-        id,
-        name: `node-${id}`,
-        format: "SVG",
-        dataBase64: list ? "" : fakeSvg,
-      }));
-    } else if (list) {
-      assets = [
-        { id: "131:p1", name: "icon-a", format: "SVG", dataBase64: "" },
-        { id: "131:p2", name: "icon-b", format: "SVG", dataBase64: "", parentId: "131:p1" },
-      ];
-    } else {
-      assets = [{ id: "i1", name: "star icon", format: "SVG", dataBase64: fakeSvg }];
-    }
-    ws.send(JSON.stringify({ t: "assets", reqId: msg.reqId, error: null, assets }));
+    const reqId = msg.reqId as string;
+
+    void (async (): Promise<void> => {
+      let assets: any[];
+      if (ids && ids.length > 0) {
+        assets = ids.map((id) => ({ id, name: `node-${id}`, format: "SVG", path: null }));
+        if (!list) {
+          await Promise.all(assets.map((_, i) => uploadAssetBytes(reqId, i)));
+        }
+      } else if (list) {
+        assets = [
+          { id: "131:p1", name: "icon-a", format: "SVG", path: null },
+          { id: "131:p2", name: "icon-b", format: "SVG", path: null, parentId: "131:p1" },
+        ];
+      } else {
+        assets = [{ id: "i1", name: "star icon", format: "SVG", path: null }];
+        await uploadAssetBytes(reqId, 0);
+      }
+      ws.send(JSON.stringify({ t: "assets", reqId, error: null, assets }));
+    })();
   }
 });
 await once(ws, "open");

@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, statSync, copyFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { WireAsset } from "./bridge/protocol";
 
@@ -24,9 +24,10 @@ function slug(s: string): string {
 }
 
 /**
- * Decode the bridge's base64 assets and write them to a per-screen folder
- * under ./plumb-assets (overridable via PLUMB_ASSETS_DIR). Returns file paths —
- * never base64 — so the response stays token-frugal (plan §6).
+ * Move the bridge's temp-file uploads into a per-screen folder under
+ * ./plumb-assets (overridable via PLUMB_ASSETS_DIR). Asset bytes never appear
+ * in this process — they ride the binary HTTP upload channel and land on disk
+ * before we get here, so this is just a rename (or copy across filesystems).
  */
 export function writeAssets(
   screenName: string,
@@ -39,6 +40,7 @@ export function writeAssets(
   const used = new Set<string>();
   const written: WrittenAsset[] = [];
   for (const asset of assets) {
+    if (!asset.path) continue; // list mode or upload failed — skip silently
     const ext = asset.format === "SVG" ? "svg" : "png";
     const base = slug(asset.name) || "asset";
     let file = `${base}.${ext}`;
@@ -46,15 +48,20 @@ export function writeAssets(
     while (used.has(file)) file = `${base}-${n++}.${ext}`;
     used.add(file);
 
-    const buffer = Buffer.from(asset.dataBase64, "base64");
     const fullPath = join(dir, file);
-    writeFileSync(fullPath, buffer);
+    try {
+      renameSync(asset.path, fullPath);
+    } catch {
+      // tmpdir on a different filesystem from cwd — fall back to copy+unlink.
+      copyFileSync(asset.path, fullPath);
+      try { unlinkSync(asset.path); } catch { /* best-effort */ }
+    }
     written.push({
       id: asset.id,
       name: asset.name,
       format: asset.format,
       path: fullPath,
-      bytes: buffer.length,
+      bytes: statSync(fullPath).size,
       parentId: asset.parentId,
     });
   }
