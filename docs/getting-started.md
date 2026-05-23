@@ -20,8 +20,21 @@ You'll install both, pair them once with a click, then everything else happens f
 
 ## 1 · Install the server
 
+Pick whichever fits your setup:
+
 ```bash
+# npm — global install (recommended)
 npm install -g plumb-mcp
+
+# npm — without installing
+npx plumb-mcp
+
+# Docker — multi-arch image (amd64 + arm64), runs on stdio
+docker run --rm -i ghcr.io/tathagat22/plumb-mcp:latest
+
+# Source — for contributors
+git clone https://github.com/tathagat22/plumb-mcp.git
+cd plumb-mcp && npm install && npm run build
 ```
 
 Confirm it's reachable:

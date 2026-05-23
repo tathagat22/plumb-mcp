@@ -109,17 +109,35 @@ for the bug autopsy.
 
 ## Quick start
 
+### Install the server
+
+Pick whichever fits your stack:
+
 ```bash
+# npm (recommended)
+npm install -g plumb-mcp
+
+# or run without installing
+npx plumb-mcp
+
+# or run as a container (multi-arch — amd64 + arm64)
+docker run --rm -i ghcr.io/tathagat22/plumb-mcp:latest
+
+# or build from source (for contributors)
 git clone https://github.com/tathagat22/plumb-mcp.git
-cd plumb-mcp
-npm install
-npm run build       # builds server (dist/index.js) + plugin (figma-plugin/code.js)
+cd plumb-mcp && npm install && npm run build
 ```
 
-**Sideload the Figma plugin** (desktop app required for sideload):
+### Sideload the Figma plugin
+
+The plugin ships inside the npm package and the Docker image. Find the manifest:
+
+```bash
+echo "$(npm root -g)/plumb-mcp/figma-plugin/manifest.json"
+```
 
 1. Open Figma desktop → **Plugins → Development → Import plugin from manifest…**
-2. Select `figma-plugin/manifest.json`.
+2. Select the manifest path printed above.
 3. Run **Plumb** from the Plugins menu. The panel opens — click **Pair with Plumb**.
 4. The plugin remembers the pairing — future runs start as a small dot.
 

@@ -1,0 +1,16 @@
+node_modules
+dist
+figma-plugin/code.js
+.git
+.github
+.tmp
+plumb-assets
+plumb-screenshots
+docs
+*.log
+.DS_Store
+.env
+.env.*
+README*.md
+LICENSE
+.gitignore
