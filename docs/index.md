@@ -6,6 +6,9 @@ hero:
   name: Plumb
   text: Figma MCP server for AI coding agents.
   tagline: Connect Claude Code, Cursor, Windsurf, and any other Model-Context-Protocol-compatible AI coding agent to your Figma files — token-efficient, no REST rate limits, on any Figma plan including Free.
+  image:
+    src: /logo.png
+    alt: Plumb plumb-line logo
   actions:
     - theme: brand
       text: Get started

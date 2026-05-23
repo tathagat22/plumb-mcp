@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./docs/public/banner.png" alt="Plumb — Figma ↔ AI 코딩, 연결 완료." width="100%">
+</p>
+
 # Plumb (`plumb-mcp`)
 
 **AI 코딩 에이전트용 Figma MCP 서버 — Claude Code, Cursor, Windsurf, 그리고 모든 Model Context Protocol 호환 AI 코딩 도구와 함께 사용 가능.**

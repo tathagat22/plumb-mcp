@@ -16,7 +16,7 @@ export default defineConfig({
   lastUpdated: true,
   sitemap: { hostname: SITE_URL },
   head: [
-    ["link", { rel: "icon", type: "image/svg+xml", href: "/plumb-mcp/favicon.svg" }],
+    ["link", { rel: "icon", type: "image/png", href: "/plumb-mcp/favicon.png" }],
     ["meta", { name: "theme-color", content: "#0c8ce9" }],
     ["meta", { name: "author", content: "Tathagat Maitray" }],
     ["meta", { name: "keywords", content: "figma, mcp, model context protocol, design to code, claude code, cursor, windsurf, ai coding agent, figma mcp server, dev mode" }],
@@ -25,11 +25,17 @@ export default defineConfig({
     ["meta", { property: "og:description", content: SITE_DESCRIPTION }],
     ["meta", { property: "og:url", content: SITE_URL }],
     ["meta", { property: "og:site_name", content: "Plumb" }],
+    ["meta", { property: "og:image", content: `${SITE_URL}banner.png` }],
+    ["meta", { property: "og:image:width", content: "1774" }],
+    ["meta", { property: "og:image:height", content: "887" }],
     ["meta", { name: "twitter:card", content: "summary_large_image" }],
     ["meta", { name: "twitter:title", content: SITE_TITLE }],
     ["meta", { name: "twitter:description", content: SITE_DESCRIPTION }],
+    ["meta", { name: "twitter:image", content: `${SITE_URL}banner.png` }],
   ],
   themeConfig: {
+    logo: "/logo.png",
+    siteTitle: "Plumb",
     nav: [
       { text: "Get started", link: "/getting-started" },
       { text: "Tools", link: "/tools/" },

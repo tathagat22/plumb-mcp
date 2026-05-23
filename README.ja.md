@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./docs/public/banner.png" alt="Plumb — Figma ↔ AI コーディング、配管完了。" width="100%">
+</p>
+
 # Plumb (`plumb-mcp`)
 
 **AI コーディングエージェント向けの Figma MCP サーバー — Claude Code、Cursor、Windsurf、その他 Model Context Protocol 対応の AI コーディングツールと組み合わせて使用。**

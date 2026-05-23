@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./docs/public/banner.png" alt="Plumb — Figma ↔ AI coding, plumbed." width="100%">
+</p>
+
 # Plumb (`plumb-mcp`)
 
 **A Model Context Protocol (MCP) server for Figma — used with Claude Code, Cursor, Windsurf, and any other MCP-compatible AI coding agent.**

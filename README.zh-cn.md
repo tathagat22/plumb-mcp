@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./docs/public/banner.png" alt="Plumb — Figma ↔ AI 编程，已打通。" width="100%">
+</p>
+
 # Plumb (`plumb-mcp`)
 
 **面向 AI 编程代理的 Figma MCP 服务器 —— 适用于 Claude Code、Cursor、Windsurf，以及任何兼容 Model Context Protocol 的 AI 编程工具。**

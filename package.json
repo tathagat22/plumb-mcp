@@ -28,8 +28,12 @@
     "figma-plugin/code.js",
     "figma-plugin/ui.html",
     "figma-plugin/manifest.json",
+    "figma-plugin/icon.png",
     "figma-plugin/README.md",
     "README.md",
+    "README.zh-cn.md",
+    "README.ja.md",
+    "README.ko.md",
     "LICENSE"
   ],
   "engines": {
