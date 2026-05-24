@@ -40,6 +40,62 @@ function weightOf(styleName: string): number {
   return WEIGHTS[styleName.toLowerCase().replace(/\s+|italic|oblique/g, "")] ?? 400;
 }
 
+/**
+ * Convert a 2×3 affine `gradientTransform` into REST-style handle positions
+ * (start, end, width-control) in 0..1 layer space. Mirrors what the REST API
+ * already gives us so the downstream gradient-angle math is identity-shared
+ * between plugin and REST.
+ */
+function handlesFromTransform(
+  t: readonly [readonly [number, number, number], readonly [number, number, number]] | undefined,
+): { x: number; y: number }[] | undefined {
+  if (!t || t.length !== 2) return undefined;
+  // Invert the affine: world = T · local. We need start (0,0), end (1,0),
+  // width (0,1) in LOCAL → apply inverse(T) over the canonical points.
+  const [a, b, c] = t[0];
+  const [d, e, f] = t[1];
+  const det = a * e - b * d;
+  if (det === 0) return undefined;
+  const inv = (x: number, y: number): { x: number; y: number } => {
+    // Inverse of [[a,b,c],[d,e,f]] applied to (x,y,1) → solve T·p = (x,y).
+    const px = (e * (x - c) - b * (y - f)) / det;
+    const py = (a * (y - f) - d * (x - c)) / det;
+    return { x: px, y: py };
+  };
+  return [inv(0, 0), inv(1, 0), inv(0, 1)];
+}
+
+function normalizePaint(p: unknown): unknown {
+  if (!p || typeof p !== "object") return p;
+  const src = p as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...src };
+  // Plugin uses `imageHash`; REST uses `imageRef`. Speak REST downstream.
+  if (typeof src.imageHash === "string" && !src.imageRef) out.imageRef = src.imageHash;
+  // Convert gradientTransform → handlePositions for angle inference.
+  if (Array.isArray(src.gradientTransform) && !src.gradientHandlePositions) {
+    const hp = handlesFromTransform(
+      src.gradientTransform as unknown as
+        | readonly [readonly [number, number, number], readonly [number, number, number]]
+        | undefined,
+    );
+    if (hp) out.gradientHandlePositions = hp;
+  }
+  return out;
+}
+
+function serializeReactions(node: SceneNode): unknown[] | undefined {
+  const r = (node as unknown as { reactions?: unknown }).reactions;
+  if (!Array.isArray(r) || r.length === 0) return undefined;
+  // Plugin reactions are already shape-compatible with REST after a shallow
+  // copy. Filter out the noisy `actions: []` legacy field if present.
+  return r.map((entry) => {
+    if (!entry || typeof entry !== "object") return entry;
+    const { actions: _drop, ...rest } = entry as Record<string, unknown>;
+    void _drop;
+    return rest;
+  });
+}
+
 function serialize(node: SceneNode): SerialNode {
   const n = node as unknown as Record<string, any>;
   const out: SerialNode = { id: node.id, name: node.name, type: node.type };
@@ -63,8 +119,8 @@ function serialize(node: SceneNode): SerialNode {
   }
   if (n.layoutPositioning === "ABSOLUTE") out.layoutPositioning = "ABSOLUTE";
 
-  if (Array.isArray(n.fills)) out.fills = n.fills;
-  if (Array.isArray(n.strokes)) out.strokes = n.strokes;
+  if (Array.isArray(n.fills)) out.fills = n.fills.map(normalizePaint);
+  if (Array.isArray(n.strokes)) out.strokes = n.strokes.map(normalizePaint);
   if (typeof n.strokeWeight === "number") out.strokeWeight = n.strokeWeight;
   if (typeof n.cornerRadius === "number") {
     out.cornerRadius = n.cornerRadius;
@@ -100,6 +156,9 @@ function serialize(node: SceneNode): SerialNode {
       style.letterSpacing = t.letterSpacing.value;
     }
     style.textAlignHorizontal = t.textAlignHorizontal;
+    if (t.textDecoration && t.textDecoration !== figma.mixed && t.textDecoration !== "NONE") {
+      style.textDecoration = t.textDecoration;
+    }
     out.style = style;
   }
 
@@ -111,6 +170,9 @@ function serialize(node: SceneNode): SerialNode {
       // mainComponent can throw on dynamic-page documents — skip
     }
   }
+
+  const reactions = serializeReactions(node);
+  if (reactions) out.reactions = reactions;
 
   if ("children" in node) {
     const kids = (node as ChildrenMixin).children;

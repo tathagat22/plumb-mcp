@@ -87,27 +87,57 @@ function resolveRadius(node: PdsNode, tokens: TokenTable): string | undefined {
   return String(r);
 }
 
+function summarizeFills(node: PdsNode, tokens: TokenTable): string | undefined {
+  if (node.fills && node.fills.length) {
+    const parts = node.fills.map((f) => {
+      if (f.type === "color") return f.color;
+      if (f.type === "image") return f.assetId ? `image:${f.assetId}` : "image";
+      const stops = f.stops.map((s) => s.color).join("→");
+      const angle = "angle" in f && f.angle !== undefined ? `${f.angle}° ` : "";
+      return `${f.type}(${angle}${stops})`;
+    });
+    return parts.length === 1 ? parts[0] : `[${parts.join(" over ")}]`;
+  }
+  const fill = resolveFill(node, tokens);
+  return fill;
+}
+
 function summarizeAppearance(node: PdsNode, tokens: TokenTable): string {
   const parts: string[] = [];
-  const fill = resolveFill(node, tokens);
-  if (fill) parts.push(`fill ${fill}`);
+  const fillSummary = summarizeFills(node, tokens);
+  if (fillSummary) parts.push(`fill ${fillSummary}`);
   if (node.stroke && node.strokeW) {
     const stroke = node.stroke.startsWith("$c") ? tokens.color[node.stroke] : node.stroke;
     parts.push(`${node.strokeW}px ${stroke ?? "solid"} border`);
   }
   const radius = resolveRadius(node, tokens);
   if (radius) parts.push(`radius ${radius}`);
-  if (node.shadow && node.shadow.startsWith("$s")) {
-    parts.push(`shadow ${tokens.shadow[node.shadow] ?? "yes"}`);
+  // Effects stack: surface glass/blur explicitly so image-blind agents don't
+  // write a flat fill where the design is layered.
+  if (node.effects && node.effects.length) {
+    const efParts = node.effects.map((e) => {
+      if (e.type === "background-blur") return `frosted glass (backdrop-blur ${e.radius}px)`;
+      if (e.type === "layer-blur") return `blur ${e.radius}px`;
+      if (e.type === "inner-shadow") return `inset highlight ${e.color}`;
+      if (e.type === "drop-shadow") return `shadow ${e.color}`;
+      return "effect";
+    });
+    parts.push(efParts.join(", "));
   } else if (node.shadow) {
-    parts.push("shadow");
+    if (node.shadow.startsWith("$s")) parts.push(`shadow ${tokens.shadow[node.shadow] ?? "yes"}`);
+    else parts.push("shadow");
   }
+  if (node.backdropFilter) parts.push(`backdrop ${node.backdropFilter}`);
+  if (node.textDecoration) parts.push(node.textDecoration);
   if (node.opacity !== undefined && node.opacity < 1) parts.push(`opacity ${node.opacity}`);
   if (node.clip) parts.push("clipped");
   if (node.layout) {
     const dir = node.layout.flow === "col" ? "column" : "row";
     const gap = node.layout.gap ? `, gap ${node.layout.gap}` : "";
     parts.push(`${dir} stack${gap}`);
+  }
+  if (node.motion && node.motion.length) {
+    parts.push(`motion (${node.motion.map((m) => m.trigger).join(", ")})`);
   }
   return parts.length ? parts.join(", ") : "no fill";
 }

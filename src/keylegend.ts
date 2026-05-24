@@ -19,12 +19,22 @@ export const KEY_LEGEND: Record<string, string> = {
   strokeW: "border width in px",
   radius:
     "border-radius — token ref $rN into tokens.radius (value is px or \"full\" for pill/circle), or per-corner [tl,tr,br,bl]",
-  shadow: "CSS box-shadow string",
+  shadow: "compact CSS box-shadow string for a single shadow (dominant case)",
+  effects:
+    "structured stack of drop/inner shadows, layer-blur, background-blur — read this on glass / multi-shadow surfaces instead of `shadow`",
+  backdropFilter:
+    "CSS backdrop-filter shorthand (e.g. 'blur(24px)') when the node has a Figma background-blur",
+  fills:
+    "structured fill stack — solid / linear-gradient / radial-gradient / image with assetId. Emitted whenever the compact `fill` string would be lossy (multi-fill, gradient, image). Render in CSS as comma-separated layers.",
   text: "type style — token ref $tN into tokens.text ('weight size/lh family')",
+  textDecoration: "'underline' or 'line-through' on TEXT nodes (Figma STRIKETHROUGH/UNDERLINE)",
   chars: "literal text content of a TEXT node",
   opacity: "0..1, omitted when 1",
   clip: "overflow is clipped",
   component: "mainComponent id (INSTANCE nodes)",
+  assetId: "Figma asset id when this node renders an image — tag DOM with data-plumb-asset for verify",
+  path: "globally-unique dotted ancestor path; tag deeply-nested DOM with data-plumb-id=\"<path>\" when bare `el` would collide",
+  motion: "Figma prototype reactions on this node — list of { trigger, kind, duration, easing, target }",
   iconHint:
     "inferred icon meaning for small image/vector nodes — derived from sibling TEXT labels and ancestor names. Use it to swap bitmap icons for your codebase's line-icon library without reading pixels.",
   children: "child `el` handles included in this response",

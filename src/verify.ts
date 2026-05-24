@@ -36,6 +36,18 @@ export interface Delta {
   severity: Severity;
 }
 
+export interface CoverageInfo {
+  pdsTotal: number;
+  matched: number;
+  coverage: number; // 0..1 ratio
+  /**
+   * `el`s present in the PDS subtree but NOT in `rendered`. Prioritised so
+   * "important" untagged nodes (fills, text, effects, interactive surfaces)
+   * float to the top — these are usually the ones an agent forgot to tag.
+   */
+  untagged: string[];
+}
+
 export interface VerifyResult {
   matched: number;
   rendered: number;
@@ -43,6 +55,7 @@ export interface VerifyResult {
   ok: boolean;
   deltas: Delta[];
   truncated?: boolean;
+  coverage?: CoverageInfo;
 }
 
 const MAX_DELTAS = 150;
@@ -53,19 +66,27 @@ export function verifyAgainst(
   rendered: RenderedElement[],
   tolerances: Tolerances = DEFAULT_TOLERANCES,
 ): VerifyResult {
+  // The rendered set's keys can be either the short `el` handle or the
+  // globally-unique dotted `path`; build both lookup tables so agents that
+  // tagged deep-nested DOM with `path` aren't punished. PDS keys are `el`s, so
+  // we index `pds.nodes` by both surfaces here.
   const byEl = new Map<string, PdsNode>();
+  const byPath = new Map<string, PdsNode>();
   for (const el of Object.keys(pds.nodes)) {
     const node = pds.nodes[el];
-    if (node) byEl.set(el, node);
+    if (!node) continue;
+    byEl.set(el, node);
+    if (node.path) byPath.set(node.path, node);
   }
 
   const deltas: Delta[] = [];
   let matched = 0;
   let unmatched = 0;
+  const matchedEls = new Set<string>();
 
   for (const r of rendered) {
     if (deltas.length >= MAX_DELTAS) break;
-    const node = byEl.get(r.el);
+    const node = byEl.get(r.el) ?? byPath.get(r.el);
     if (!node) {
       unmatched += 1;
       deltas.push({
@@ -79,8 +100,15 @@ export function verifyAgainst(
       continue;
     }
     matched += 1;
+    matchedEls.add(node.el);
     compareOne(node, r, pds.tokens, tolerances, deltas);
   }
+
+  // Coverage: the verifier's most useful affordance, per real-world feedback.
+  // "All 10 matched / 0 deltas" lies if the screen had 47 tag-worthy nodes
+  // and you only checked the skeleton. Compute and surface the gap so the
+  // agent knows what to tag on the next round.
+  const coverage = computeCoverage(pds, matchedEls);
 
   deltas.sort(
     (a, b) =>
@@ -92,9 +120,67 @@ export function verifyAgainst(
   if (truncated) deltas.length = MAX_DELTAS;
 
   const ok = deltas.every((d) => d.severity !== "error");
-  return truncated
-    ? { matched, rendered: rendered.length, unmatched, ok, deltas, truncated: true }
-    : { matched, rendered: rendered.length, unmatched, ok, deltas };
+  const base: VerifyResult = {
+    matched,
+    rendered: rendered.length,
+    unmatched,
+    ok,
+    deltas,
+    coverage,
+  };
+  if (truncated) base.truncated = true;
+  return base;
+}
+
+/**
+ * "Important" PDS nodes are the ones an agent usually wants to verify but
+ * commonly forgets — anything with a visible fill, text, effect, image, or
+ * radius. Skeleton frames without any of these are unlikely to surface bugs.
+ */
+function isImportantNode(node: PdsNode): boolean {
+  if (node.text || node.chars) return true;
+  if (node.fill || node.fills) return true;
+  if (node.effects || node.shadow || node.backdropFilter) return true;
+  if (node.assetId) return true;
+  if (node.radius !== undefined) return true;
+  if (node.iconHint) return true;
+  return false;
+}
+
+function computeCoverage(pds: PdsDocument, matchedEls: Set<string>): CoverageInfo {
+  // Collect every reachable PDS node under the requested root (skip orphans
+  // that exist in the flat map but aren't in the requested subtree).
+  const reachable = new Set<string>();
+  const queue: string[] = [pds.root];
+  while (queue.length) {
+    const el = queue.shift();
+    if (!el || reachable.has(el)) continue;
+    reachable.add(el);
+    const node = pds.nodes[el];
+    if (node?.children) queue.push(...node.children);
+  }
+  const importantUntagged: string[] = [];
+  const plainUntagged: string[] = [];
+  for (const el of reachable) {
+    if (matchedEls.has(el)) continue;
+    const node = pds.nodes[el];
+    if (!node) continue;
+    if (isImportantNode(node)) importantUntagged.push(el);
+    else plainUntagged.push(el);
+  }
+  // Cap the surfaced list — agents don't need 200 names, the top ~20 is plenty
+  // to identify what to add to the next round of tagging.
+  const untagged = importantUntagged
+    .concat(plainUntagged)
+    .slice(0, 20);
+  const pdsTotal = reachable.size;
+  const coverage = pdsTotal === 0 ? 1 : matchedEls.size / pdsTotal;
+  return {
+    pdsTotal,
+    matched: matchedEls.size,
+    coverage: Math.round(coverage * 100) / 100,
+    untagged,
+  };
 }
 
 /* ---------------------------------------------------------------------- */
@@ -201,6 +287,22 @@ function compareOne(
     );
   }
 
+  // --- Form-control UA-style fallthrough (real-world bug #16) -------------
+  // When rendered.backgroundColor parses to a UA keyword like `buttonface` or
+  // `field`, the agent's reset CSS isn't taking and the browser is painting
+  // the native control. This silently breaks dashboards built on <button>
+  // elements with custom backgrounds. Surface it as a warn.
+  if (styles.backgroundColor && isUserAgentColor(styles.backgroundColor)) {
+    deltas.push({
+      el: node.el,
+      name: node.name,
+      kind: "ua-style-fallthrough",
+      expected: "explicit background-color",
+      actual: styles.backgroundColor,
+      severity: "warn",
+    });
+  }
+
   // --- Text content ------------------------------------------------------
   if (typeof node.chars === "string" && typeof r.text === "string") {
     const exp = node.chars.trim();
@@ -220,6 +322,22 @@ function compareOne(
   // --- Text colour (TEXT nodes use `color` in the browser) ---------------
   if (node.type === "text" && node.fill && node.fill.startsWith("$c") && styles.color) {
     pushColorDelta(node, "text.color", tokens.color[node.fill], styles.color, tol, deltas);
+  }
+
+  // --- Text decoration (real-world bug #14: missing strike-through on
+  //     completed-checklist items) ----------------------------------------
+  if (node.type === "text" && node.textDecoration) {
+    const dec = (styles.textDecorationLine ?? styles.textDecoration ?? "").toLowerCase();
+    if (!dec.includes(node.textDecoration)) {
+      deltas.push({
+        el: node.el,
+        name: node.name,
+        kind: "text.decoration",
+        expected: node.textDecoration,
+        actual: dec || "none",
+        severity: "error",
+      });
+    }
   }
 
   // --- Text style (font weight / size / line-height / family) ------------
@@ -472,4 +590,43 @@ function computeLineHeightRatio(
 
 function severityRank(s: Severity): number {
   return s === "error" ? 0 : s === "warn" ? 1 : 2;
+}
+
+const UA_COLOR_KEYWORDS = new Set([
+  "buttonface",
+  "buttontext",
+  "field",
+  "fieldtext",
+  "highlight",
+  "highlighttext",
+  "graytext",
+  "menu",
+  "menutext",
+  "window",
+  "windowframe",
+  "windowtext",
+  "linktext",
+  "visitedtext",
+  "activetext",
+  "activeborder",
+  "inactiveborder",
+  "infobackground",
+  "infotext",
+  "scrollbar",
+  "threeddarkshadow",
+  "threedface",
+  "threedhighlight",
+  "threedlightshadow",
+  "threedshadow",
+]);
+
+/**
+ * True when a CSS color value is a user-agent system keyword. Chrome computes
+ * `<button>` and `<input>` backgrounds to these when the page's CSS reset
+ * fails to override — the symptom of the real-world dashboard-pill
+ * regression that motivated check #16.
+ */
+function isUserAgentColor(s: string): boolean {
+  if (!s) return false;
+  return UA_COLOR_KEYWORDS.has(s.trim().toLowerCase());
 }

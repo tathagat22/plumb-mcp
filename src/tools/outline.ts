@@ -10,6 +10,42 @@ import { fail, ok, requireToken } from "./shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { OutlineDocument } from "../normalize/outline";
 
+/**
+ * Drop every page whose name doesn't match. We keep the response shape stable
+ * (still `{ pages: [...] }`) so callers don't need a separate code path for
+ * the filtered case. Recomputes derived counts to reflect the filter.
+ */
+function filterByPage<T extends { pages?: unknown[]; meta?: Record<string, unknown> }>(
+  outline: T,
+  pageFilter: string | undefined,
+): T {
+  if (!pageFilter) return outline;
+  const pages = (outline.pages ?? []) as Array<{ name?: string; frames?: unknown[]; screens?: unknown[] }>;
+  const kept = pages.filter((p) => (p?.name ?? "").toLowerCase() === pageFilter);
+  if (kept.length === 0) {
+    // Fall back to substring match so "test" finds a "testing" page.
+    const fuzzy = pages.filter((p) => (p?.name ?? "").toLowerCase().includes(pageFilter));
+    if (fuzzy.length) return rebuildOutline(outline, fuzzy);
+  }
+  return rebuildOutline(outline, kept);
+}
+
+function rebuildOutline<T extends { pages?: unknown[]; meta?: Record<string, unknown> }>(
+  outline: T,
+  pages: Array<{ frames?: unknown[]; screens?: unknown[] }>,
+): T {
+  const screenCount = pages.reduce(
+    (n, p) => n + ((p.frames ?? p.screens ?? []) as unknown[]).length,
+    0,
+  );
+  const meta = { ...(outline.meta ?? {}) };
+  // plugin path uses screenCount, REST uses frameCount — keep both honest.
+  if ("frameCount" in meta) meta.frameCount = screenCount;
+  if ("screenCount" in meta) meta.screenCount = screenCount;
+  meta.pageCount = pages.length;
+  return { ...outline, pages, meta } as T;
+}
+
 const DESCRIPTION =
   "Map a Figma file cheaply: its pages and their top-level screens (id, name, " +
   "size). The shallow entry point — call it to find the screen you want, then " +
@@ -34,16 +70,29 @@ export function registerPlumbOutline(server: McpServer): void {
           .describe(
             "Paste a full Figma URL — fileKey is auto-extracted. Accepts /design/, /file/, /proto/, and branch URLs.",
           ),
+        page: z
+          .string()
+          .optional()
+          .describe(
+            "Filter to a single Figma page by name (case-insensitive). " +
+              "Saves tokens on multi-page files where most pages are irrelevant.",
+          ),
       },
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     },
     async (args) => {
       try {
         const { fileKey } = resolveFigmaTarget({ url: args.url, fileKey: args.fileKey });
+        const pageFilter = args.page?.trim().toLowerCase();
 
         // Plugin path — the live inventory, no file key.
         if (bridge.paired && bridge.inventory && !fileKey) {
-          return ok(pluginOutline());
+          return ok(
+            filterByPage(
+              pluginOutline() as { pages?: unknown[]; meta?: Record<string, unknown> },
+              pageFilter,
+            ),
+          );
         }
 
         // REST path.
@@ -55,7 +104,7 @@ export function registerPlumbOutline(server: McpServer): void {
         }
         const cacheKey = `outline:${fileKey}`;
         const hit = cacheGet<OutlineDocument>(cacheKey, DEFAULT_TTL_MS);
-        if (hit) return ok({ ...hit.payload, cached: true });
+        if (hit) return ok({ ...filterByPage(hit.payload, pageFilter), cached: true });
 
         const token = requireToken();
         const file = await fetchFileOutline(fileKey, token);
@@ -65,7 +114,7 @@ export function registerPlumbOutline(server: McpServer): void {
           version: file.version,
         });
         cacheSet(cacheKey, file.version, outline);
-        return ok({ ...outline, cached: false });
+        return ok({ ...filterByPage(outline, pageFilter), cached: false });
       } catch (e) {
         return fail(e);
       }

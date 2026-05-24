@@ -27,6 +27,13 @@ export function registerPlumbSearch(server: McpServer): void {
           .string()
           .optional()
           .describe('Filter by node type, e.g. "TEXT", "FRAME", "INSTANCE", "VECTOR".'),
+        page: z
+          .string()
+          .optional()
+          .describe(
+            "Filter to a single Figma page by name (case-insensitive, " +
+              "substring-friendly). Drops noise on multi-page files.",
+          ),
       },
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
@@ -51,11 +58,16 @@ export function registerPlumbSearch(server: McpServer): void {
             "Retry; if it persists, re-run the Plumb plugin in Figma.",
           );
         }
+        const pageFilter = args.page?.trim().toLowerCase();
+        const filtered = pageFilter
+          ? matches.filter((m) => (m.page ?? "").toLowerCase().includes(pageFilter))
+          : matches;
         return ok({
           source: "plugin",
-          count: matches.length,
-          matches,
-          next: matches.length
+          count: filtered.length,
+          ...(pageFilter ? { page: args.page } : {}),
+          matches: filtered,
+          next: filtered.length
             ? "Drill into one with plumb_node({ id }) or pull its asset with plumb_assets({ ids: [id] })."
             : "No matches. Try a different query or type.",
         });

@@ -11,11 +11,23 @@ export interface RgbaColor {
   a?: number;
 }
 
+export interface FigmaColorStop {
+  position: number;
+  color: RgbaColor;
+}
+
 export interface FigmaPaint {
-  type: string; // SOLID | GRADIENT_LINEAR | GRADIENT_RADIAL | IMAGE | ...
+  type: string; // SOLID | GRADIENT_LINEAR | GRADIENT_RADIAL | GRADIENT_ANGULAR | GRADIENT_DIAMOND | IMAGE | ...
   visible?: boolean;
   opacity?: number;
   color?: RgbaColor;
+  gradientStops?: FigmaColorStop[];
+  /** Three handles: [start, end, width-control] in 0..1 of the layer box. */
+  gradientHandlePositions?: { x: number; y: number }[];
+  /** Asset hash for IMAGE paints. */
+  imageRef?: string;
+  /** FILL | FIT | CROP | TILE (Figma's enum). */
+  scaleMode?: string;
 }
 
 export interface FigmaEffect {
@@ -27,6 +39,23 @@ export interface FigmaEffect {
   spread?: number;
 }
 
+export interface FigmaTransition {
+  type?: string; // SMART_ANIMATE | DISSOLVE | MOVE_IN | PUSH | SLIDE_IN | INSTANT | ...
+  duration?: number; // seconds in REST, seconds in plugin too
+  easing?: { type?: string; easingFunctionCubicBezier?: number[] };
+  // Plugin shape uses snake-case sometimes; REST uses camel.
+  easingType?: string;
+}
+
+export interface FigmaReaction {
+  trigger?: { type?: string }; // ON_CLICK / ON_HOVER / AFTER_TIMEOUT / ...
+  action?: {
+    type?: string; // NODE | URL | BACK | CLOSE | ...
+    destinationId?: string;
+    transition?: FigmaTransition;
+  };
+}
+
 export interface FigmaTypeStyle {
   fontFamily?: string;
   fontWeight?: number;
@@ -35,6 +64,7 @@ export interface FigmaTypeStyle {
   letterSpacing?: number;
   textAlignHorizontal?: string;
   textCase?: string;
+  /** Figma: "NONE" | "UNDERLINE" | "STRIKETHROUGH". */
   textDecoration?: string;
 }
 
@@ -77,6 +107,9 @@ export interface FigmaNode {
 
   // Component
   componentId?: string;
+
+  // Prototyping
+  reactions?: FigmaReaction[];
 
   [key: string]: unknown;
 }

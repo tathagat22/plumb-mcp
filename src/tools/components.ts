@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { requestComponents } from "../bridge/server";
 import { bridge } from "../bridge/store";
 import { PlumbError } from "../errors";
@@ -18,10 +19,19 @@ export function registerPlumbComponents(server: McpServer): void {
     {
       title: "Plumb · components",
       description: DESCRIPTION,
-      inputSchema: {},
+      inputSchema: {
+        page: z
+          .string()
+          .optional()
+          .describe(
+            "Filter components and instances to a single Figma page by name " +
+              "(case-insensitive, substring-friendly). Massive token saver on " +
+              "files that hide a 200-variant style guide on one page.",
+          ),
+      },
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
-    async () => {
+    async (args) => {
       try {
         if (!bridge.paired) {
           throw new PlumbError(
@@ -36,15 +46,23 @@ export function registerPlumbComponents(server: McpServer): void {
             "Retry; if it persists, re-run the Plumb plugin in Figma.",
           );
         }
+        const pageFilter = args.page?.trim().toLowerCase();
+        const filterFn = pageFilter
+          ? <T extends { page?: string }>(x: T): boolean =>
+              (x.page ?? "").toLowerCase().includes(pageFilter)
+          : (): boolean => true;
+        const filteredComponents = components.filter(filterFn);
+        const filteredInstances = instances.filter(filterFn);
         return ok({
           source: "plugin",
-          componentCount: components.length,
-          instanceCount: instances.length,
-          components,
-          instances,
+          ...(pageFilter ? { page: args.page } : {}),
+          componentCount: filteredComponents.length,
+          instanceCount: filteredInstances.length,
+          components: filteredComponents,
+          instances: filteredInstances,
           next:
-            components.length === 0
-              ? "No components defined in this file."
+            filteredComponents.length === 0
+              ? "No components defined" + (pageFilter ? ` on the "${args.page}" page.` : " in this file.")
               : "Each instance has a componentId — match it to a definition. Use plumb_node by id to inspect either.",
         });
       } catch (e) {

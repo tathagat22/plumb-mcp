@@ -1,10 +1,16 @@
 import { HandleMinter } from "./handles";
 import { toLayout } from "./layout";
+import { backdropFilterCss, effectsToStack, paintsToFillStack } from "./paint";
 import { TokenInterner } from "./tokens";
 import { estimateTokens } from "../util/estimate";
 import { cleanPx, round } from "../util/num";
-import type { FigmaFileResult, FigmaNode } from "../figma/types";
-import type { PdsDocument, PdsNode } from "../pds";
+import type {
+  FigmaFileResult,
+  FigmaNode,
+  FigmaReaction,
+  FigmaTransition,
+} from "../figma/types";
+import type { Fill, MotionSpec, PdsDocument, PdsNode } from "../pds";
 
 const TYPE_MAP: Record<string, string> = {
   FRAME: "frame",
@@ -58,11 +64,17 @@ export function normalize(
   }
   preWalk(file.document, 0);
 
-  function walk(fn: FigmaNode, level: number, parent?: FigmaNode): string | undefined {
+  function walk(
+    fn: FigmaNode,
+    level: number,
+    parent?: FigmaNode,
+    parentPath?: string,
+  ): string | undefined {
     // Prune invisible nodes — but never the requested root (level 0).
     if (level > 0 && fn.visible === false) return undefined;
 
     const el = elById.get(fn.id) ?? minter.mint(fn.name ?? "", fn.type ?? "");
+    const path = parentPath ? `${parentPath}.${el}` : el;
     const node: PdsNode = {
       id: fn.id,
       el,
@@ -73,6 +85,9 @@ export function normalize(
         h: round(fn.absoluteBoundingBox?.height ?? 0),
       },
     };
+    // Only emit `path` once we're past the root — root's path is just its own
+    // `el`, which is already on the node.
+    if (parentPath) node.path = path;
 
     const pos = relativePos(parent, fn);
     if (pos) node.pos = pos;
@@ -82,6 +97,15 @@ export function normalize(
 
     const fill = interner.internColor(fn.fills);
     if (fill) node.fill = fill;
+
+    // Full fill stack — the smoking-gun fix for "20% white" being a
+    // multi-fill glass treatment, or "gradient" being a stop-less placeholder.
+    const fills = paintsToFillStack(fn.fills);
+    if (fills) {
+      node.fills = fills;
+      const firstImage = fills.find((f): f is Fill & { type: "image" } => f.type === "image");
+      if (firstImage && firstImage.assetId) node.assetId = firstImage.assetId;
+    }
 
     const iconHint = inferIconHint(fn, parent, node);
     if (iconHint) node.iconHint = iconHint;
@@ -105,6 +129,10 @@ export function normalize(
 
     const shadow = interner.internShadow(fn.effects);
     if (shadow) node.shadow = shadow;
+    const effects = effectsToStack(fn.effects);
+    if (effects) node.effects = effects;
+    const backdrop = backdropFilterCss(fn.effects);
+    if (backdrop) node.backdropFilter = backdrop;
 
     if (fn.opacity != null && fn.opacity < 1) node.opacity = round(fn.opacity, 2);
     if (fn.clipsContent) node.clip = true;
@@ -113,11 +141,17 @@ export function normalize(
       const text = interner.internText(fn.style);
       if (text) node.text = text;
       if (typeof fn.characters === "string") node.chars = fn.characters;
+      const dec = fn.style?.textDecoration;
+      if (dec === "UNDERLINE") node.textDecoration = "underline";
+      else if (dec === "STRIKETHROUGH") node.textDecoration = "line-through";
     }
 
     if (fn.type === "INSTANCE" && typeof fn.componentId === "string") {
       node.component = fn.componentId;
     }
+
+    const motion = motionFromReactions(fn.reactions);
+    if (motion) node.motion = motion;
 
     if (opts.notes) {
       const notes = buildNotes(fn);
@@ -133,7 +167,7 @@ export function normalize(
     } else {
       const childEls: string[] = [];
       for (const child of kids) {
-        const childEl = walk(child, level + 1, fn);
+        const childEl = walk(child, level + 1, fn, path);
         if (childEl) childEls.push(childEl);
       }
       if (childEls.length) node.children = childEls;
@@ -177,6 +211,58 @@ export function normalize(
   }
 
   return doc;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Motion specs — Figma prototype reactions                                 */
+/* ---------------------------------------------------------------------- */
+
+function easingFromFigma(tr: FigmaTransition | undefined): string | undefined {
+  if (!tr) return undefined;
+  const cubic = tr.easing?.easingFunctionCubicBezier;
+  if (Array.isArray(cubic) && cubic.length === 4) {
+    return `cubic-bezier(${cubic.map((n) => round(n, 3)).join(",")})`;
+  }
+  const kind = tr.easing?.type ?? tr.easingType;
+  if (!kind) return undefined;
+  switch (kind) {
+    case "EASE_IN":
+      return "ease-in";
+    case "EASE_OUT":
+      return "ease-out";
+    case "EASE_IN_AND_OUT":
+    case "EASE_IN_OUT":
+      return "ease-in-out";
+    case "LINEAR":
+      return "linear";
+    default:
+      return kind.toLowerCase().replace(/_/g, "-");
+  }
+}
+
+function motionFromReactions(reactions: FigmaReaction[] | undefined): MotionSpec[] | undefined {
+  if (!reactions?.length) return undefined;
+  const out: MotionSpec[] = [];
+  for (const r of reactions) {
+    const trigger = r.trigger?.type;
+    if (!trigger) continue;
+    const action = r.action;
+    if (!action) continue;
+    const tr = action.transition;
+    const kind = tr?.type ?? action.type ?? "INSTANT";
+    const spec: MotionSpec = { trigger, kind };
+    // Figma stores duration in seconds on REST, sometimes in ms on plugin.
+    // Both feel awkward; normalise to ms.
+    if (typeof tr?.duration === "number") {
+      const ms = tr.duration > 10 ? tr.duration : tr.duration * 1000;
+      spec.duration = round(ms, 0);
+    }
+    const easing = easingFromFigma(tr);
+    if (easing) spec.easing = easing;
+    if (action.destinationId) spec.target = action.destinationId;
+    out.push(spec);
+  }
+  return out.length ? out : undefined;
 }
 
 /* ---------------------------------------------------------------------- */

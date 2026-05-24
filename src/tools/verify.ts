@@ -15,16 +15,18 @@ import type { Tolerances } from "../verify";
 const DESCRIPTION =
   "Compare what you built against the Figma design and return structured deltas " +
   "— exact, deterministic, no pixel diff. After rendering, for every element " +
-  'you tagged `data-plumb-id="<el>"` (the el comes from the PDS plumb_node ' +
-  "returned), collect:\n" +
+  'you tagged `data-plumb-id="<el>"` (or the globally-unique `data-plumb-id="<path>"` ' +
+  "for deeply nested DOM), collect:\n" +
   "  • box — getBoundingClientRect() → { x, y, w, h }\n" +
   "  • styles — a subset of getComputedStyle: backgroundColor, color, " +
   "fontFamily, fontSize, fontWeight, lineHeight, padding{Top,Right,Bottom,Left}, " +
   "gap, flexDirection, justifyContent, alignItems, borderRadius, borderColor, " +
-  "borderWidth, opacity\n" +
+  "borderWidth, opacity, textDecorationLine\n" +
   "  • text — textContent for TEXT nodes\n" +
-  "Pass them as `rendered`. The tool fetches the live PDS, joins by `el`, and " +
+  "Pass them as `rendered`. The tool joins by `el` (loose) or `path` (strict) and " +
   "returns deltas like { kind:'size.w', expected:528, actual:530, severity:'warn' }. " +
+  "The response also includes `coverage` — how many PDS els in the subtree were " +
+  "actually tagged, plus an `untagged` list so you know what to add next round. " +
   "ok=true means no errors; warns are differences you may have meant.";
 
 const renderedElementSchema = z.object({
@@ -150,18 +152,30 @@ export function registerPlumbVerify(server: McpServer): void {
         const errs = result.deltas.filter((d) => d.severity === "error").length;
         const warns = result.deltas.filter((d) => d.severity === "warn").length;
 
-        return ok({
-          source,
-          screen,
-          ...result,
-          next: result.ok
-            ? `Pixel-perfect within tolerances — ${result.matched} element(s) matched, ${result.deltas.length} note(s).`
-            : `Fix the ${errs} error(s)${warns ? ` and consider the ${warns} warning(s)` : ""}, then call plumb_verify again.${
-                result.unmatched > 0
-                  ? ` (${result.unmatched} rendered element(s) had no PDS match — check your data-plumb-id tags or increase \`depth\`.)`
-                  : ""
-              }`,
-        });
+        // Coverage-aware hint: 21% coverage with 0 deltas is a lie. Tell the
+        // agent what they forgot to tag so the next round is actually useful.
+        const cov = result.coverage;
+        const coveragePct = cov ? Math.round(cov.coverage * 100) : 100;
+        const lowCoverage = cov && cov.coverage < 0.6 && cov.untagged.length > 0;
+        const taggingHint =
+          cov && cov.untagged.length > 0
+            ? ` Consider tagging more: ${cov.untagged.slice(0, 8).join(", ")}${cov.untagged.length > 8 ? ", …" : ""}.`
+            : "";
+
+        let next: string;
+        if (result.ok && !lowCoverage) {
+          next = `Pixel-perfect within tolerances — ${result.matched}/${cov?.pdsTotal ?? result.matched} matched (${coveragePct}% coverage), ${result.deltas.length} note(s).`;
+        } else if (result.ok && lowCoverage) {
+          next = `No deltas, but only ${coveragePct}% of the PDS subtree was tagged. "All matched" with ${coveragePct}% coverage is not the same as "the page is right".${taggingHint}`;
+        } else {
+          next = `Fix the ${errs} error(s)${warns ? ` and consider the ${warns} warning(s)` : ""}, then call plumb_verify again. Coverage: ${coveragePct}%.${
+            result.unmatched > 0
+              ? ` (${result.unmatched} rendered element(s) had no PDS match — check your data-plumb-id tags or increase \`depth\`.)`
+              : ""
+          }${taggingHint}`;
+        }
+
+        return ok({ source, screen, ...result, next });
       } catch (e) {
         return fail(e);
       }
