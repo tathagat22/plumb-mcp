@@ -1,0 +1,80 @@
+name: Release · npm + MCP Registry
+
+# Fires on any v* tag push (e.g. v0.7.2). Publishes plumb-mcp to npm AND
+# ships server.json to registry.modelcontextprotocol.io in one shot, so the
+# Registry never falls behind npm. Uses GitHub OIDC for the Registry auth —
+# no PAT to rotate.
+#
+# One-time setup before the first run:
+#   1. Create an npm Automation token at npmjs.com → Access Tokens.
+#   2. Add it to this repo's secrets as `NPM_TOKEN`.
+#   (No MCP_GITHUB_TOKEN needed — OIDC handles the Registry side.)
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write    # required for `mcp-publisher login github-oidc`
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      # Fail fast if the tag, package.json, and server.json disagree.
+      # These three versions MUST track each other, otherwise the Registry
+      # validates against the wrong npm tarball and we publish silent drift.
+      - name: Verify versions agree
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/v}"
+          PKG=$(node -p "require('./package.json').version")
+          SRV=$(node -p "require('./server.json').version")
+          SRV_PKG=$(node -p "require('./server.json').packages[0].version")
+          echo "tag=$TAG  package.json=$PKG  server.json=$SRV  server.json.packages[0]=$SRV_PKG"
+          if [ "$TAG" != "$PKG" ] || [ "$PKG" != "$SRV" ] || [ "$SRV" != "$SRV_PKG" ]; then
+            echo "::error::version mismatch — bump all three to match the tag and re-push"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build (server + plugin)
+        run: npm run build
+
+      - name: Smoke test
+        run: npm run smoke
+
+      # ---- npm publish ----------------------------------------------------
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # ---- MCP Registry publish ------------------------------------------
+      - name: Install mcp-publisher
+        run: |
+          set -euo pipefail
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+          ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+          curl -sL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_${OS}_${ARCH}.tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry (GitHub OIDC)
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server.json to MCP Registry
+        run: ./mcp-publisher publish
