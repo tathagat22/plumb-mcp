@@ -2,6 +2,7 @@ import { HandleMinter } from "./handles";
 import { toLayout } from "./layout";
 import { backdropFilterCss, effectsToStack, paintsToFillStack } from "./paint";
 import { TokenInterner } from "./tokens";
+import { detectSuspiciousText } from "./typo";
 import { estimateTokens } from "../util/estimate";
 import { cleanPx, round } from "../util/num";
 import type {
@@ -64,11 +65,19 @@ export function normalize(
   }
   preWalk(file.document, 0);
 
+  // Surfaces of interest for inheritedFill — nodes a renderer would tag with
+  // `background:` if they had their own fill. Text/vector/icon-like leaves
+  // don't need the inherited info: text inherits color via CSS naturally,
+  // and vectors render their own paths.
+  const SURFACE_TYPES = new Set(["frame", "group", "rect", "instance", "component"]);
+
   function walk(
     fn: FigmaNode,
     level: number,
     parent?: FigmaNode,
     parentPath?: string,
+    inheritedFill?: string,
+    grandparent?: FigmaNode,
   ): string | undefined {
     // Prune invisible nodes — but never the requested root (level 0).
     if (level > 0 && fn.visible === false) return undefined;
@@ -93,7 +102,34 @@ export function normalize(
     if (pos) node.pos = pos;
 
     const layout = toLayout(fn);
-    if (layout) node.layout = layout;
+    if (layout) {
+      node.layout = layout;
+      // Emit contentMain when justify is set and visible children sit shorter
+      // than the container — the slack is what justify distributes. Agents
+      // were guessing-and-screenshotting to confirm this; the number kills
+      // the round-trip.
+      if (layout.justify) {
+        const visibleKids = (fn.children ?? []).filter((k) => k.visible !== false);
+        if (visibleKids.length >= 2) {
+          const isCol = layout.flow === "col";
+          const sumMain = visibleKids.reduce((acc, k) => {
+            const dim = isCol
+              ? round(k.absoluteBoundingBox?.height ?? 0)
+              : round(k.absoluteBoundingBox?.width ?? 0);
+            return acc + dim;
+          }, 0);
+          const gapTotal = (visibleKids.length - 1) * (layout.gap ?? 0);
+          const contentMain = sumMain + gapTotal;
+          const containerMain = isCol ? node.box.h : node.box.w;
+          const padStart = isCol ? layout.pad[0] : layout.pad[3];
+          const padEnd = isCol ? layout.pad[2] : layout.pad[1];
+          const available = containerMain - padStart - padEnd;
+          // Only emit when there's at least 4px of slack — within that the
+          // agent's naive flex assumption is already correct.
+          if (available - contentMain >= 4) layout.contentMain = contentMain;
+        }
+      }
+    }
 
     const fill = interner.internColor(fn.fills);
     if (fill) node.fill = fill;
@@ -107,8 +143,21 @@ export function normalize(
       if (firstImage && firstImage.assetId) node.assetId = firstImage.assetId;
     }
 
-    const iconHint = inferIconHint(fn, parent, node);
+    // Surface the nearest ancestor's solid fill when this node has none of
+    // its own — the renderer can read it directly instead of walking the
+    // tree. Only meaningful for nodes that render a surface (frame/group/etc).
+    if (!fill && inheritedFill && SURFACE_TYPES.has(node.type)) {
+      node.inheritedFill = inheritedFill;
+    }
+    // What we hand down to children — this node's own fill if it has one,
+    // otherwise whatever it inherited.
+    const fillForChildren = fill ?? inheritedFill;
+
+    const iconHint = inferIconHint(fn, parent, grandparent, node);
     if (iconHint) node.iconHint = iconHint;
+
+    const pattern = inferPattern(fn, node);
+    if (pattern) node.pattern = pattern;
 
     const stroke = interner.internColor(fn.strokes);
     if (stroke) {
@@ -167,7 +216,7 @@ export function normalize(
     } else {
       const childEls: string[] = [];
       for (const child of kids) {
-        const childEl = walk(child, level + 1, fn, path);
+        const childEl = walk(child, level + 1, fn, path, fillForChildren, parent);
         if (childEl) childEls.push(childEl);
       }
       if (childEls.length) node.children = childEls;
@@ -202,6 +251,9 @@ export function normalize(
       "A node with a `more` count has that many children not yet included — " +
       "call plumb_node again on that node's `id` to expand them.",
   };
+
+  const suspicious = detectSuspiciousText(nodes);
+  if (suspicious.length) doc.meta.suspiciousText = suspicious;
 
   if (opts.maxTokens && estTokens > opts.maxTokens) {
     doc.meta.truncated = true;
@@ -310,16 +362,39 @@ function isIconShaped(node: PdsNode, fn: FigmaNode): boolean {
   return false;
 }
 
-/** First TEXT sibling under the same parent with non-empty characters. */
-function siblingLabel(fn: FigmaNode, parent: FigmaNode | undefined): string | undefined {
+/** First TEXT sibling under `parent` with non-empty characters, skipping the
+ *  subtree rooted at `excludeId` (the icon node we're labelling). */
+function findTextSibling(
+  parent: FigmaNode | undefined,
+  excludeId: string,
+): string | undefined {
   if (!parent?.children) return undefined;
   for (const sib of parent.children) {
-    if (sib.id === fn.id) continue;
+    if (sib.id === excludeId) continue;
     if (sib.visible === false) continue;
     if (sib.type === "TEXT" && typeof sib.characters === "string") {
       const chars = sib.characters.trim();
       if (chars) return chars;
     }
+  }
+  return undefined;
+}
+
+/** Find an icon's labelling TEXT — first try direct siblings, then climb one
+ *  level to grandparent's direct children (skipping the parent's own subtree).
+ *  Catches the common pattern where a button is `[wrapper > vector] + TEXT`:
+ *  the vector's direct sibling is empty, but the wrapper's sibling is the
+ *  label. Climb is capped at 1 ancestor to avoid pulling labels from
+ *  unrelated regions of the tree. */
+function siblingLabel(
+  fn: FigmaNode,
+  parent: FigmaNode | undefined,
+  grandparent?: FigmaNode,
+): string | undefined {
+  const direct = findTextSibling(parent, fn.id);
+  if (direct) return direct;
+  if (grandparent && parent) {
+    return findTextSibling(grandparent, parent.id);
   }
   return undefined;
 }
@@ -331,9 +406,34 @@ function siblingLabel(fn: FigmaNode, parent: FigmaNode | undefined): string | un
  * when no signal is available — the agent gracefully falls back to the
  * file path / inline source.
  */
+/**
+ * Tag row-layout clusters that look like a button — text + (stroke OR fill) +
+ * radius, sized within human-button bounds. Saves the renderer from inferring
+ * "this is a button" from geometry every time. Conservative: only emits when
+ * all signals align, so missing-button is preferred over false-positive.
+ */
+function inferPattern(fn: FigmaNode, node: PdsNode): string | undefined {
+  if (!node.layout || node.layout.flow !== "row") return undefined;
+  const { w, h } = node.box;
+  if (w < 40 || w > 480 || h < 20 || h > 80) return undefined;
+  const hasVisual = Boolean(node.stroke || node.fill || node.fills);
+  if (!hasVisual) return undefined;
+  if (node.radius === undefined) return undefined;
+  const labeled = (fn.children ?? []).some(
+    (c) =>
+      c.visible !== false &&
+      c.type === "TEXT" &&
+      typeof c.characters === "string" &&
+      c.characters.trim().length > 0,
+  );
+  if (!labeled) return undefined;
+  return "button";
+}
+
 function inferIconHint(
   fn: FigmaNode,
   parent: FigmaNode | undefined,
+  grandparent: FigmaNode | undefined,
   node: PdsNode,
 ): string | undefined {
   if (!isIconShaped(node, fn)) return undefined;
@@ -341,11 +441,15 @@ function inferIconHint(
     const own = cleanIconLabel(node.name);
     if (own) return own;
   }
-  const label = siblingLabel(fn, parent);
+  const label = siblingLabel(fn, parent, grandparent);
   if (label) return label;
   if (parent && isDescriptive(parent.name ?? "")) {
     const p = cleanIconLabel(parent.name ?? "");
     if (p) return p;
+  }
+  if (grandparent && isDescriptive(grandparent.name ?? "")) {
+    const g = cleanIconLabel(grandparent.name ?? "");
+    if (g) return g;
   }
   return undefined;
 }

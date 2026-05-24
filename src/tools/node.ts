@@ -85,8 +85,12 @@ export function registerPlumbNode(server: McpServer): void {
           id: args.id,
         });
 
-        // Plugin path — no file key, plugin paired.
-        if (!fileKey && bridge.paired) {
+        // Plugin path — paired plugin reads whatever file is open in Figma,
+        // so an id is sufficient. Pasting a Figma URL also flows through here
+        // (the URL provides the id; the fileKey is informational) — without
+        // this, a URL would force REST and 403 on Free-plan tokens even though
+        // the plugin would have happily served the same node for free.
+        if (bridge.paired && (id || args.name)) {
           const resolved = resolveScreen(id, args.name);
           if ("ambiguous" in resolved) {
             return ok({

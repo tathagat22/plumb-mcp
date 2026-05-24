@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { createWriteStream } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { WebSocketServer, type WebSocket } from "ws";
 import { BRIDGE_PORTS } from "./protocol";
@@ -224,6 +224,11 @@ function bindPort(port: number): Promise<{ wss: WebSocketServer; http: Server } 
   return new Promise((resolve) => {
     const http = createServer(handleHttp);
     const wss = new WebSocketServer({ server: http });
+    // Multi-agent connect: when a second `plumb-mcp` boots and 31337 is taken,
+    // http emits 'error' AND wss emits 'error' (it's attached to the same
+    // server). Without this swallow the wss error propagates as uncaught and
+    // crashes the new server before it can fall through to the next port.
+    wss.on("error", () => undefined);
     http.once("listening", () => resolve({ wss, http }));
     http.once("error", () => resolve(null));
     http.listen(port, "127.0.0.1");
@@ -254,11 +259,12 @@ export async function startBridge(): Promise<void> {
     return;
   }
   bridge.port = chosen;
-  log(`listening on 127.0.0.1:${chosen}`);
+  const sessionLabel = process.env.PLUMB_SESSION_NAME?.trim() || basename(process.cwd());
+  log(`listening on 127.0.0.1:${chosen} as "${sessionLabel}"`);
 
   wss.on("connection", (ws, req) => {
     log(`connection from origin ${req.headers.origin ?? "(none)"}`);
-    send(ws, { t: "plumb-hello", serverVersion: SERVER_VERSION });
+    send(ws, { t: "plumb-hello", serverVersion: SERVER_VERSION, sessionLabel });
 
     let thisPaired = false;
 

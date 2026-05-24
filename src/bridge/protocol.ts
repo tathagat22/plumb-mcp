@@ -93,7 +93,7 @@ export type PluginMessage =
 
 /** Messages the server sends back to the plugin. */
 export type ServerMessage =
-  | { t: "plumb-hello"; serverVersion: string }
+  | { t: "plumb-hello"; serverVersion: string; sessionLabel: string }
   | { t: "paired" }
   | { t: "pair-rejected"; reason: string }
   | { t: "get-node"; reqId: string; nodeId: string }

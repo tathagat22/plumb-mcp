@@ -13,7 +13,7 @@
 
   /* expanded panel */
   #panel { padding: 12px; display: flex; flex-direction: column;
-    gap: 6px; height: 100%; }
+    gap: 8px; height: 100%; }
   .row { display: flex; align-items: center; gap: 8px; }
   .dot { width: 8px; height: 8px; border-radius: 50%;
     background: #c0392b; flex: none; }
@@ -25,7 +25,34 @@
     font-size: 11px; min-height: 14px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  #actions { display: flex; gap: 6px; margin-top: auto; }
+
+  /* per-session row */
+  #sessions { display: flex; flex-direction: column; gap: 6px;
+    overflow-y: auto; min-height: 0; flex: 1; }
+  .session {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 6px;
+    background: var(--figma-color-bg-secondary, #f1f1f4);
+  }
+  .session .meta { flex: 1; min-width: 0; }
+  .session .label {
+    font-weight: 500;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .session .sub {
+    color: var(--figma-color-text-secondary, #888);
+    font-size: 10px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .session button {
+    flex: none; padding: 4px 8px; font-size: 11px;
+  }
+  #empty {
+    color: var(--figma-color-text-secondary, #888);
+    font-size: 11px; padding: 8px 0; text-align: center;
+  }
+
+  #actions { display: flex; gap: 6px; }
   button {
     font: inherit; font-size: 12px; padding: 7px 10px; flex: 1;
     border: 0; border-radius: 5px;
@@ -68,9 +95,10 @@
 <body>
   <div id="panel">
     <div class="row"><div class="dot" id="dot"></div><span id="title">Plumb</span></div>
-    <div id="status">Connecting…</div>
+    <div id="status">Searching for Plumb servers…</div>
+    <div id="sessions"></div>
     <div id="actions">
-      <button id="pair" disabled>Pair</button>
+      <button id="pairAll" disabled>Pair all</button>
       <button id="hide" class="ghost">Minimize</button>
     </div>
   </div>
@@ -78,100 +106,268 @@
 <script>
   var PORTS = [31337, 31338, 31339, 31340, 31341];
   var PLUGIN_VERSION = "0.0.1";
-  var ws = null, paired = false, autoPair = false, portIdx = 0, helloTimer = null;
+  var autoPair = false;
   var lastSelection = null, lastInventory = null;
-  var connectedPort = 0; // set on each connect attempt — used for /upload POSTs
+
+  // Per-port session state. Created lazily on first connect attempt; survives
+  // disconnect/reconnect cycles so we keep the same row in the UI.
+  // { ws, paired, sessionLabel, serverVersion, helloTimer, retryTimer,
+  //   discovered (got plumb-hello once), pendingAssetUploads }
+  var sessions = Object.create(null);
+
+  // Plugin-worker-side reqId is rewritten as `pP_<origReqId>` so reqIds from
+  // different servers can't collide (each MCP server mints its own r1, r2…).
+  // Wire-side reqIds and /upload/ URLs always use the original reqId so the
+  // bridge's own bookkeeping keeps working.
+  // routing[mainSideReqId] = { port, origReqId }
+  var routing = Object.create(null);
 
   var dot = document.getElementById("dot");
   var bigdot = document.getElementById("bigdot");
   var statusEl = document.getElementById("status");
-  var pairBtn = document.getElementById("pair");
+  var sessionsEl = document.getElementById("sessions");
+  var pairAllBtn = document.getElementById("pairAll");
   var hideBtn = document.getElementById("hide");
   var collapsed = document.getElementById("collapsed");
 
-  function setState(cls, text) {
+  function toMain(msg) { parent.postMessage({ pluginMessage: msg }, "*"); }
+  function sendRaw(ws, obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+  function rewriteIn(port, origReqId) { return "p" + port + "_" + origReqId; }
+  function originalOf(mainReqId) {
+    var r = routing[mainReqId];
+    return r ? r.origReqId : mainReqId;
+  }
+  function portOf(mainReqId) {
+    var r = routing[mainReqId];
+    return r ? r.port : 0;
+  }
+
+  function anyPaired() {
+    for (var p in sessions) if (sessions[p].paired) return true;
+    return false;
+  }
+  function anyDiscovered() {
+    for (var p in sessions) if (sessions[p].discovered) return true;
+    return false;
+  }
+  function anyUnpairedDiscovered() {
+    for (var p in sessions) if (sessions[p].discovered && !sessions[p].paired) return true;
+    return false;
+  }
+
+  function setHeader(cls, text) {
     dot.className = "dot" + (cls ? " " + cls : "");
     bigdot.className = cls ? cls : "";
     if (text !== undefined) statusEl.textContent = text;
   }
 
-  function refreshStatus() {
-    if (!paired) return;
-    var bits = [];
-    if (lastInventory) {
-      var n = lastInventory.pages.reduce(function (acc, p) {
-        return acc + p.frames.length;
-      }, 0);
-      bits.push(n + " screens");
+  // Compose the small status text under the title. With multiple sessions
+  // we just summarise — "N paired · 12 screens · Frame 2439".
+  function refreshHeader() {
+    var pairedCount = 0;
+    for (var p in sessions) if (sessions[p].paired) pairedCount++;
+
+    var cls = pairedCount > 0 ? "on" : (anyDiscovered() ? "wait" : "");
+    var parts = [];
+    if (pairedCount === 0) {
+      parts.push(anyDiscovered() ? "Not paired" : "Searching for Plumb servers…");
+    } else {
+      parts.push(pairedCount + " paired");
+      if (lastInventory) {
+        var n = lastInventory.pages.reduce(function (acc, q) {
+          return acc + q.frames.length;
+        }, 0);
+        parts.push("· " + n + " screens");
+      }
+      if (lastSelection && lastSelection.nodeName) {
+        var s = lastSelection.nodeName;
+        parts.push("· " + (s.length > 22 ? s.slice(0, 22) + "…" : s));
+      }
     }
-    if (lastSelection && lastSelection.nodeName) {
-      var s = lastSelection.nodeName;
-      bits.push("· " + (s.length > 22 ? s.slice(0, 22) + "…" : s));
-    }
-    statusEl.textContent = bits.length ? bits.join(" ") : "Paired";
+    setHeader(cls, parts.join(" "));
   }
 
-  function toMain(msg) { parent.postMessage({ pluginMessage: msg }, "*"); }
-  function send(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+  function renderSessions() {
+    // Stable port order so rows don't jump around.
+    var ports = Object.keys(sessions).map(Number).sort(function (a, b) { return a - b; });
+    sessionsEl.innerHTML = "";
 
-  function connect() {
-    var port = PORTS[portIdx % PORTS.length];
-    portIdx++;
-    connectedPort = port;
-    try { ws = new WebSocket("ws://localhost:" + port); }
-    catch (e) { setTimeout(connect, 1500); return; }
+    var anyShown = false;
+    for (var i = 0; i < ports.length; i++) {
+      var port = ports[i];
+      var s = sessions[port];
+      if (!s.discovered) continue; // hide ports with no server
+      anyShown = true;
 
-    ws.onopen = function () {
-      helloTimer = setTimeout(function () { try { ws.close(); } catch (e) {} }, 1500);
+      var row = document.createElement("div");
+      row.className = "session";
+
+      var d = document.createElement("div");
+      d.className = "dot " + (s.paired ? "on" : "wait");
+      row.appendChild(d);
+
+      var meta = document.createElement("div");
+      meta.className = "meta";
+      var lbl = document.createElement("div");
+      lbl.className = "label";
+      lbl.textContent = s.sessionLabel || ("port " + port);
+      var sub = document.createElement("div");
+      sub.className = "sub";
+      sub.textContent = "v" + (s.serverVersion || "?") + " · :" + port;
+      meta.appendChild(lbl);
+      meta.appendChild(sub);
+      row.appendChild(meta);
+
+      var btn = document.createElement("button");
+      btn.className = s.paired ? "ghost" : "";
+      btn.textContent = s.paired ? "Unpair" : "Pair";
+      (function (p) {
+        btn.onclick = function () {
+          var ses = sessions[p];
+          if (ses.paired) {
+            try { ses.ws.close(); } catch (e) {}
+          } else {
+            sendRaw(ses.ws, { t: "pair", pluginVersion: PLUGIN_VERSION });
+          }
+        };
+      }(port));
+      row.appendChild(btn);
+
+      sessionsEl.appendChild(row);
+    }
+
+    if (!anyShown) {
+      var empty = document.createElement("div");
+      empty.id = "empty";
+      empty.textContent = "No Plumb servers running. Start one with `plumb-mcp` from a project terminal.";
+      sessionsEl.appendChild(empty);
+    }
+
+    pairAllBtn.disabled = !anyUnpairedDiscovered();
+
+    refreshHeader();
+  }
+
+  function fanout(makePayload) {
+    for (var p in sessions) {
+      var s = sessions[p];
+      if (s.paired) sendRaw(s.ws, makePayload());
+    }
+  }
+
+  function connectPort(port) {
+    var s = sessions[port];
+    if (!s) {
+      s = sessions[port] = {
+        ws: null, paired: false, sessionLabel: "", serverVersion: "",
+        helloTimer: null, retryTimer: null, discovered: false,
+        pendingAssetUploads: Object.create(null),
+      };
+    }
+    if (s.retryTimer) { clearTimeout(s.retryTimer); s.retryTimer = null; }
+
+    try { s.ws = new WebSocket("ws://localhost:" + port); }
+    catch (e) { scheduleRetry(port); return; }
+
+    s.ws.onopen = function () {
+      // If a server is on this port it answers plumb-hello within ~ms.
+      // If it opens but doesn't say hello, treat as unknown and drop.
+      s.helloTimer = setTimeout(function () {
+        try { s.ws.close(); } catch (e) {}
+      }, 1500);
     };
 
-    ws.onmessage = function (ev) {
+    s.ws.onmessage = function (ev) {
       var msg;
       try { msg = JSON.parse(ev.data); } catch (e) { return; }
+
       if (msg.t === "plumb-hello") {
-        if (helloTimer) { clearTimeout(helloTimer); helloTimer = null; }
-        if (autoPair) {
-          setState("wait", "Pairing…");
-          send({ t: "pair", pluginVersion: PLUGIN_VERSION });
-        } else {
-          setState("wait", "Not paired");
-          pairBtn.disabled = false;
+        if (s.helloTimer) { clearTimeout(s.helloTimer); s.helloTimer = null; }
+        s.discovered = true;
+        s.serverVersion = msg.serverVersion || "";
+        s.sessionLabel = msg.sessionLabel || ("port " + port);
+        renderSessions();
+        if (autoPair) sendRaw(s.ws, { t: "pair", pluginVersion: PLUGIN_VERSION });
+        return;
+      }
+
+      if (msg.t === "paired") {
+        s.paired = true;
+        // Bring this newly-paired server up to date with what we already know.
+        if (lastInventory) {
+          sendRaw(s.ws, {
+            t: "inventory", fileName: lastInventory.fileName, pages: lastInventory.pages,
+          });
         }
-      } else if (msg.t === "paired") {
-        paired = true;
-        pairBtn.disabled = true;
-        pairBtn.textContent = "Paired";
-        setState("on");
-        refreshStatus();
+        if (lastSelection) {
+          sendRaw(s.ws, {
+            t: "selection", doc: lastSelection.doc, fileName: lastSelection.fileName,
+            pageName: lastSelection.pageName, nodeName: lastSelection.nodeName,
+          });
+        }
+        // First pair flips clientStorage so subsequent reconnects auto-pair.
         toMain({ type: "paired" });
         toMain({ type: "resync" });
-      } else if (msg.t === "pair-rejected") {
-        setState("wait", msg.reason || "Pairing rejected");
-      } else if (msg.reqId && typeof msg.t === "string" && msg.t.indexOf("get-") === 0) {
-        // Forward every server-side `get-*` request that carries a reqId to the
-        // plugin worker. Earlier this only routed get-node/get-assets, which
-        // silently dropped get-screenshot/get-search/get-components.
-        toMain({ type: "server-request", req: msg });
-      } else if (msg.t === "ping") {
-        send({ t: "pong" });
+        renderSessions();
+        return;
       }
+
+      if (msg.t === "pair-rejected") {
+        renderSessions();
+        return;
+      }
+
+      if (msg.reqId && typeof msg.t === "string" && msg.t.indexOf("get-") === 0) {
+        // Rewrite reqId so different servers' reqIds (both mint `r1`) can't
+        // collide on the plugin-worker side. Original reqId stays on the wire.
+        var mainReqId = rewriteIn(port, msg.reqId);
+        routing[mainReqId] = { port: port, origReqId: msg.reqId };
+        var copy = {};
+        for (var k in msg) copy[k] = msg[k];
+        copy.reqId = mainReqId;
+        toMain({ type: "server-request", req: copy });
+        return;
+      }
+
+      if (msg.t === "ping") { sendRaw(s.ws, { t: "pong" }); return; }
     };
 
-    ws.onclose = function () {
-      if (helloTimer) { clearTimeout(helloTimer); helloTimer = null; }
-      paired = false;
-      pairBtn.disabled = true;
-      pairBtn.textContent = "Pair";
-      setState("", "Disconnected — retrying…");
-      setTimeout(connect, 1500);
+    s.ws.onclose = function () {
+      if (s.helloTimer) { clearTimeout(s.helloTimer); s.helloTimer = null; }
+      s.ws = null;
+      s.paired = false;
+      // Drop any in-flight routings for this port — replies will be ignored.
+      for (var rid in routing) {
+        if (routing[rid] && routing[rid].port === port) delete routing[rid];
+      }
+      s.pendingAssetUploads = Object.create(null);
+      renderSessions();
+      scheduleRetry(port);
     };
 
-    ws.onerror = function () { try { ws.close(); } catch (e) {} };
+    s.ws.onerror = function () { try { s.ws.close(); } catch (e) {} };
   }
 
-  pairBtn.onclick = function () {
-    send({ t: "pair", pluginVersion: PLUGIN_VERSION });
-    setState("wait", "Pairing…");
+  function scheduleRetry(port) {
+    var s = sessions[port];
+    if (!s || s.retryTimer) return;
+    s.retryTimer = setTimeout(function () {
+      s.retryTimer = null;
+      connectPort(port);
+    }, 1500);
+  }
+
+  function connectAll() {
+    for (var i = 0; i < PORTS.length; i++) connectPort(PORTS[i]);
+  }
+
+  pairAllBtn.onclick = function () {
+    for (var p in sessions) {
+      var s = sessions[p];
+      if (s.discovered && !s.paired) {
+        sendRaw(s.ws, { t: "pair", pluginVersion: PLUGIN_VERSION });
+      }
+    }
   };
 
   hideBtn.onclick = function () {
@@ -193,94 +389,126 @@
         document.body.classList.add("mini");
         toMain({ type: "collapse" });
       }
-    } else if (msg.type === "selection") {
+      return;
+    }
+    if (msg.type === "selection") {
       lastSelection = msg;
-      refreshStatus();
-      if (paired) {
-        send({ t: "selection", doc: msg.doc, fileName: msg.fileName,
-          pageName: msg.pageName, nodeName: msg.nodeName });
-      }
-    } else if (msg.type === "inventory") {
+      refreshHeader();
+      fanout(function () {
+        return { t: "selection", doc: msg.doc, fileName: msg.fileName,
+          pageName: msg.pageName, nodeName: msg.nodeName };
+      });
+      return;
+    }
+    if (msg.type === "inventory") {
       lastInventory = msg;
-      refreshStatus();
-      if (paired) {
-        send({ t: "inventory", fileName: msg.fileName, pages: msg.pages });
-      }
-    } else if (msg.type === "plugin-reply") {
+      refreshHeader();
+      fanout(function () {
+        return { t: "inventory", fileName: msg.fileName, pages: msg.pages };
+      });
+      return;
+    }
+    if (msg.type === "plugin-reply") {
       forwardReply(msg.reply);
-    } else if (msg.type === "upload-screenshot") {
+      return;
+    }
+    if (msg.type === "upload-screenshot") {
       uploadScreenshot(msg);
-    } else if (msg.type === "upload-asset") {
+      return;
+    }
+    if (msg.type === "upload-asset") {
       uploadAsset(msg);
+      return;
     }
   };
 
-  // Tracks in-flight asset POSTs per reqId so the matching assets reply can
-  // wait for every upload to land before going out over the wire — otherwise
-  // the bridge sees the manifest before some files exist on disk.
-  var pendingAssetUploads = Object.create(null);
-
   function forwardReply(reply) {
-    if (reply && reply.t === "assets" && pendingAssetUploads[reply.reqId]) {
-      var promises = pendingAssetUploads[reply.reqId];
-      delete pendingAssetUploads[reply.reqId];
-      Promise.all(promises).then(function () { send(reply); });
+    if (!reply || !reply.reqId) return;
+    var port = portOf(reply.reqId);
+    var s = port && sessions[port];
+    if (!s || !s.paired) {
+      // Originator disappeared — drop pending state and bail.
+      if (s) delete s.pendingAssetUploads[reply.reqId];
+      delete routing[reply.reqId];
       return;
     }
-    send(reply);
+
+    // Assets reply must wait for all per-asset uploads to land first,
+    // otherwise the bridge sees the manifest before some files exist on disk.
+    if (reply.t === "assets" && s.pendingAssetUploads[reply.reqId]) {
+      var promises = s.pendingAssetUploads[reply.reqId];
+      delete s.pendingAssetUploads[reply.reqId];
+      Promise.all(promises).then(function () { sendStripped(s, reply); });
+      return;
+    }
+    sendStripped(s, reply);
+  }
+
+  function sendStripped(s, reply) {
+    var out = {};
+    for (var k in reply) out[k] = reply[k];
+    out.reqId = originalOf(reply.reqId);
+    delete routing[reply.reqId];
+    sendRaw(s.ws, out);
   }
 
   function postBinary(url, bytes) {
     try {
       return fetch(url, { method: "POST", body: bytes })
-        .then(function (r) {
-          if (!r.ok) throw new Error("HTTP " + r.status);
-        });
-    } catch (e) {
-      return Promise.reject(e);
-    }
+        .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); });
+    } catch (e) { return Promise.reject(e); }
   }
 
   // Ship raw screenshot bytes over loopback HTTP — no base64, no JSON framing.
   // The bridge writes the body straight to disk and resolves the pending
-  // screenshot promise once it sees the matching `screenshot` WS reply below.
+  // screenshot promise once it sees the matching `screenshot` WS reply.
   function uploadScreenshot(msg) {
+    var port = portOf(msg.reqId);
+    var s = port && sessions[port];
+    if (!s) return;
     var ext = (msg.format || "PNG").toLowerCase();
-    var url = "http://localhost:" + connectedPort + "/upload/" + msg.reqId + "." + ext;
+    var origReqId = originalOf(msg.reqId);
+    var url = "http://localhost:" + port + "/upload/" + origReqId + "." + ext;
     postBinary(url, msg.bytes)
       .then(function () {
-        send({
+        sendRaw(s.ws, {
           t: "screenshot",
-          reqId: msg.reqId,
+          reqId: origReqId,
           format: msg.format || "",
           nodeName: msg.nodeName || null,
           error: null,
         });
+        delete routing[msg.reqId];
       })
       .catch(function (e) {
-        send({
+        sendRaw(s.ws, {
           t: "screenshot",
-          reqId: msg.reqId,
+          reqId: origReqId,
           format: msg.format || "",
           nodeName: msg.nodeName || null,
           error: String(e && e.message || e),
         });
+        delete routing[msg.reqId];
       });
   }
 
   // Asset bytes ride the same loopback HTTP channel as screenshots — one POST
-  // per asset, keyed by `${reqId}-${index}` so the bridge can match them to
-  // the manifest entries that follow in the assets WS reply. The plugin
-  // serialises uploads by waiting for an upload-ack postMessage between each;
-  // without that gating, Figma's IPC buffers and redelivers messages, causing
-  // duplicate POSTs that race the manifest reply.
+  // per asset, keyed by `${origReqId}-${index}` so the bridge matches them to
+  // manifest entries that follow in the assets WS reply. The plugin worker
+  // serialises uploads via upload-ack postMessage between each; without that
+  // gating, Figma's IPC buffers and redelivers postMessages, causing duplicate
+  // POSTs that race the manifest reply.
   function uploadAsset(msg) {
+    var port = portOf(msg.reqId);
+    var s = port && sessions[port];
+    if (!s) return;
+    var origReqId = originalOf(msg.reqId);
     var ext = msg.ext || "bin";
-    var url = "http://localhost:" + connectedPort +
-      "/upload/" + msg.reqId + "-" + msg.index + "." + ext;
+    var url = "http://localhost:" + port +
+      "/upload/" + origReqId + "-" + msg.index + "." + ext;
     var p = postBinary(url, msg.bytes);
-    if (!pendingAssetUploads[msg.reqId]) pendingAssetUploads[msg.reqId] = [];
-    pendingAssetUploads[msg.reqId].push(p);
+    if (!s.pendingAssetUploads[msg.reqId]) s.pendingAssetUploads[msg.reqId] = [];
+    s.pendingAssetUploads[msg.reqId].push(p);
     p.then(function () {
       toMain({ type: "upload-ack", reqId: msg.reqId, index: msg.index, error: null });
     }).catch(function (e) {
@@ -293,7 +521,8 @@
     });
   }
 
-  connect();
+  renderSessions();
+  connectAll();
 </script>
 </body>
 </html>

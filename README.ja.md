@@ -4,63 +4,47 @@
 
 # Plumb (`plumb-mcp`)
 
-**AI コーディングエージェント向けの Figma MCP サーバー — Claude Code、Cursor、Windsurf、その他 Model Context Protocol 対応の AI コーディングツールと組み合わせて使用。**
+**検証ループ付きの Figma → コード MCP。** デザインを入力すると正規化された仕様が出力され、`plumb-mcp verify` がヘッドレス Chrome を駆動してレンダリングされたコードが本当に Figma のデザインと一致するかを証明します。
 
 📖 ドキュメント：**<https://tathagat22.github.io/plumb-mcp/>** &nbsp;·&nbsp; 📦 npm：[`plumb-mcp`](https://www.npmjs.com/package/plumb-mcp) &nbsp;·&nbsp; 🇬🇧 [English README](./README.md) &nbsp;·&nbsp; 🇨🇳 [简体中文](./README.zh-cn.md) &nbsp;·&nbsp; 🇰🇷 [한국어](./README.ko.md)
 
 > この翻訳は AI 支援によって生成されています。改善提案は PR で歓迎します — ネイティブ話者のレビューを大切にしています。
 
-Plumb は Figma デスクトップアプリ内で動作するコンパニオンプラグインを通じて Figma ファイルを読み取ります。REST のレート制限なし、課金なし、プラン制限なし。Figma API が出力する数十万トークンの JSON ではなく、コンパクトで正規化された設計仕様を返します。アイコンは SVG として、画像は PNG として、必要な時にディスクへ書き出します。Free プランを含む任意の Figma プランで動作します。
+コーディングエージェント専用 — Claude Code、Cursor、Windsurf、MCP 互換ツールなら何でも。Figma デスクトップアプリ内で動作するコンパニオンプラグインを通じて Figma ファイルを読み取ります（REST レート制限なし、Free を含む全プランで動作）。Figma API が出力する数十万トークンの JSON ではなく、コンパクトで正規化された設計仕様を返し、SVG アイコンと PNG 画像を必要に応じて直接ディスクに書き出します。
+
+---
+
+## Plumb と他の Figma MCP の違い
+
+知っておく価値のある他の Figma MCP サーバーは三つ：
+
+- **Figma 公式 Dev Mode MCP** — 双方向（Figma に書き戻せる）だが、プラン制限があり、課金される。
+- **Framelink** — 軽量 REST ラッパー。ツール 2 個。検証なし、レート制限を継承。
+- **cursor-talk-to-figma** — Figma 内で作業するデザイナー向けの双方向自動化ツール。
+
+Plumb は**コード側でループを閉じる**唯一の選択肢。`plumb_verify`（MCP ツール）と `plumb-mcp verify`（CLI）が、エージェントが出力したコードが実際にデザインと一致するかを教えてくれます — カラーコード付きの delta、ピクセル比較なし、CI で実行可能。
 
 ---
 
 ## クイックスタート
 
-### サーバーのインストール
-
 ```bash
-# npm（推奨）
+# 1. インストール
 npm install -g plumb-mcp
 
-# またはインストールせずに実行
-npx plumb-mcp
+# 2. エディタに接続 — Claude Code / Cursor / VS Code / Windsurf を自動検出
+plumb-mcp init
 
-# または Docker（マルチアーキテクチャ — amd64 + arm64）
-docker run --rm -i ghcr.io/tathagat22/plumb-mcp:latest
-```
-
-### Figma プラグインのサイドロード
-
-プラグインは npm パッケージと Docker イメージに同梱されています。マニフェストの場所を確認：
-
-```bash
+# 3. Figma プラグインを一度だけサイドロード。マニフェストの場所：
 echo "$(npm root -g)/plumb-mcp/figma-plugin/manifest.json"
+#    Figma デスクトップ → Plugins → Development → Import plugin from manifest…
+#    Plumb を実行 → "Pair with Plumb" をクリック → 完了。次回以降は小さなドットに折りたたまれます。
+
+# 4. 任意 — ターミナルからレンダリングされたコードを Figma と検証
+plumb-mcp verify http://localhost:5173/dashboard --url <figma-url>
 ```
 
-Figma デスクトップアプリで：**Plugins → Development → Import plugin from manifest…** を選択し、上記のパスを指定。
-
-**Plumb** プラグインを実行し、**Pair with Plumb** をクリック。ペアリング後、プラグインは小さなドットに折りたたまれます。
-
----
-
-## 他の Figma MCP サーバーとの比較
-
-| 機能 | Plumb | Figma 公式 Dev Mode MCP | Framelink | claude-talk-to-figma |
-|---|---|---|---|---|
-| ツール数 | **12** | 少数 | 2 | 少数 |
-| Figma Free プランでの動作 | ✅ | 制限あり | ✅（Variables 除く） | ✅ |
-| 読み取り方法 | プラグイン · REST · `.fig` | REST | REST | プラグイン |
-| プラグイン経由のレート制限 | **なし** | n/a | n/a | なし |
-| 非 Enterprise プランでの Variables | ✅（プラグイン経由） | 制限あり | ❌ | ✅ |
-| Figma への書き戻し | ❌ | ✅ | ❌ | ✅ |
-| デザインとコードの差分（`verify`） | ✅ | ❌ | ❌ | ❌ |
-| 選択状態のリアルタイム認識 | ✅ | ✅ | ❌ | ✅ |
-| コンポーネント / インスタンス一覧 | ✅ | 一部 | ❌ | 一部 |
-| CI 向けオフライン `.fig` パース | ✅ | ❌ | ❌ | ❌ |
-| トークン節約型 PDS（auto-layout → flex、重複排除） | ✅ | ❌ | 一部 | ❌ |
-| ローカル動作、テレメトリなし | ✅ | クラウド | ✅ | ✅ |
-| トランスポート | stdio | stdio | stdio + HTTP/SSE | stdio |
-| ライセンス | MIT | プロプライエタリ | MIT | MIT |
+他のインストール方法：`npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/plumb-mcp:latest` · [ソースからビルド](https://github.com/tathagat22/plumb-mcp)。
 
 ---
 

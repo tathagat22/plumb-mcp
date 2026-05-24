@@ -665,6 +665,29 @@ async function handleGetComponents(reqId: string): Promise<void> {
   }
 }
 
+/** Serialize main-thread operations that produce upload streams across all
+ *  paired sessions. Without this, two MCP servers each kicking off `get-assets`
+ *  at once would interleave their per-asset upload-ack chains; Figma's IPC
+ *  has already been observed buffering & redelivering postMessages under
+ *  pressure (see ui.html and the upload-ack gating there). Reads (get-node,
+ *  get-search, get-components) skip the queue so a quick lookup from session
+ *  B isn't stuck behind a 400ms export from session A. */
+let uploadOpQueue: Promise<unknown> = Promise.resolve();
+function queueUploadOp<T>(fn: () => Promise<T>): Promise<T> {
+  const next = uploadOpQueue.then(fn, fn);
+  uploadOpQueue = next.catch(() => undefined);
+  return next;
+}
+
+async function dispatchServerRequest(req: any): Promise<void> {
+  if (!req || typeof req.t !== "string") return;
+  if (req.t === "get-assets" || req.t === "get-screenshot") {
+    await queueUploadOp(() => handleServerRequest(req));
+    return;
+  }
+  await handleServerRequest(req);
+}
+
 async function handleServerRequest(req: any): Promise<void> {
   if (!req || typeof req.t !== "string") return;
 
@@ -752,7 +775,7 @@ figma.ui.onmessage = (message: {
       void figma.clientStorage.setAsync("plumb-paired", true);
       break;
     case "server-request":
-      void handleServerRequest(message.req);
+      void dispatchServerRequest(message.req);
       break;
     case "upload-ack": {
       const key = `${message.reqId}-${message.index}`;

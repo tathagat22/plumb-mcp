@@ -4,63 +4,47 @@
 
 # Plumb (`plumb-mcp`)
 
-**AI 코딩 에이전트용 Figma MCP 서버 — Claude Code, Cursor, Windsurf, 그리고 모든 Model Context Protocol 호환 AI 코딩 도구와 함께 사용 가능.**
+**검증 루프가 있는 Figma → 코드 MCP.** 디자인이 들어가고 정규화된 스펙이 나옵니다. `plumb-mcp verify` 가 헤드리스 Chrome 을 구동해서 렌더링된 코드가 정말 Figma 의 디자인과 일치하는지 증명합니다.
 
 📖 전체 문서: **<https://tathagat22.github.io/plumb-mcp/>** &nbsp;·&nbsp; 📦 npm: [`plumb-mcp`](https://www.npmjs.com/package/plumb-mcp) &nbsp;·&nbsp; 🇬🇧 [English README](./README.md) &nbsp;·&nbsp; 🇨🇳 [简体中文](./README.zh-cn.md) &nbsp;·&nbsp; 🇯🇵 [日本語](./README.ja.md)
 
 > 이 번역은 AI의 도움으로 생성되었습니다. 원어민의 검토를 환영하며, PR로 개선해 주시면 감사하겠습니다.
 
-Plumb 는 Figma 데스크톱 앱 안에서 실행되는 동반 플러그인을 통해 Figma 파일을 읽어들입니다 — REST 속도 제한 없음, 과금 없음, 플랜 제한 없음. Figma API 가 내보내는 수십만 토큰짜리 JSON 대신, 간결하고 정규화된 디자인 스펙을 반환하며, 필요할 때 SVG 아이콘과 PNG 이미지를 디스크에 내보냅니다. Free 플랜을 포함한 모든 Figma 플랜에서 동작합니다.
+코딩 에이전트 전용 — Claude Code, Cursor, Windsurf, MCP 호환 도구라면 무엇이든. Figma 데스크톱 앱 안에서 실행되는 동반 플러그인으로 Figma 파일을 읽고(REST 속도 제한 없음, Free 를 포함한 모든 플랜에서 동작), Figma API 가 내보내는 수십만 토큰짜리 JSON 대신 간결하게 정규화된 디자인 스펙을 반환하며, 필요할 때 SVG 아이콘과 PNG 이미지를 디스크로 곧장 내보냅니다.
+
+---
+
+## Plumb 가 다른 Figma MCP 와 다른 점
+
+알아둘 만한 다른 Figma MCP 서버 셋:
+
+- **Figma 공식 Dev Mode MCP** — 양방향（Figma 에 쓰기 가능）이지만 플랜 제한이 있고 호출당 과금.
+- **Framelink** — 얇은 REST 래퍼. 도구 2 개. 검증 없음, 속도 제한 그대로 상속.
+- **cursor-talk-to-figma** — Figma 안에서 작업하는 디자이너용 양방향 자동화 도구.
+
+Plumb 는 **코드 쪽에서 루프를 닫는** 유일한 선택지. `plumb_verify`（MCP 도구）와 `plumb-mcp verify`（CLI）가 에이전트가 만든 코드가 실제로 디자인과 일치하는지 알려줍니다 — 색상으로 표시된 delta, 픽셀 비교 없음, CI 에서 실행 가능.
 
 ---
 
 ## 빠른 시작
 
-### 서버 설치
-
 ```bash
-# npm（권장）
+# 1. 설치
 npm install -g plumb-mcp
 
-# 또는 설치 없이 실행
-npx plumb-mcp
+# 2. 에디터에 연결 — Claude Code / Cursor / VS Code / Windsurf 자동 인식
+plumb-mcp init
 
-# 또는 Docker（멀티 아키텍처 — amd64 + arm64）
-docker run --rm -i ghcr.io/tathagat22/plumb-mcp:latest
-```
-
-### Figma 플러그인 사이드로드
-
-플러그인은 npm 패키지와 Docker 이미지에 포함되어 있습니다. manifest 경로 찾기:
-
-```bash
+# 3. Figma 플러그인을 한 번만 사이드로드. manifest 경로:
 echo "$(npm root -g)/plumb-mcp/figma-plugin/manifest.json"
+#    Figma 데스크톱 → Plugins → Development → Import plugin from manifest…
+#    Plumb 실행 → "Pair with Plumb" 클릭 → 완료. 이후 실행은 작은 점으로 접힙니다.
+
+# 4. 선택 — 터미널에서 바로 렌더링된 코드와 Figma 를 검증
+plumb-mcp verify http://localhost:5173/dashboard --url <figma-url>
 ```
 
-Figma 데스크톱에서: **Plugins → Development → Import plugin from manifest…** 를 선택하고 위 경로를 지정하세요.
-
-**Plumb** 플러그인을 실행한 뒤 **Pair with Plumb** 를 클릭합니다. 페어링 후 플러그인은 작은 점으로 접힙니다.
-
----
-
-## 다른 Figma MCP 서버와 비교
-
-| 기능 | Plumb | Figma 공식 Dev Mode MCP | Framelink | claude-talk-to-figma |
-|---|---|---|---|---|
-| 도구 개수 | **12** | 적음 | 2 | 적음 |
-| Figma Free 플랜에서 동작 | ✅ | 제한 있음 | ✅（Variables 제외） | ✅ |
-| 읽기 경로 | 플러그인 · REST · `.fig` | REST | REST | 플러그인 |
-| 플러그인 경로 속도 제한 | **없음** | n/a | n/a | 없음 |
-| 비 Enterprise 플랜에서 Variables | ✅（플러그인 경유） | 제한 있음 | ❌ | ✅ |
-| Figma 에 쓰기 | ❌ | ✅ | ❌ | ✅ |
-| 디자인 대 코드 diff（`verify`） | ✅ | ❌ | ❌ | ❌ |
-| 실시간 `selection` 인식 | ✅ | ✅ | ❌ | ✅ |
-| 컴포넌트 / 인스턴스 목록 | ✅ | 부분 지원 | ❌ | 부분 지원 |
-| CI 용 오프라인 `.fig` 파싱 | ✅ | ❌ | ❌ | ❌ |
-| 토큰 절약형 PDS（auto-layout → flex, 중복 제거） | ✅ | ❌ | 부분 지원 | ❌ |
-| 로컬 전용, 텔레메트리 없음 | ✅ | 클라우드 | ✅ | ✅ |
-| 전송 방식 | stdio | stdio | stdio + HTTP/SSE | stdio |
-| 라이선스 | MIT | 사유 | MIT | MIT |
+다른 설치 방법: `npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/plumb-mcp:latest` · [소스에서 빌드](https://github.com/tathagat22/plumb-mcp).
 
 ---
 

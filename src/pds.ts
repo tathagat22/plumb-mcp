@@ -21,6 +21,14 @@ export interface PdsLayout {
   align?: string;
   /** flex-wrap */
   wrap?: boolean;
+  /**
+   * Main-axis content size: sum(children main-axis box) + (n-1)*gap.
+   * Emitted only when `justify` is set AND the result is meaningfully
+   * smaller than the container's main-axis box — i.e. the cases where a
+   * renderer's naive "stack from start" assumption would mis-place items.
+   * Compare to box.{w|h} minus matching `pad` ends to find the slack.
+   */
+  contentMain?: number;
 }
 
 /** A single colour stop inside a gradient fill. `at` is 0..1. */
@@ -144,6 +152,13 @@ export interface PdsNode {
    * these as `background: <layer-1>, <layer-2>, …` in CSS order.
    */
   fills?: Fill[];
+  /**
+   * Token ref `$cN` resolved from the nearest ancestor with a solid fill.
+   * Emitted only when this node has no `fill` of its own — saves the renderer
+   * from walking up the tree to figure out what shows through. Frames /
+   * groups / rects only; text and vector nodes don't carry it.
+   */
+  inheritedFill?: string;
   stroke?: string;
   strokeW?: number;
   /** Token ref into tokens.radius, or a per-corner [tl,tr,br,bl] tuple. */
@@ -196,6 +211,13 @@ export interface PdsNode {
    */
   iconHint?: string;
   /**
+   * Detected semantic UI pattern. Currently `"button"` for row-layout clusters
+   * sized like a button (≤480×80), with stroke or fill, radius, and at least
+   * one TEXT child. Saves the renderer from re-discovering "this is a button"
+   * by geometric inspection — map directly to the codebase's Button component.
+   */
+  pattern?: string;
+  /**
    * Figma prototype transitions wired to this node. Pure design intent —
    * Plumb does not verify these at runtime today.
    */
@@ -238,7 +260,21 @@ export interface PdsDocument {
     depthUsed: number;
     truncated?: boolean;
     hint?: string;
+    /**
+     * Likely typos in TEXT nodes — single-edit outliers from a dominant
+     * sibling/cluster value. Conservative: only flagged when ≥3 nearby texts
+     * agree and exactly one diverges by 1–2 edits. Designers ship typos all
+     * the time and a faithful extractor preserves them; this hint surfaces
+     * them so the agent can ask the user instead of silently shipping.
+     */
+    suspiciousText?: SuspiciousText[];
   };
   /** Suggested next step for the agent (plan §6.1). */
   next: string;
+}
+
+export interface SuspiciousText {
+  path: string;
+  value: string;
+  hint: string;
 }
