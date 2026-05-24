@@ -25,6 +25,8 @@ export const KEY_LEGEND: Record<string, string> = {
   opacity: "0..1, omitted when 1",
   clip: "overflow is clipped",
   component: "mainComponent id (INSTANCE nodes)",
+  iconHint:
+    "inferred icon meaning for small image/vector nodes — derived from sibling TEXT labels and ancestor names. Use it to swap bitmap icons for your codebase's line-icon library without reading pixels.",
   children: "child `el` handles included in this response",
   more: "this many children were NOT included — call plumb_node on `id` to expand",
 };

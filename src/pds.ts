@@ -56,6 +56,15 @@ export interface PdsNode {
   chars?: string;
   /** mainComponent id (INSTANCE nodes only). */
   component?: string;
+  /**
+   * Hint for icon-swap flows. Set on small image-filled / vector nodes whose
+   * intent can be inferred from the design context (a sibling TEXT label
+   * inside the same button, or a descriptive ancestor name). Example: a 24×24
+   * IMAGE inside a Button whose other child is the text "Get started" gets
+   * `iconHint: "Get started"`. Useful for replacing bitmap icons with
+   * codebase line-icons without having to read the pixels.
+   */
+  iconHint?: string;
   /** Child `el` handles — present when this node's children are included. */
   children?: string[];
   /**

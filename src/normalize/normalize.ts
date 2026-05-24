@@ -83,6 +83,9 @@ export function normalize(
     const fill = interner.internColor(fn.fills);
     if (fill) node.fill = fill;
 
+    const iconHint = inferIconHint(fn, parent, node);
+    if (iconHint) node.iconHint = iconHint;
+
     const stroke = interner.internColor(fn.strokes);
     if (stroke) {
       node.stroke = stroke;
@@ -174,6 +177,91 @@ export function normalize(
   }
 
   return doc;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Icon-swap hints                                                          */
+/* ---------------------------------------------------------------------- */
+
+/** Names Figma auto-generates that carry no semantic information. */
+const GENERIC_NAME =
+  /^(image|vector|rectangle|rect|ellipse|circle|line|frame|group|instance|node|layer|shape|path|union|subtract|intersect|exclude|component)\s*\d*$/i;
+
+const ICON_MAX_SIZE = 64;
+
+/** Strip the trailing "Button" / "Icon" / "IconButton" noise from a name. */
+function cleanIconLabel(s: string): string {
+  return s
+    .replace(/([a-z])([A-Z])/g, "$1 $2") // SearchButton → "Search Button"
+    .replace(/[_-]+/g, " ")
+    .replace(/\b(icon|button|btn|iconbutton|cta)\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function isDescriptive(name: string): boolean {
+  if (!name) return false;
+  const cleaned = cleanIconLabel(name);
+  if (!cleaned) return false;
+  if (GENERIC_NAME.test(cleaned)) return false;
+  return cleaned.length >= 2;
+}
+
+function hasImageFill(fn: FigmaNode): boolean {
+  if (!Array.isArray(fn.fills)) return false;
+  return fn.fills.some((p) => p?.visible !== false && p?.type === "IMAGE");
+}
+
+function isIconShaped(node: PdsNode, fn: FigmaNode): boolean {
+  if (node.box.w > ICON_MAX_SIZE || node.box.h > ICON_MAX_SIZE) return false;
+  if (node.box.w === 0 || node.box.h === 0) return false;
+  const aspect = node.box.w / node.box.h;
+  if (aspect < 0.5 || aspect > 2) return false;
+  if (hasImageFill(fn)) return true;
+  if (fn.type === "VECTOR" || fn.type === "BOOLEAN_OPERATION") return true;
+  const name = (node.name ?? "").toLowerCase();
+  if (name.includes("icon")) return true;
+  return false;
+}
+
+/** First TEXT sibling under the same parent with non-empty characters. */
+function siblingLabel(fn: FigmaNode, parent: FigmaNode | undefined): string | undefined {
+  if (!parent?.children) return undefined;
+  for (const sib of parent.children) {
+    if (sib.id === fn.id) continue;
+    if (sib.visible === false) continue;
+    if (sib.type === "TEXT" && typeof sib.characters === "string") {
+      const chars = sib.characters.trim();
+      if (chars) return chars;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Build the icon hint by reading the design context instead of the pixels.
+ * Order of preference: own descriptive name → sibling TEXT label → parent's
+ * descriptive name. Returns undefined when the node isn't icon-shaped or
+ * when no signal is available — the agent gracefully falls back to the
+ * file path / inline source.
+ */
+function inferIconHint(
+  fn: FigmaNode,
+  parent: FigmaNode | undefined,
+  node: PdsNode,
+): string | undefined {
+  if (!isIconShaped(node, fn)) return undefined;
+  if (isDescriptive(node.name)) {
+    const own = cleanIconLabel(node.name);
+    if (own) return own;
+  }
+  const label = siblingLabel(fn, parent);
+  if (label) return label;
+  if (parent && isDescriptive(parent.name ?? "")) {
+    const p = cleanIconLabel(parent.name ?? "");
+    if (p) return p;
+  }
+  return undefined;
 }
 
 /**
