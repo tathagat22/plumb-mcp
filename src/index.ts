@@ -1,23 +1,31 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { startBridge } from "./bridge/server";
 import { runInit } from "./cli/init";
+import { runVerifyCli } from "./cli/verify";
 import { SERVER_VERSION } from "./meta";
 import { createServer } from "./server";
 
 const HELP = `plumb-mcp ${SERVER_VERSION} — Figma MCP server for AI coding agents
 
 Usage:
-  plumb-mcp                Run the stdio MCP server (+ the local plugin bridge).
-                           This is what your MCP client (Claude Code, Cursor,
-                           Windsurf, etc.) spawns.
+  plumb-mcp                  Run the stdio MCP server (+ the local plugin bridge).
+                             This is what your MCP client (Claude Code, Cursor,
+                             Windsurf, etc.) spawns.
 
-  plumb-mcp init           Detect your installed editor(s) and write the
-                           correct MCP config block into each — Claude Code,
-                           Cursor, VS Code, Windsurf. Existing entries are
-                           preserved.
+  plumb-mcp init             Detect your installed editor(s) and write the
+                             correct MCP config block into each — Claude Code,
+                             Cursor, VS Code, Windsurf. Existing entries are
+                             preserved.
 
-  plumb-mcp --help, -h     Print this message and exit.
-  plumb-mcp --version, -v  Print the version and exit.
+  plumb-mcp verify <url>     Drive headless Chrome against your dev server,
+                             capture every [data-plumb-id] element's box +
+                             computed styles, and print the deltas against the
+                             Figma design. No Puppeteer needed — uses your
+                             installed Chrome. Run \`plumb-mcp verify --help\`
+                             for the full option list.
+
+  plumb-mcp --help, -h       Print this message and exit.
+  plumb-mcp --version, -v    Print the version and exit.
 
 Thirteen tools exposed once running: plumb_status, plumb_outline, plumb_node,
 plumb_tokens, plumb_selection, plumb_assets, plumb_screenshot, plumb_describe,
@@ -49,6 +57,10 @@ async function main(): Promise<void> {
   if (arg === "init") {
     runInit();
     return;
+  }
+  if (arg === "verify") {
+    const code = await runVerifyCli(process.argv.slice(3));
+    process.exit(code);
   }
   if (arg && arg.startsWith("-")) {
     process.stderr.write(
