@@ -1,0 +1,37 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.tathagat22/plumb-mcp",
+  "description": "Local Figma MCP server with no REST rate limits, no metered tool-call quotas, and a verification loop that diffs rendered code against the design. Drop-in alternative to Figma's Dev Mode MCP and Framelink — works on every Figma plan including Free.",
+  "repository": {
+    "url": "https://github.com/tathagat22/plumb-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://tathagat22.github.io/plumb-mcp/",
+  "version": "0.7.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "plumb-mcp",
+      "version": "0.7.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "FIGMA_TOKEN",
+          "description": "Figma personal access token (read-only). Only needed for the REST path — not required when the Plumb plugin is paired in Figma desktop. Create one at figma.com → Settings → Security → Personal access tokens.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "PLUMB_SESSION_NAME",
+          "description": "Optional label shown in the Plumb Figma plugin when multiple plumb-mcp servers are paired with the same plugin (multi-agent connect). Defaults to the basename of the current working directory.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
