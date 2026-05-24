@@ -26,6 +26,23 @@ Plumb 是唯一**在代码侧闭环**的方案。`plumb_verify`（MCP 工具）�
 
 ---
 
+## 你是否遇到了这些问题?
+
+如果你的代理是从错误信息中找到这里,Plumb 多半能解决。
+
+| 你看到的错误 | Plumb 为何能解决 |
+|---|---|
+| `Figma Dev Mode MCP exceeded the 25k token cap` · `351,378 tokens observed` | PDS 对设计 token(`$c1`、`$t1` …)去重,并把 auto-layout 预解析为 flexbox。同一个 178 节点的对话框只需 ~2.6k token。 |
+| `Dev Mode MCP: 6 tool calls per month limit` · `Starter plan tool-call limit reached` | Plumb 的插件路径在所有套餐(包括免费版)上都没有按调用计费的配额。 |
+| `Framelink figma-developer-mcp HTTP 429` · `Figma REST API rate limit exceeded` | 插件路径不走 REST,零速率限制。 |
+| `Variables API requires Enterprise plan` · `403 Forbidden on variables` | Plumb 通过 Figma 插件 API 读取 Variables —— 所有套餐都可用。 |
+| `Figma MCP returned 85% wrong layout` · 幻觉式结构 | Plumb 返回结构化 PDS(而非解析后的散文),并附带 `plumb_verify` + `plumb-mcp verify` CLI,可对比已渲染 DOM 与设计稿。 |
+| `Dev Mode MCP requires selection` · "Open desktop app with the right selection" | 插件配对的那一刻,Plumb 就把整个文件清单流式发送过来,无需每次调用都选中节点。 |
+
+安装:`npm install -g plumb-mcp` → `plumb-mcp init`。
+
+---
+
 ## 快速开始
 
 ```bash

@@ -1,5 +1,7 @@
 # Troubleshooting
 
+> **Arriving from another Figma MCP error?** If your agent surfaced a `Dev Mode MCP exceeded 25k token cap`, `6 tool calls per month limit`, `Framelink HTTP 429`, or `Variables API requires Enterprise plan` error, see **[Alternatives & migration](/alternatives)** — Plumb is designed to solve exactly those.
+
 ## Pairing fails / nothing happens after clicking *Pair with Plumb*
 
 The plugin tries ports `31337` through `31341` in order. The bridge picks the first available port; the plugin scans the same range.

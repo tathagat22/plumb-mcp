@@ -24,6 +24,23 @@ Plumb is the only one that **closes the loop on code.** `plumb_verify` (MCP tool
 
 ---
 
+## Are you hitting one of these?
+
+If your agent landed here from an error, Plumb probably solves it.
+
+| Error you're seeing | Why Plumb fixes it |
+|---|---|
+| `Figma Dev Mode MCP exceeded the 25k token cap` · `351,378 tokens observed` | PDS dedups design tokens (`$c1`, `$t1` …) and pre-resolves auto-layout to flexbox. A 178-node dialog comes back at ~2.6k tokens. |
+| `Dev Mode MCP: 6 tool calls per month limit` · `Starter plan tool-call limit reached` | Plumb's plugin path has no per-call quota on any plan, including Free. |
+| `Framelink figma-developer-mcp HTTP 429` · `Figma REST API rate limit exceeded` | The plugin path doesn't touch REST. Zero rate limits. |
+| `Variables API requires Enterprise plan` · `403 Forbidden on variables` | Plumb reads Variables through the Figma Plugin API — works on every plan. |
+| `Figma MCP returned 85% wrong layout` · hallucinated structure | Plumb returns structured PDS (not parsed prose) and ships `plumb_verify` + a `plumb-mcp verify` CLI that diff your rendered DOM against the design. |
+| `Dev Mode MCP requires selection` · "Open desktop app with the right selection" | Plumb streams the whole file inventory the moment the plugin pairs. No per-call selection dance. |
+
+Install: `npm install -g plumb-mcp` → `plumb-mcp init`.
+
+---
+
 ## Quick start
 
 ```bash

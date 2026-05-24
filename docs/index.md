@@ -1,11 +1,11 @@
 ---
-title: Plumb — Figma MCP server for Claude Code, Cursor & Windsurf
-description: A Model Context Protocol (MCP) server that connects AI coding agents to Figma files. Token-efficient, no REST rate limits, on any Figma plan.
+title: Plumb — Figma MCP with no rate limits, on any plan
+description: Local Figma MCP server for Claude Code, Cursor, Windsurf. No REST rate limits, no metered tool-call quotas, no 25k token cap explosions, with a built-in verification loop. Drop-in alternative to Figma's Dev Mode MCP and Framelink — works on every Figma plan including Free.
 layout: home
 hero:
   name: Plumb
-  text: Figma MCP server for AI coding agents.
-  tagline: Connect Claude Code, Cursor, Windsurf, and any other Model-Context-Protocol-compatible AI coding agent to your Figma files — token-efficient, no REST rate limits, on any Figma plan including Free.
+  text: The Figma → code MCP with a verification loop.
+  tagline: Designs in, normalised specs out, and `plumb-mcp verify` drives headless Chrome to prove your rendered code matches Figma. No REST rate limits, no metered tool-call quotas, no 25k token cap explosions. Works on every Figma plan including Free.
   image:
     src: /logo.png
     alt: Plumb plumb-line logo
@@ -14,22 +14,25 @@ hero:
       text: Get started
       link: /getting-started
     - theme: alt
+      text: Hit a Figma MCP error?
+      link: /alternatives
+    - theme: alt
       text: Tool reference
       link: /tools/
     - theme: alt
       text: GitHub
       link: https://github.com/tathagat22/plumb-mcp
 features:
-  - title: Token-frugal
-    details: Returns a compact normalised design spec instead of a 350,000-token JSON dump. Auto-layout pre-resolved to flexbox, tokens deduped, depth-stable element handles.
-  - title: Works on any plan
-    details: Reads the file through a companion Figma plugin — no REST rate limits, no metered billing, no plan-gating. Free, Starter, Professional, Organization, Enterprise.
+  - title: No rate limits, on any plan
+    details: Reads through a companion Figma plugin — no REST rate limits (no Framelink 429), no metered per-call quota (no Dev Mode MCP 6-call/month wall), no plan-gating. Free, Starter, Professional, Organization, Enterprise.
+  - title: Verification loop
+    details: '`plumb_verify` (MCP tool) and `plumb-mcp verify` (CLI) diff your rendered DOM against the design — colour-coded deltas, no pixel diff, runs in CI. No other Figma MCP closes this loop.'
+  - title: Token-frugal PDS
+    details: Returns a deduplicated design spec instead of the 351,378-token JSON the Dev Mode MCP emits. Tokens shrink to `$c1`, `$t1` refs; auto-layout pre-resolved to flexbox. A 178-node dialog comes back at ~2.6k tokens.
+  - title: Multi-agent connect
+    details: One Figma plugin pairs with multiple `plumb-mcp` servers at once — different Claude / Cursor / Windsurf sessions on different projects can share the same Figma file with zero contention.
   - title: Everything local
     details: Plugin and server talk over the loopback interface. Nothing about your design ever leaves your machine. No analytics, no third-party endpoints.
-  - title: Built for agents
-    details: Twelve focused tools — outline, node, assets, screenshot, search, components, verify, plus an offline `.fig` parser — exposed over MCP for Claude Code, Cursor, Windsurf, and any other MCP-compatible client.
-  - title: Battle-tested at scale
-    details: Validated against a 665-screen production design system with 14,608 component instances. plumb_assets exports 106 icons & images in ~600 ms. plumb_verify produces structured deltas in milliseconds.
   - title: Open source
-    details: MIT-licensed. Issues, source, and roadmap on GitHub.
+    details: MIT-licensed. Twelve focused tools + offline `.fig` parser. Issues, source, and roadmap on GitHub.
 ---

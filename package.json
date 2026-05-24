@@ -1,7 +1,7 @@
 {
   "name": "plumb-mcp",
   "version": "0.7.0",
-  "description": "A Model Context Protocol server that gives AI coding agents access to Figma files.",
+  "description": "Local Figma MCP server with no REST rate limits, no metered tool-call quotas, and a built-in verification loop. Works on every Figma plan including Free. Drop-in alternative to Figma's Dev Mode MCP and Framelink for Claude Code, Cursor, Windsurf, and any MCP-compatible AI coding agent.",
   "type": "module",
   "license": "MIT",
   "author": "Tathagat Maitray",
@@ -15,10 +15,26 @@
   },
   "keywords": [
     "figma",
+    "figma-mcp",
+    "figma-mcp-server",
+    "figma-plugin",
     "mcp",
+    "mcp-server",
     "model-context-protocol",
+    "claude-code",
+    "claude-mcp",
+    "cursor",
+    "cursor-mcp",
+    "windsurf",
     "design-to-code",
-    "ai-agent"
+    "design-tokens",
+    "design-system",
+    "ai-agent",
+    "ai-coding-agent",
+    "dev-mode",
+    "figma-rate-limit",
+    "anthropic",
+    "verification"
   ],
   "bin": {
     "plumb-mcp": "dist/index.js"

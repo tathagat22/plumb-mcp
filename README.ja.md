@@ -26,6 +26,23 @@ Plumb は**コード側でループを閉じる**唯一の選択肢。`plumb_ver
 
 ---
 
+## こんなエラーに遭遇していませんか?
+
+エラーから辿り着いた場合、Plumb で大抵解決します。
+
+| 表示されているエラー | Plumb で解決できる理由 |
+|---|---|
+| `Figma Dev Mode MCP exceeded the 25k token cap` · `351,378 tokens observed` | PDS はデザイントークン(`$c1`、`$t1` …)を重複排除し、auto-layout を flexbox に事前解決します。同じ 178 ノードのダイアログが ~2.6k トークンで返ります。 |
+| `Dev Mode MCP: 6 tool calls per month limit` · `Starter plan tool-call limit reached` | Plumb のプラグイン経路は、Free を含む全プランで呼び出しあたりの上限なし。 |
+| `Framelink figma-developer-mcp HTTP 429` · `Figma REST API rate limit exceeded` | プラグイン経路は REST を経由しないため、レート制限ゼロ。 |
+| `Variables API requires Enterprise plan` · `403 Forbidden on variables` | Plumb は Figma プラグイン API 経由で Variables を読み取ります — 全プランで動作。 |
+| `Figma MCP returned 85% wrong layout` · 幻覚レイアウト | Plumb はパース済みの散文ではなく構造化 PDS を返し、レンダリング済み DOM とデザインを比較する `plumb_verify` + `plumb-mcp verify` CLI を同梱。 |
+| `Dev Mode MCP requires selection` · "Open desktop app with the right selection" | プラグインがペアリングされた瞬間、Plumb はファイル全体のインベントリを送信。呼び出しごとの選択操作は不要。 |
+
+インストール:`npm install -g plumb-mcp` → `plumb-mcp init`。
+
+---
+
 ## クイックスタート
 
 ```bash
