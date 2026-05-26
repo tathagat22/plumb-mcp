@@ -198,6 +198,12 @@ export interface PdsNode {
   /** Token ref into tokens.radius, or a per-corner [tl,tr,br,bl] tuple. */
   radius?: string | [number, number, number, number];
   /**
+   * Figma Variable name bound to the (uniform) corner radius (e.g.
+   * `"radii/md"`). Only emitted via the plugin path. Per-corner variable
+   * bindings aren't surfaced yet.
+   */
+  radiusVar?: string;
+  /**
    * Compact dominant shadow — CSS `box-shadow` string for back-compat.
    * Multi-shadow stacks and blur effects live in `effects`.
    */
@@ -228,6 +234,16 @@ export interface PdsNode {
   chars?: string;
   /** mainComponent id (INSTANCE nodes only). */
   component?: string;
+  /**
+   * Component property overrides on an INSTANCE — e.g.
+   * `{ Label: "Sign in", Variant: "primary", Icon: true }`. Lets agents
+   * render the instance with the correct props instead of always
+   * defaulting (`<Button label="Sign in" variant="primary" icon />`
+   * vs. `<Button />`). Keys are Figma's property names with the
+   * internal `#id:idx` suffix stripped. Closes the #1 component-intent
+   * gap from feedbackstowor.txt.
+   */
+  props?: Record<string, string | boolean | number>;
   /**
    * Asset id when this node renders an image. Mirrors the first
    * `ImageFill.assetId` in `fills`; surfaced at the top level so the agent
@@ -274,6 +290,34 @@ export interface PdsNode {
   sizing?: { w?: "fill" | "hug"; h?: "fill" | "hug" };
   /** Child `el` handles — present when this node's children are included. */
   children?: string[];
+  /**
+   * Compressed repeating sibling block. When ≥ 3 consecutive children
+   * share an identical structural shape (modulo `chars` and `assetId`),
+   * only the FIRST child is emitted as a full node in `nodes`; the rest
+   * appear here as per-instance overrides keyed by the EL inside the
+   * template that varies.
+   *
+   * Render once, fill in per-row data:
+   *
+   *   const rows = parent.repeat
+   *     ? [{}, ...Object.values(parent.repeat.data)]
+   *     : parent.children.map(el => nodes[el]);
+   *   for (const overrides of rows) renderTemplate(parent.repeat.template, overrides);
+   *
+   * Compressed sibling els still appear in `children` so plumb_verify
+   * can tag rendered DOM with `data-plumb-id="<el>"`. They're just not in
+   * `nodes` (lookup misses are intentional).
+   *
+   * Closes the biggest agent-token bleed: a 10-row settings list ships
+   * as 1 template + 9 small override maps instead of 10 full subtrees.
+   */
+  repeat?: {
+    template: string;
+    data: Record<
+      string,
+      Record<string, { chars?: string; assetId?: string; iconHint?: string }>
+    >;
+  };
   /**
    * Set instead of `children` at the disclosure boundary: this many children
    * exist but were not included. Call plumb_node again on this node's `id`

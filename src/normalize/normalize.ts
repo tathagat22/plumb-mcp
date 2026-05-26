@@ -203,6 +203,9 @@ export function normalize(
     } else if (radius) {
       node.radius = radius; // per-corner tuple, inlined
     }
+    if (typeof fn.cornerRadiusVar === "string" && fn.cornerRadiusVar.length > 0) {
+      node.radiusVar = fn.cornerRadiusVar;
+    }
 
     const effects = effectsToStack(fn.effects);
     const shadow = interner.internShadow(fn.effects);
@@ -245,6 +248,9 @@ export function normalize(
       node.component = fn.componentId;
     }
 
+    const props = normalizeComponentProps(fn.componentProperties);
+    if (props) node.props = props;
+
     const motion = motionFromReactions(fn.reactions);
     if (motion) node.motion = motion;
 
@@ -281,6 +287,13 @@ export function normalize(
     }
 
     nodes[el] = node;
+    // Repeating-list compression — only runs when children are present
+    // and we're below the disclosure boundary (i.e. children were actually
+    // walked). Mutates `nodes` to delete compressed sibling subtrees and
+    // sets `node.repeat` on the parent.
+    if (node.children && node.children.length >= REPEAT_MIN) {
+      compressRepeats(node, nodes);
+    }
     return el;
   }
 
@@ -321,6 +334,191 @@ export function normalize(
   }
 
   return doc;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Repeating-list compression                                               */
+/* ---------------------------------------------------------------------- */
+
+/** Minimum consecutive identical-fingerprint siblings to compress. */
+const REPEAT_MIN = 3;
+
+/**
+ * Structural fingerprint for a PDS subtree. Two nodes have the same
+ * fingerprint iff their shape, styling, and layout are identical — modulo
+ * the fields that legitimately vary between list items (`chars`, `assetId`,
+ * `id`, `el`, `name`, `path`, `pos`).
+ */
+function fingerprintSubtree(el: string, nodes: Record<string, PdsNode>): string {
+  const n = nodes[el];
+  if (!n) return "";
+  // Walk children first, then build a canonical JSON representation. Sorted
+  // keys keep the output stable across Node versions / object insertion order.
+  const childPrints = (n.children ?? []).map((c) => fingerprintSubtree(c, nodes));
+  // Strip varying fields. Image fills: scrub the per-instance assetId so two
+  // rows with different photos still match.
+  const fillsForPrint = (n.fills ?? []).map((f) =>
+    f.type === "image" ? { ...f, assetId: undefined } : f,
+  );
+  const skeleton: Record<string, unknown> = {
+    type: n.type,
+    box: n.box,
+    layout: n.layout,
+    fill: n.fill,
+    fills: fillsForPrint.length > 0 ? fillsForPrint : undefined,
+    inheritedFill: n.inheritedFill,
+    stroke: n.stroke,
+    strokeW: n.strokeW,
+    strokeAlign: n.strokeAlign,
+    strokeSides: n.strokeSides,
+    strokeDash: n.strokeDash,
+    radius: n.radius,
+    radiusVar: n.radiusVar,
+    shadow: n.shadow,
+    effects: n.effects,
+    backdropFilter: n.backdropFilter,
+    opacity: n.opacity,
+    clip: n.clip,
+    text: n.text,
+    textDecoration: n.textDecoration,
+    component: n.component,
+    pattern: n.pattern,
+    // iconHint + notes are DERIVED from per-instance data (sibling chars,
+    // etc.) so they legitimately vary across otherwise-identical rows.
+    // Excluded here; iconHint surfaces as an override below.
+    isMask: n.isMask,
+    maskMode: n.maskMode,
+    masked: n.masked,
+    grow: n.grow,
+    selfAlign: n.selfAlign,
+    sizing: n.sizing,
+    vectorPath: n.vectorPath,
+    childPrints,
+  };
+  return JSON.stringify(canonicalize(skeleton));
+}
+
+/** Recursively drop undefined fields and sort keys for a stable JSON form. */
+function canonicalize(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(canonicalize);
+  if (v && typeof v === "object") {
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(v as Record<string, unknown>).sort()) {
+      const val = (v as Record<string, unknown>)[k];
+      if (val === undefined) continue;
+      out[k] = canonicalize(val);
+    }
+    return out;
+  }
+  return v;
+}
+
+/**
+ * Walk two same-shape subtrees in lockstep and collect the per-leaf
+ * differences (`chars`, `assetId`) keyed by the TEMPLATE's el — so the
+ * agent renders the template once and applies these overrides per row.
+ */
+function extractOverrides(
+  templateEl: string,
+  instanceEl: string,
+  nodes: Record<string, PdsNode>,
+): Record<string, { chars?: string; assetId?: string; iconHint?: string }> {
+  const out: Record<string, { chars?: string; assetId?: string; iconHint?: string }> = {};
+  function walkPair(tEl: string, iEl: string): void {
+    const t = nodes[tEl];
+    const i = nodes[iEl];
+    if (!t || !i) return;
+    const delta: { chars?: string; assetId?: string; iconHint?: string } = {};
+    if (t.chars !== i.chars && i.chars !== undefined) delta.chars = i.chars;
+    if (t.assetId !== i.assetId && i.assetId !== undefined) delta.assetId = i.assetId;
+    if (t.iconHint !== i.iconHint && i.iconHint !== undefined) delta.iconHint = i.iconHint;
+    if (
+      delta.chars !== undefined ||
+      delta.assetId !== undefined ||
+      delta.iconHint !== undefined
+    ) {
+      out[tEl] = delta;
+    }
+    const tKids = t.children ?? [];
+    const iKids = i.children ?? [];
+    const n = Math.min(tKids.length, iKids.length);
+    for (let k = 0; k < n; k++) walkPair(tKids[k]!, iKids[k]!);
+  }
+  walkPair(templateEl, instanceEl);
+  return out;
+}
+
+/** Recursively delete a node and its descendants from the nodes map. */
+function deleteSubtree(el: string, nodes: Record<string, PdsNode>): void {
+  const n = nodes[el];
+  if (!n) return;
+  for (const c of n.children ?? []) deleteSubtree(c, nodes);
+  delete nodes[el];
+}
+
+/**
+ * After the parent's children have been walked, detect consecutive runs of
+ * identical-fingerprint siblings (≥ REPEAT_MIN) and collapse each run into
+ * a single template + per-instance override map on the parent's `repeat`
+ * field. Mutates `nodes` in place (removes compressed siblings).
+ */
+function compressRepeats(parent: PdsNode, nodes: Record<string, PdsNode>): void {
+  const kids = parent.children;
+  if (!kids || kids.length < REPEAT_MIN) return;
+  const prints = kids.map((k) => fingerprintSubtree(k, nodes));
+  // Find the first run of REPEAT_MIN+ identical fingerprints. V1: collapse
+  // ONE run per parent — the most common shape (homogeneous list inside a
+  // single container). Heterogeneous lists with multiple runs can come later.
+  let runStart = -1;
+  let runLen = 0;
+  for (let i = 0; i < prints.length; i++) {
+    if (i > 0 && prints[i] === prints[i - 1] && prints[i]!.length > 0) {
+      if (runStart === -1) {
+        runStart = i - 1;
+        runLen = 2;
+      } else {
+        runLen++;
+      }
+    } else if (runStart !== -1 && runLen >= REPEAT_MIN) {
+      break;
+    } else {
+      runStart = -1;
+      runLen = 0;
+    }
+  }
+  if (runStart === -1 || runLen < REPEAT_MIN) return;
+
+  const templateEl = kids[runStart]!;
+  const data: Record<string, Record<string, { chars?: string; assetId?: string }>> = {};
+  for (let i = runStart + 1; i < runStart + runLen; i++) {
+    const instanceEl = kids[i]!;
+    const overrides = extractOverrides(templateEl, instanceEl, nodes);
+    data[instanceEl] = overrides;
+    deleteSubtree(instanceEl, nodes);
+  }
+  parent.repeat = { template: templateEl, data };
+}
+
+/* ---------------------------------------------------------------------- */
+/* Component property overrides                                             */
+/* ---------------------------------------------------------------------- */
+
+function normalizeComponentProps(
+  raw: FigmaNode["componentProperties"],
+): Record<string, string | boolean | number> | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const out: Record<string, string | boolean | number> = {};
+  for (const [key, entry] of Object.entries(raw)) {
+    if (!entry || typeof entry !== "object") continue;
+    const value = (entry as { value?: unknown }).value;
+    if (typeof value !== "string" && typeof value !== "boolean" && typeof value !== "number") {
+      continue;
+    }
+    // Strip Figma's `#id:idx` internal suffix — "Label#10:0" → "Label".
+    const cleanKey = key.replace(/#[^#]*$/, "");
+    out[cleanKey] = value;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /* ---------------------------------------------------------------------- */

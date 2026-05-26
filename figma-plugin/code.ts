@@ -195,6 +195,11 @@ function serialize(node: SceneNode, varMap?: Map<string, string>): SerialNode {
   }
   if (typeof n.cornerRadius === "number") {
     out.cornerRadius = n.cornerRadius;
+    // Variable-bound uniform corner radius — resolve to a name so the
+    // agent can reach for var(--radii-md) instead of a hardcoded px.
+    const radiusBinding = (bv as { cornerRadius?: unknown })?.cornerRadius;
+    const radiusVar = varNameFor(radiusBinding, varMap);
+    if (radiusVar) out.cornerRadiusVar = radiusVar;
   } else if (typeof n.topLeftRadius === "number") {
     out.rectangleCornerRadii = [
       n.topLeftRadius ?? 0,
@@ -267,6 +272,12 @@ function serialize(node: SceneNode, varMap?: Map<string, string>): SerialNode {
       if (main) out.componentId = main.id;
     } catch {
       // mainComponent can throw on dynamic-page documents — skip
+    }
+    // Property override values — variant, text, boolean, instance-swap.
+    // The normalizer strips Figma's internal `#id:idx` key suffix.
+    const props = (node as InstanceNode).componentProperties;
+    if (props && typeof props === "object" && Object.keys(props).length > 0) {
+      out.componentProperties = props;
     }
   }
 

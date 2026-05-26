@@ -121,6 +121,11 @@ export interface FigmaNode {
   /** Dash lengths in px; empty/missing means a solid stroke. */
   dashPattern?: number[];
   cornerRadius?: number;
+  /**
+   * Plugin-injected: resolved Figma Variable name bound to `cornerRadius`
+   * when present (e.g. `"radii/md"`). REST cannot reliably resolve this.
+   */
+  cornerRadiusVar?: string;
   rectangleCornerRadii?: [number, number, number, number];
   effects?: FigmaEffect[];
   opacity?: number;
@@ -132,6 +137,13 @@ export interface FigmaNode {
 
   // Component
   componentId?: string;
+  /**
+   * INSTANCE-only: the property override values for this instance. Figma
+   * shapes them as `{ "PropName#10:0": { value, type } }` where the
+   * `#id:idx` suffix is internal. Type can be TEXT | BOOLEAN | VARIANT |
+   * INSTANCE_SWAP.
+   */
+  componentProperties?: Record<string, { value: unknown; type: string }>;
 
   // Prototyping
   reactions?: FigmaReaction[];
