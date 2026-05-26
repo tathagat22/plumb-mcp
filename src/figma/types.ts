@@ -111,6 +111,12 @@ export interface FigmaNode {
   // Prototyping
   reactions?: FigmaReaction[];
 
+  // Mask — `isMask` marks this node as a mask for its subsequent siblings
+  // inside the same container. `maskType` is Figma's mask mode and maps to
+  // CSS `mask-type` ("alpha" / "luminance") or to vector / outline clipping.
+  isMask?: boolean;
+  maskType?: "ALPHA" | "LUMINANCE" | "VECTOR" | "GEOMETRY";
+
   [key: string]: unknown;
 }
 

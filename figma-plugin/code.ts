@@ -136,6 +136,11 @@ function serialize(node: SceneNode): SerialNode {
   if (typeof n.opacity === "number" && n.opacity < 1) out.opacity = n.opacity;
   if (n.clipsContent === true) out.clipsContent = true;
 
+  if (n.isMask === true) {
+    out.isMask = true;
+    if (typeof n.maskType === "string") out.maskType = n.maskType;
+  }
+
   if (node.type === "TEXT") {
     const t = node;
     out.characters = t.characters;

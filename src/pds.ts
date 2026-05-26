@@ -232,6 +232,22 @@ export interface PdsNode {
   more?: number;
   /** Opt-in human-readable hints (plan §7). */
   notes?: string[];
+  /**
+   * This node is a Figma mask — it shapes its subsequent siblings inside the
+   * same container rather than rendering as its own surface. The renderer
+   * should NOT paint this node directly; use its `fills` (gradient / image /
+   * shape) as the CSS `mask-image` of every sibling whose `masked` references
+   * this node's `el`. `maskMode` mirrors CSS `mask-type`: `"alpha"` reads
+   * alpha channel, `"luminance"` reads luminance, `"vector"` is a vector clip.
+   */
+  isMask?: boolean;
+  maskMode?: "alpha" | "luminance" | "vector";
+  /**
+   * El of the sibling mask that shapes this node. Emitted on every sibling
+   * after a mask child inside the same container. Use the mask node's `fills`
+   * as `mask-image` and `mask-mode: <mask.maskMode>` on the masked element.
+   */
+  masked?: string;
 }
 
 export interface TokenTable {

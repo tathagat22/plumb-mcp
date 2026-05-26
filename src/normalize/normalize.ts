@@ -186,6 +186,12 @@ export function normalize(
     if (fn.opacity != null && fn.opacity < 1) node.opacity = round(fn.opacity, 2);
     if (fn.clipsContent) node.clip = true;
 
+    if (fn.isMask === true) {
+      node.isMask = true;
+      const mode = normalizeMaskType(fn.maskType);
+      if (mode) node.maskMode = mode;
+    }
+
     if (fn.type === "TEXT") {
       const text = interner.internText(fn.style);
       if (text) node.text = text;
@@ -215,9 +221,21 @@ export function normalize(
       if (kids.length) node.more = kids.length;
     } else {
       const childEls: string[] = [];
+      // A mask child shapes every later sibling inside the same container
+      // (Figma's `isMask` semantics). Track the most recent mask el and tag
+      // subsequent siblings with `masked` so the renderer can apply the
+      // mask's fills as CSS `mask-image` instead of drawing it standalone.
+      let currentMaskEl: string | undefined;
       for (const child of kids) {
         const childEl = walk(child, level + 1, fn, path, fillForChildren, parent);
-        if (childEl) childEls.push(childEl);
+        if (!childEl) continue;
+        childEls.push(childEl);
+        if (child.isMask === true) {
+          currentMaskEl = childEl;
+        } else if (currentMaskEl) {
+          const childNode = nodes[childEl];
+          if (childNode) childNode.masked = currentMaskEl;
+        }
       }
       if (childEls.length) node.children = childEls;
     }
@@ -263,6 +281,28 @@ export function normalize(
   }
 
   return doc;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Mask mode                                                                */
+/* ---------------------------------------------------------------------- */
+
+function normalizeMaskType(
+  raw: string | undefined,
+): "alpha" | "luminance" | "vector" | undefined {
+  switch (raw) {
+    case "ALPHA":
+      return "alpha";
+    case "LUMINANCE":
+      return "luminance";
+    case "VECTOR":
+    case "GEOMETRY":
+      return "vector";
+    default:
+      // Unknown / unspecified — fall through. The presence of `isMask` alone
+      // is still enough for the renderer to know it's a mask.
+      return undefined;
+  }
 }
 
 /* ---------------------------------------------------------------------- */
