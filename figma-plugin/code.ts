@@ -119,9 +119,34 @@ function serialize(node: SceneNode): SerialNode {
   }
   if (n.layoutPositioning === "ABSOLUTE") out.layoutPositioning = "ABSOLUTE";
 
+  // Per-child auto-layout sizing — only meaningful when the parent has
+  // auto-layout, but cheap to always emit. Lets agents render flex children
+  // with the right grow/stretch/sizing instead of defaulting to "shrink to
+  // content" which is the #1 "almost right" layout failure.
+  if (typeof n.layoutGrow === "number" && n.layoutGrow > 0) out.layoutGrow = n.layoutGrow;
+  if (typeof n.layoutAlign === "string" && n.layoutAlign !== "INHERIT") {
+    out.layoutAlign = n.layoutAlign;
+  }
+  // FIXED is the default and is already implied by box.{w,h}. Only emit
+  // when the child stretches (FILL) or shrinks to content (HUG).
+  if (n.layoutSizingHorizontal === "FILL" || n.layoutSizingHorizontal === "HUG") {
+    out.layoutSizingHorizontal = n.layoutSizingHorizontal;
+  }
+  if (n.layoutSizingVertical === "FILL" || n.layoutSizingVertical === "HUG") {
+    out.layoutSizingVertical = n.layoutSizingVertical;
+  }
+
   if (Array.isArray(n.fills)) out.fills = n.fills.map(normalizePaint);
   if (Array.isArray(n.strokes)) out.strokes = n.strokes.map(normalizePaint);
   if (typeof n.strokeWeight === "number") out.strokeWeight = n.strokeWeight;
+  if (typeof n.strokeAlign === "string") out.strokeAlign = n.strokeAlign;
+  if (typeof n.strokeTopWeight === "number") out.strokeTopWeight = n.strokeTopWeight;
+  if (typeof n.strokeRightWeight === "number") out.strokeRightWeight = n.strokeRightWeight;
+  if (typeof n.strokeBottomWeight === "number") out.strokeBottomWeight = n.strokeBottomWeight;
+  if (typeof n.strokeLeftWeight === "number") out.strokeLeftWeight = n.strokeLeftWeight;
+  if (Array.isArray(n.dashPattern) && n.dashPattern.length > 0) {
+    out.dashPattern = n.dashPattern;
+  }
   if (typeof n.cornerRadius === "number") {
     out.cornerRadius = n.cornerRadius;
   } else if (typeof n.topLeftRadius === "number") {

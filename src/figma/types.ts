@@ -90,11 +90,27 @@ export interface FigmaNode {
   counterAxisAlignItems?: string;
   layoutSizingHorizontal?: string;
   layoutSizingVertical?: string;
+  /** 0 = no grow, 1 = fill remaining main-axis space. Only meaningful when
+   * the parent has auto-layout. */
+  layoutGrow?: number;
+  /** Cross-axis self-alignment: "INHERIT" | "STRETCH" | "MIN" | "CENTER" | "MAX". */
+  layoutAlign?: string;
 
   // Paint
   fills?: FigmaPaint[];
   strokes?: FigmaPaint[];
   strokeWeight?: number;
+  /** "INSIDE" | "OUTSIDE" | "CENTER" — Figma's stroke alignment. */
+  strokeAlign?: "INSIDE" | "OUTSIDE" | "CENTER";
+  /** REST: `individualStrokeWeights: { top, right, bottom, left }`. */
+  individualStrokeWeights?: { top: number; right: number; bottom: number; left: number };
+  /** Plugin: per-side stroke weights live as flat fields. */
+  strokeTopWeight?: number;
+  strokeRightWeight?: number;
+  strokeBottomWeight?: number;
+  strokeLeftWeight?: number;
+  /** Dash lengths in px; empty/missing means a solid stroke. */
+  dashPattern?: number[];
   cornerRadius?: number;
   rectangleCornerRadii?: [number, number, number, number];
   effects?: FigmaEffect[];

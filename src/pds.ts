@@ -161,6 +161,24 @@ export interface PdsNode {
   inheritedFill?: string;
   stroke?: string;
   strokeW?: number;
+  /**
+   * Where the stroke sits relative to the geometry. CSS `border` is always
+   * inside, so for `outside` / `center` the renderer needs to compensate
+   * with `outline` + `outline-offset` or an extra wrapping box, otherwise
+   * the element comes out 2-4px smaller than the Figma source.
+   */
+  strokeAlign?: "inside" | "outside" | "center";
+  /**
+   * Per-side stroke weights when not uniform. Emitted only when at least
+   * one side differs from `strokeW`. Renders to `border-{top,right,bottom,left}-width`.
+   */
+  strokeSides?: { t: number; r: number; b: number; l: number };
+  /**
+   * Dash lengths in CSS px — e.g. `[4, 4]` for a 4-on / 4-off dashed
+   * border. Maps to `border-style: dashed` plus `border-image` if exact
+   * dash control is needed. Empty / missing means solid.
+   */
+  strokeDash?: number[];
   /** Token ref into tokens.radius, or a per-corner [tl,tr,br,bl] tuple. */
   radius?: string | [number, number, number, number];
   /**
@@ -222,6 +240,22 @@ export interface PdsNode {
    * Plumb does not verify these at runtime today.
    */
   motion?: MotionSpec[];
+  /**
+   * Auto-layout child sizing — emitted on children of auto-layout parents
+   * when non-default. The renderer applies these as flex properties:
+   *   - `grow: 1` → `flex-grow: 1` (fill remaining main-axis space)
+   *   - `selfAlign: "stretch"` → `align-self: stretch` (cross-axis fill)
+   *   - `sizing.w: "fill"` → main-axis fill on row / cross-axis stretch on col
+   *   - `sizing.h: "fill"` → main-axis fill on col / cross-axis stretch on row
+   *   - `sizing.{w,h}: "hug"` → shrink to content (the default flex item
+   *     behavior, but explicit when Figma flagged it so the agent doesn't
+   *     apply a hardcoded width/height).
+   * Without these fields, agents default to flex's "shrink to content" and
+   * stretchy columns collapse — the #1 "almost right" layout failure.
+   */
+  grow?: number;
+  selfAlign?: "stretch" | "min" | "center" | "max";
+  sizing?: { w?: "fill" | "hug"; h?: "fill" | "hug" };
   /** Child `el` handles — present when this node's children are included. */
   children?: string[];
   /**

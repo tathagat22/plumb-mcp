@@ -101,6 +101,21 @@ export function normalize(
     const pos = relativePos(parent, fn);
     if (pos) node.pos = pos;
 
+    // Per-child auto-layout sizing — only meaningful when the parent has
+    // auto-layout. `grow`/`selfAlign`/`sizing` answer "how does this child
+    // fill its parent" — without them, agents default to flex's "shrink to
+    // content" and stretchy columns collapse, the #1 layout failure.
+    const parentIsAutoLayout = !!(parent?.layoutMode && parent.layoutMode !== "NONE");
+    if (parentIsAutoLayout) {
+      if (typeof fn.layoutGrow === "number" && fn.layoutGrow > 0) {
+        node.grow = fn.layoutGrow;
+      }
+      const selfAlign = normalizeLayoutAlign(fn.layoutAlign);
+      if (selfAlign) node.selfAlign = selfAlign;
+      const sizing = childSizing(fn);
+      if (sizing) node.sizing = sizing;
+    }
+
     const layout = toLayout(fn);
     if (layout) {
       node.layout = layout;
@@ -165,6 +180,13 @@ export function normalize(
       if (fn.strokeWeight) {
         const w = cleanPx(fn.strokeWeight);
         if (w) node.strokeW = w;
+      }
+      const align = normalizeStrokeAlign(fn.strokeAlign);
+      if (align) node.strokeAlign = align;
+      const sides = perSideStrokeWidths(fn, node.strokeW);
+      if (sides) node.strokeSides = sides;
+      if (Array.isArray(fn.dashPattern) && fn.dashPattern.length > 0) {
+        node.strokeDash = fn.dashPattern.map((n) => round(n, 2));
       }
     }
 
@@ -281,6 +303,89 @@ export function normalize(
   }
 
   return doc;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Auto-layout child sizing                                                 */
+/* ---------------------------------------------------------------------- */
+
+function normalizeLayoutAlign(
+  raw: string | undefined,
+): "stretch" | "min" | "center" | "max" | undefined {
+  switch (raw) {
+    case "STRETCH":
+      return "stretch";
+    case "MIN":
+      return "min";
+    case "CENTER":
+      return "center";
+    case "MAX":
+      return "max";
+    default:
+      // "INHERIT" and undefined → don't override the parent's align-items.
+      return undefined;
+  }
+}
+
+function childSizing(
+  fn: FigmaNode,
+): { w?: "fill" | "hug"; h?: "fill" | "hug" } | undefined {
+  const w = sizingValue(fn.layoutSizingHorizontal);
+  const h = sizingValue(fn.layoutSizingVertical);
+  if (!w && !h) return undefined;
+  const out: { w?: "fill" | "hug"; h?: "fill" | "hug" } = {};
+  if (w) out.w = w;
+  if (h) out.h = h;
+  return out;
+}
+
+function sizingValue(raw: string | undefined): "fill" | "hug" | undefined {
+  // FIXED is the default and already implied by box.{w,h} — skip.
+  if (raw === "FILL") return "fill";
+  if (raw === "HUG") return "hug";
+  return undefined;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Stroke alignment + per-side widths                                       */
+/* ---------------------------------------------------------------------- */
+
+function normalizeStrokeAlign(
+  raw: string | undefined,
+): "inside" | "outside" | "center" | undefined {
+  switch (raw) {
+    case "INSIDE":
+      return "inside";
+    case "OUTSIDE":
+      return "outside";
+    case "CENTER":
+      return "center";
+    default:
+      return undefined;
+  }
+}
+
+function perSideStrokeWidths(
+  fn: FigmaNode,
+  uniform: number | undefined,
+): { t: number; r: number; b: number; l: number } | undefined {
+  // REST ships `individualStrokeWeights: { top, right, bottom, left }`;
+  // plugin ships them as flat `strokeTopWeight` / etc. Read either form.
+  const isw = fn.individualStrokeWeights;
+  const t = isw?.top ?? fn.strokeTopWeight;
+  const r = isw?.right ?? fn.strokeRightWeight;
+  const b = isw?.bottom ?? fn.strokeBottomWeight;
+  const l = isw?.left ?? fn.strokeLeftWeight;
+  if (t == null && r == null && b == null && l == null) return undefined;
+
+  const tr = round(t ?? uniform ?? 0, 2);
+  const rr = round(r ?? uniform ?? 0, 2);
+  const br = round(b ?? uniform ?? 0, 2);
+  const lr = round(l ?? uniform ?? 0, 2);
+  // Only emit when at least one side actually differs — uniform borders
+  // already covered by `strokeW`.
+  if (tr === rr && rr === br && br === lr) return undefined;
+  return { t: tr, r: rr, b: br, l: lr };
 }
 
 /* ---------------------------------------------------------------------- */
