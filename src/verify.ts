@@ -28,7 +28,8 @@ export type Severity = "error" | "warn" | "info";
 
 export interface Delta {
   el: string;
-  name: string;
+  /** Mirrors PdsNode.name — undefined when Figma's name was auto-generated. */
+  name?: string;
   kind: string;
   expected: string | number | null;
   actual: string | number | null;

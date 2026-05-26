@@ -87,13 +87,17 @@ export function normalize(
     const node: PdsNode = {
       id: fn.id,
       el,
-      name: fn.name ?? "",
       type: TYPE_MAP[fn.type] ?? fn.type.toLowerCase(),
       box: {
         w: round(fn.absoluteBoundingBox?.width ?? 0),
         h: round(fn.absoluteBoundingBox?.height ?? 0),
       },
     };
+    // Only emit `name` when it carries actual signal — Figma auto-generates
+    // "Frame 12", "Rectangle 3", "Vector", etc. and those repeat across
+    // hundreds of nodes for no agent benefit. The `el` handle already
+    // encodes identity.
+    if (fn.name && isDescriptive(fn.name)) node.name = fn.name;
     // Only emit `path` once we're past the root — root's path is just its own
     // `el`, which is already on the node.
     if (parentPath) node.path = path;
@@ -146,16 +150,18 @@ export function normalize(
       }
     }
 
-    const fill = interner.internColor(fn.fills);
-    if (fill) node.fill = fill;
-
     // Full fill stack — the smoking-gun fix for "20% white" being a
     // multi-fill glass treatment, or "gradient" being a stop-less placeholder.
     const fills = paintsToFillStack(fn.fills);
+    const fill = interner.internColor(fn.fills);
     if (fills) {
       node.fills = fills;
       const firstImage = fills.find((f): f is Fill & { type: "image" } => f.type === "image");
       if (firstImage && firstImage.assetId) node.assetId = firstImage.assetId;
+    } else if (fill) {
+      // Compact dominant fill — only emitted when the full stack didn't
+      // ship (single-solid case), so the two fields are strictly disjoint.
+      node.fill = fill;
     }
 
     // Surface the nearest ancestor's solid fill when this node has none of
@@ -198,10 +204,15 @@ export function normalize(
       node.radius = radius; // per-corner tuple, inlined
     }
 
-    const shadow = interner.internShadow(fn.effects);
-    if (shadow) node.shadow = shadow;
     const effects = effectsToStack(fn.effects);
-    if (effects) node.effects = effects;
+    const shadow = interner.internShadow(fn.effects);
+    if (effects) {
+      node.effects = effects;
+    } else if (shadow) {
+      // Compact dominant shadow — only when the full effects stack didn't
+      // ship, so the two fields are strictly disjoint.
+      node.shadow = shadow;
+    }
     const backdrop = backdropFilterCss(fn.effects);
     if (backdrop) node.backdropFilter = backdrop;
 
@@ -213,6 +224,13 @@ export function normalize(
       const mode = normalizeMaskType(fn.maskType);
       if (mode) node.maskMode = mode;
     }
+
+    // Inline vector path for small icons — saves an entire `plumb_assets`
+    // round-trip per icon. Only single-path, single-winding-rule cases
+    // under the per-node char budget. Bigger / multi-rule paths fall
+    // through to plumb_assets.
+    const inlined = inlineVectorPath(fn);
+    if (inlined) node.vectorPath = inlined;
 
     if (fn.type === "TEXT") {
       const text = interner.internText(fn.style);
@@ -303,6 +321,31 @@ export function normalize(
   }
 
   return doc;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Inline vector path                                                       */
+/* ---------------------------------------------------------------------- */
+
+/** Per-icon budget. Bigger paths still ship via `plumb_assets`. */
+const VECTOR_INLINE_MAX = 600;
+
+function inlineVectorPath(fn: FigmaNode): string | undefined {
+  const geom = fn.fillGeometry;
+  if (!Array.isArray(geom) || geom.length === 0) return undefined;
+  // V1: only inline when there's exactly one path. Multi-path icons (cut-outs
+  // with EVENODD, layered strokes) fall back to plumb_assets — they're rarer
+  // and harder to reassemble correctly inline.
+  if (geom.length !== 1) return undefined;
+  const entry = geom[0];
+  if (!entry) return undefined;
+  // Speak REST (`path`) but tolerate plugin (`data`) just in case the path
+  // didn't get normalized upstream.
+  const d = typeof entry.path === "string" ? entry.path : entry.data;
+  if (typeof d !== "string" || d.length === 0 || d.length > VECTOR_INLINE_MAX) {
+    return undefined;
+  }
+  return d;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -582,8 +625,8 @@ function inferIconHint(
   node: PdsNode,
 ): string | undefined {
   if (!isIconShaped(node, fn)) return undefined;
-  if (isDescriptive(node.name)) {
-    const own = cleanIconLabel(node.name);
+  if (isDescriptive(node.name ?? "")) {
+    const own = cleanIconLabel(node.name ?? "");
     if (own) return own;
   }
   const label = siblingLabel(fn, parent, grandparent);

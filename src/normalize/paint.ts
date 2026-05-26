@@ -109,6 +109,7 @@ function fillOf(p: FigmaPaint): Fill | undefined {
       color: colorToHex({ r: p.color.r, g: p.color.g, b: p.color.b, a: p.color.a ?? 1 }),
     };
     if (p.opacity !== undefined && p.opacity < 1) out.opacity = round(p.opacity, 2);
+    if (p.var) out.var = p.var;
     return out;
   }
   const grad = GRADIENT_KIND[p.type];
@@ -144,8 +145,10 @@ export function paintsToFillStack(paints: FigmaPaint[] | undefined): Fill[] | un
   const list = visiblePaints(paints);
   if (!list.length) return undefined;
   // Trivial case: a single SOLID is fully captured by the compact `fill`
-  // field. Don't echo it.
-  if (list.length === 1 && list[0]!.type === "SOLID") return undefined;
+  // field. Don't echo it — unless it has a variable binding, in which case
+  // we need the full stack to carry `var` (the compact `fill: "$cN"` ref
+  // can't express the variable name).
+  if (list.length === 1 && list[0]!.type === "SOLID" && !list[0]!.var) return undefined;
   const out: Fill[] = [];
   for (const p of list) {
     const f = fillOf(p);

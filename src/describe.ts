@@ -20,7 +20,8 @@ export type Region =
 export interface NodeSummary {
   el: string;
   id: string;
-  name: string;
+  /** Mirrors PdsNode.name — undefined when Figma's name was auto-generated. */
+  name?: string;
   type: string;
   box: { w: number; h: number };
   pos?: { x: number; y: number };

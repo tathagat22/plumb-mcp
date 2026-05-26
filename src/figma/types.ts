@@ -28,6 +28,15 @@ export interface FigmaPaint {
   imageRef?: string;
   /** FILL | FIT | CROP | TILE (Figma's enum). */
   scaleMode?: string;
+  /**
+   * Resolved Figma Variable name for the paint's COLOR (e.g.
+   * `"colors/brand/primary"`). Injected by the plugin path when this paint
+   * was bound to a Variable — REST path can't always resolve variable IDs
+   * to names, so REST-fetched paints typically won't carry this. Agents
+   * should reach for `var(--colors-brand-primary)` instead of the resolved
+   * hex when this is present.
+   */
+  var?: string;
 }
 
 export interface FigmaEffect {
@@ -126,6 +135,17 @@ export interface FigmaNode {
 
   // Prototyping
   reactions?: FigmaReaction[];
+
+  // Vector geometry — the SVG path data for shape primitives (VECTOR,
+  // BOOLEAN_OPERATION, STAR, POLYGON, etc.). REST ships `path`; plugin
+  // ships `data` — the plugin normalizes to `path` before sending.
+  fillGeometry?: Array<{ path?: string; data?: string; windingRule?: string }>;
+
+  // Variable bindings — map of property name → variable alias (or arrays
+  // for fills/strokes). E.g. `boundVariables.fills[0].id` is the variable
+  // bound to the first fill's color. The plugin path resolves these to
+  // human-readable names and injects them into the paint via `paint.var`.
+  boundVariables?: Record<string, unknown>;
 
   // Mask — `isMask` marks this node as a mask for its subsequent siblings
   // inside the same container. `maskType` is Figma's mask mode and maps to

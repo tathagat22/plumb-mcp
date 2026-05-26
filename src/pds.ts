@@ -50,6 +50,15 @@ export interface SolidFill {
   color: string;
   /** Layer-level opacity multiplier (0..1). Distinct from `color`'s alpha. */
   opacity?: number;
+  /**
+   * Figma Variable name bound to this colour (e.g. `"colors/brand/primary"`).
+   * When present, prefer `var(--colors-brand-primary)` (or the codebase's
+   * equivalent token reference) over the resolved hex — the variable is
+   * the design-system intent; the hex is just its current value. Only
+   * shipped via the plugin path; REST cannot reliably resolve variable
+   * IDs to names.
+   */
+  var?: string;
 }
 
 /** Linear / radial / angular gradient with full stop data — no info loss. */
@@ -126,7 +135,14 @@ export interface PdsNode {
    * subtrees; `plumb_verify` accepts either as the join key.
    */
   path?: string;
-  name: string;
+  /**
+   * Figma layer name. Dropped when it matches Figma's auto-generated
+   * pattern (`Frame 12`, `Rectangle 3`, `Vector`, etc.) — those carry no
+   * semantic information and the `el` handle already encodes identity.
+   * Present only when the name is descriptive ("Submit button",
+   * "Header").
+   */
+  name?: string;
   /** Simplified node type: frame | text | rect | ellipse | instance | ... */
   type: string;
   box: { w: number; h: number };
@@ -266,6 +282,17 @@ export interface PdsNode {
   more?: number;
   /** Opt-in human-readable hints (plan §7). */
   notes?: string[];
+  /**
+   * Inline SVG path data for vector shapes (VECTOR / BOOLEAN_OPERATION /
+   * STAR / POLYGON / LINE / ELLIPSE). When present, the agent can render
+   * the icon directly without a `plumb_assets` round-trip:
+   *
+   *     <svg viewBox="0 0 {box.w} {box.h}"><path d="{vectorPath}" /></svg>
+   *
+   * Only emitted when the path fits in a per-node budget (≤ 600 chars
+   * combined). Larger / multi-rule paths still ship via `plumb_assets`.
+   */
+  vectorPath?: string;
   /**
    * This node is a Figma mask — it shapes its subsequent siblings inside the
    * same container rather than rendering as its own surface. The renderer

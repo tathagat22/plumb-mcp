@@ -65,7 +65,7 @@ function handlesFromTransform(
   return [inv(0, 0), inv(1, 0), inv(0, 1)];
 }
 
-function normalizePaint(p: unknown): unknown {
+function normalizePaint(p: unknown, varName?: string): unknown {
   if (!p || typeof p !== "object") return p;
   const src = p as Record<string, unknown>;
   const out: Record<string, unknown> = { ...src };
@@ -80,7 +80,40 @@ function normalizePaint(p: unknown): unknown {
     );
     if (hp) out.gradientHandlePositions = hp;
   }
+  // Resolved Figma Variable name bound to this paint's color, if any. The
+  // server propagates this to the PDS SolidFill so agents reach for a
+  // design token instead of the resolved hex.
+  if (varName) out.var = varName;
   return out;
+}
+
+/**
+ * Build a map of `VariableID:xxx` → variable name across all local
+ * variables in the current document. Used by `serialize()` to resolve
+ * `boundVariables` references without a per-node async lookup.
+ *
+ * Remote variables (imported from a library) aren't in `getLocalVariables`
+ * — bindings to those resolve to undefined and the agent falls back to
+ * the hex value. Acceptable for V1.
+ */
+async function buildVariableMap(): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  try {
+    const vars = await figma.variables.getLocalVariablesAsync();
+    for (const v of vars) map.set(v.id, v.name);
+  } catch {
+    // File has no variables or the API is unavailable — return an empty
+    // map; bindings will silently no-op.
+  }
+  return map;
+}
+
+/** Look up a variable binding entry's id and resolve it via the map. */
+function varNameFor(binding: unknown, varMap: Map<string, string> | undefined): string | undefined {
+  if (!binding || !varMap) return undefined;
+  const id = (binding as { id?: unknown }).id;
+  if (typeof id !== "string") return undefined;
+  return varMap.get(id);
 }
 
 function serializeReactions(node: SceneNode): unknown[] | undefined {
@@ -96,7 +129,7 @@ function serializeReactions(node: SceneNode): unknown[] | undefined {
   });
 }
 
-function serialize(node: SceneNode): SerialNode {
+function serialize(node: SceneNode, varMap?: Map<string, string>): SerialNode {
   const n = node as unknown as Record<string, any>;
   const out: SerialNode = { id: node.id, name: node.name, type: node.type };
 
@@ -136,8 +169,21 @@ function serialize(node: SceneNode): SerialNode {
     out.layoutSizingVertical = n.layoutSizingVertical;
   }
 
-  if (Array.isArray(n.fills)) out.fills = n.fills.map(normalizePaint);
-  if (Array.isArray(n.strokes)) out.strokes = n.strokes.map(normalizePaint);
+  // Variable bindings live on the node as `boundVariables.fills[i]` /
+  // `boundVariables.strokes[i]`, aligned by index with the paint arrays.
+  const bv = n.boundVariables as { fills?: unknown[]; strokes?: unknown[] } | undefined;
+  if (Array.isArray(n.fills)) {
+    const boundFills = bv?.fills;
+    out.fills = n.fills.map((p, i) =>
+      normalizePaint(p, varNameFor(Array.isArray(boundFills) ? boundFills[i] : undefined, varMap)),
+    );
+  }
+  if (Array.isArray(n.strokes)) {
+    const boundStrokes = bv?.strokes;
+    out.strokes = n.strokes.map((p, i) =>
+      normalizePaint(p, varNameFor(Array.isArray(boundStrokes) ? boundStrokes[i] : undefined, varMap)),
+    );
+  }
   if (typeof n.strokeWeight === "number") out.strokeWeight = n.strokeWeight;
   if (typeof n.strokeAlign === "string") out.strokeAlign = n.strokeAlign;
   if (typeof n.strokeTopWeight === "number") out.strokeTopWeight = n.strokeTopWeight;
@@ -164,6 +210,29 @@ function serialize(node: SceneNode): SerialNode {
   if (n.isMask === true) {
     out.isMask = true;
     if (typeof n.maskType === "string") out.maskType = n.maskType;
+  }
+
+  // Inline vector path data so agents can render small icons without a
+  // round-trip to `plumb_assets`. Only vector-shape types — RECTANGLE /
+  // FRAME / GROUP / TEXT / INSTANCE all render via CSS without paths.
+  if (
+    Array.isArray(n.fillGeometry) &&
+    n.fillGeometry.length > 0 &&
+    (node.type === "VECTOR" ||
+      node.type === "BOOLEAN_OPERATION" ||
+      node.type === "STAR" ||
+      node.type === "POLYGON" ||
+      node.type === "LINE" ||
+      node.type === "ELLIPSE")
+  ) {
+    // Plugin uses `data`, REST uses `path` — speak REST downstream.
+    out.fillGeometry = n.fillGeometry.map((g: Record<string, unknown>) => {
+      const path = typeof g.path === "string" ? g.path : g.data;
+      const item: Record<string, unknown> = {};
+      if (typeof path === "string") item.path = path;
+      if (typeof g.windingRule === "string") item.windingRule = g.windingRule;
+      return item;
+    });
   }
 
   if (node.type === "TEXT") {
@@ -206,7 +275,7 @@ function serialize(node: SceneNode): SerialNode {
 
   if ("children" in node) {
     const kids = (node as ChildrenMixin).children;
-    if (kids.length > 0) out.children = kids.map(serialize);
+    if (kids.length > 0) out.children = kids.map((kid) => serialize(kid, varMap));
   }
 
   return out;
@@ -728,7 +797,13 @@ async function handleServerRequest(req: any): Promise<void> {
       return;
     }
     const scene = node as SceneNode;
-    reply({ t: "node", reqId: req.reqId, doc: serialize(scene), nodeName: scene.name });
+    const varMap = await buildVariableMap();
+    reply({
+      t: "node",
+      reqId: req.reqId,
+      doc: serialize(scene, varMap),
+      nodeName: scene.name,
+    });
     return;
   }
 
