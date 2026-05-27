@@ -4,6 +4,7 @@
  * Read on images, or simply token-conscious callers). Everything here is
  * derived deterministically from PDS data — no rendering, no inference.
  */
+import { resolveEffects, resolveFills, resolveLayout } from "./normalize/resolve";
 import type { PdsDocument, PdsNode, TokenTable } from "./pds";
 
 export type Region =
@@ -89,8 +90,9 @@ function resolveRadius(node: PdsNode, tokens: TokenTable): string | undefined {
 }
 
 function summarizeFills(node: PdsNode, tokens: TokenTable): string | undefined {
-  if (node.fills && node.fills.length) {
-    const parts = node.fills.map((f) => {
+  const fills = resolveFills(node.fills, tokens);
+  if (fills && fills.length) {
+    const parts = fills.map((f) => {
       if (f.type === "color") return f.color;
       if (f.type === "image") return f.assetId ? `image:${f.assetId}` : "image";
       const stops = f.stops.map((s) => s.color).join("→");
@@ -115,8 +117,9 @@ function summarizeAppearance(node: PdsNode, tokens: TokenTable): string {
   if (radius) parts.push(`radius ${radius}`);
   // Effects stack: surface glass/blur explicitly so image-blind agents don't
   // write a flat fill where the design is layered.
-  if (node.effects && node.effects.length) {
-    const efParts = node.effects.map((e) => {
+  const effects = resolveEffects(node.effects, tokens);
+  if (effects && effects.length) {
+    const efParts = effects.map((e) => {
       if (e.type === "background-blur") return `frosted glass (backdrop-blur ${e.radius}px)`;
       if (e.type === "layer-blur") return `blur ${e.radius}px`;
       if (e.type === "inner-shadow") return `inset highlight ${e.color}`;
@@ -132,9 +135,10 @@ function summarizeAppearance(node: PdsNode, tokens: TokenTable): string {
   if (node.textDecoration) parts.push(node.textDecoration);
   if (node.opacity !== undefined && node.opacity < 1) parts.push(`opacity ${node.opacity}`);
   if (node.clip) parts.push("clipped");
-  if (node.layout) {
-    const dir = node.layout.flow === "col" ? "column" : "row";
-    const gap = node.layout.gap ? `, gap ${node.layout.gap}` : "";
+  const layout = resolveLayout(node.layout, tokens);
+  if (layout) {
+    const dir = layout.flow === "col" ? "column" : "row";
+    const gap = layout.gap ? `, gap ${layout.gap}` : "";
     parts.push(`${dir} stack${gap}`);
   }
   if (node.motion && node.motion.length) {
@@ -178,7 +182,8 @@ export function describePds(doc: PdsDocument): DescribeResult {
     };
   }
 
-  const hasAutoLayout = !!root.layout;
+  const rootLayout = resolveLayout(root.layout, doc.tokens);
+  const hasAutoLayout = !!rootLayout;
   const kids: PdsNode[] = (root.children ?? [])
     .map((el) => doc.nodes[el])
     .filter((n): n is PdsNode => !!n);
@@ -215,7 +220,7 @@ export function describePds(doc: PdsDocument): DescribeResult {
   const rootWord = nodeWord(root.type);
   const header = hasAutoLayout
     ? `The "${root.name}" ${rootWord} is ${root.box.w}×${root.box.h}px — a ${
-        root.layout!.flow === "col" ? "vertical" : "horizontal"
+        rootLayout!.flow === "col" ? "vertical" : "horizontal"
       } auto-layout container`
     : `The "${root.name}" ${rootWord} is ${root.box.w}×${root.box.h}px — a free-form (absolutely-positioned) container`;
   lines.push(

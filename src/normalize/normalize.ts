@@ -11,7 +11,7 @@ import type {
   FigmaReaction,
   FigmaTransition,
 } from "../figma/types";
-import type { Fill, MotionSpec, PdsDocument, PdsNode } from "../pds";
+import type { Fill, MotionSpec, PdsDocument, PdsLayout, PdsNode } from "../pds";
 
 const TYPE_MAP: Record<string, string> = {
   FRAME: "frame",
@@ -153,11 +153,9 @@ export function normalize(
 
     const layout = toLayout(fn);
     if (layout) {
-      node.layout = layout;
-      // Emit contentMain when justify is set and visible children sit shorter
-      // than the container — the slack is what justify distributes. Agents
-      // were guessing-and-screenshotting to confirm this; the number kills
-      // the round-trip.
+      // Compute contentMain BEFORE interning — the slack value is part of
+      // the layout identity, so finalising it after the ref is minted would
+      // either miss the dedup or mutate a shared table entry.
       if (layout.justify) {
         const visibleKids = (fn.children ?? []).filter((k) => k.visible !== false);
         if (visibleKids.length >= 2) {
@@ -174,11 +172,13 @@ export function normalize(
           const padStart = isCol ? layout.pad[0] : layout.pad[3];
           const padEnd = isCol ? layout.pad[2] : layout.pad[1];
           const available = containerMain - padStart - padEnd;
-          // Only emit when there's at least 4px of slack — within that the
-          // agent's naive flex assumption is already correct.
           if (available - contentMain >= 4) layout.contentMain = contentMain;
         }
       }
+      // Intern the finished layout — dense list screens with 20 identical
+      // row layouts ship 1 table entry + 20 short refs instead of 20 copies
+      // of the same 80-char object.
+      node.layout = interner.internLayout(layout);
     }
 
     // Full fill stack — the smoking-gun fix for "20% white" being a
@@ -186,9 +186,14 @@ export function normalize(
     const fills = paintsToFillStack(fn.fills);
     const fill = interner.internColor(fn.fills);
     if (fills) {
-      node.fills = fills;
       const firstImage = fills.find((f): f is Fill & { type: "image" } => f.type === "image");
       if (firstImage && firstImage.assetId) node.assetId = firstImage.assetId;
+      // Don't intern fill stacks that contain image fills — assetId is
+      // per-node, and the existing fingerprint scrub in `compressRepeats`
+      // relies on the literal stack being readable to ignore per-row
+      // photos. Solid/gradient stacks are safe to intern.
+      const hasImage = fills.some((f) => f.type === "image");
+      node.fills = hasImage ? fills : (interner.internFills(fills) ?? fills);
     } else if (fill) {
       // Compact dominant fill — only emitted when the full stack didn't
       // ship (single-solid case), so the two fields are strictly disjoint.
@@ -208,7 +213,7 @@ export function normalize(
     const iconHint = inferIconHint(fn, parent, grandparent, ancestors, node);
     if (iconHint) node.iconHint = iconHint;
 
-    const pattern = inferPattern(fn, node);
+    const pattern = inferPattern(fn, node, layout);
     if (pattern) node.pattern = pattern;
 
     const stroke = interner.internColor(fn.strokes);
@@ -241,7 +246,7 @@ export function normalize(
     const effects = effectsToStack(fn.effects);
     const shadow = interner.internShadow(fn.effects);
     if (effects) {
-      node.effects = effects;
+      node.effects = interner.internEffects(effects);
     } else if (shadow) {
       // Compact dominant shadow — only when the full effects stack didn't
       // ship, so the two fields are strictly disjoint.
@@ -264,7 +269,7 @@ export function normalize(
     // under the per-node char budget. Bigger / multi-rule paths fall
     // through to plumb_assets.
     const inlined = inlineVectorPath(fn);
-    if (inlined) node.vectorPath = inlined;
+    if (inlined) node.vectorPath = interner.internVector(inlined);
 
     if (fn.type === "TEXT") {
       const text = interner.internText(fn.style);
@@ -280,7 +285,7 @@ export function normalize(
     }
 
     const props = normalizeComponentProps(fn.componentProperties);
-    if (props) node.props = props;
+    if (props) node.props = interner.internProps(props);
 
     const motion = motionFromReactions(fn.reactions);
     if (motion) node.motion = motion;
@@ -390,10 +395,15 @@ function fingerprintSubtree(el: string, nodes: Record<string, PdsNode>): string 
   // keys keep the output stable across Node versions / object insertion order.
   const childPrints = (n.children ?? []).map((c) => fingerprintSubtree(c, nodes));
   // Strip varying fields. Image fills: scrub the per-instance assetId so two
-  // rows with different photos still match.
-  const fillsForPrint = (n.fills ?? []).map((f) =>
-    f.type === "image" ? { ...f, assetId: undefined } : f,
-  );
+  // rows with different photos still match. A ref string is already a stable
+  // identity (image-fill stacks aren't interned, so refs only appear for
+  // solid/gradient stacks where the assetId scrub is a no-op).
+  const fillsForPrint =
+    typeof n.fills === "string"
+      ? n.fills
+      : (n.fills ?? []).map((f) =>
+          f.type === "image" ? { ...f, assetId: undefined } : f,
+        );
   const skeleton: Record<string, unknown> = {
     type: n.type,
     box: n.box,
@@ -832,8 +842,13 @@ function siblingLabel(
  * "this is a button" from geometry every time. Conservative: only emits when
  * all signals align, so missing-button is preferred over false-positive.
  */
-function inferPattern(fn: FigmaNode, node: PdsNode): string | undefined {
-  if (!node.layout || node.layout.flow !== "row") return undefined;
+function inferPattern(
+  fn: FigmaNode,
+  node: PdsNode,
+  layout: PdsLayout | undefined,
+): string | undefined {
+  // Use the literal layout (not the possibly-interned ref on node.layout).
+  if (!layout || layout.flow !== "row") return undefined;
   const { w, h } = node.box;
   if (w < 40 || w > 480 || h < 20 || h > 80) return undefined;
   const hasVisual = Boolean(node.stroke || node.fill || node.fills);

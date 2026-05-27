@@ -146,7 +146,13 @@ export interface PdsNode {
   /** Simplified node type: frame | text | rect | ellipse | instance | ... */
   type: string;
   box: { w: number; h: number };
-  layout?: PdsLayout;
+  /**
+   * Auto-layout config. May be the literal object or a `$lN` ref into
+   * `tokens.layout` (v0.10+, when the same config repeats across siblings —
+   * e.g. every row in a list shares one layout). Resolve refs by lookup;
+   * unresolvable strings should be treated as opaque tokens, not values.
+   */
+  layout?: PdsLayout | string;
   /**
    * Position relative to the parent's top-left, in CSS pixels. Emitted when
    * the parent has no auto-layout (so children are absolutely positioned)
@@ -165,9 +171,11 @@ export interface PdsNode {
    * Full fill stack, bottom-up. Emitted whenever the single-string `fill`
    * representation would be lossy — i.e. multiple paints layered, a
    * gradient (with all its stops), or an image (with its asset id). Render
-   * these as `background: <layer-1>, <layer-2>, …` in CSS order.
+   * these as `background: <layer-1>, <layer-2>, …` in CSS order. May be a
+   * `$fN` ref into `tokens.fills` (v0.10+) when the same stack repeats —
+   * common for gradient CTAs or branded surfaces.
    */
-  fills?: Fill[];
+  fills?: Fill[] | string;
   /**
    * Token ref `$cN` resolved from the nearest ancestor with a solid fill.
    * Emitted only when this node has no `fill` of its own — saves the renderer
@@ -211,9 +219,11 @@ export interface PdsNode {
   /**
    * Full effect stack — drop / inner shadows, layer blur (CSS `filter`),
    * and background blur (CSS `backdrop-filter`). Emitted whenever the stack
-   * is non-trivial. `backdropFilter` below is the CSS-ready shorthand.
+   * is non-trivial. `backdropFilter` below is the CSS-ready shorthand. May
+   * be a `$eN` ref into `tokens.effects` (v0.10+) for repeating elevation
+   * stacks (cards, surfaces).
    */
-  effects?: Effect[];
+  effects?: Effect[] | string;
   /**
    * Convenience: ready-to-paste CSS `backdrop-filter` value (e.g.
    * `"blur(24px)"`) when this node has a Figma `background-blur` effect.
@@ -241,9 +251,11 @@ export interface PdsNode {
    * defaulting (`<Button label="Sign in" variant="primary" icon />`
    * vs. `<Button />`). Keys are Figma's property names with the
    * internal `#id:idx` suffix stripped. Closes the #1 component-intent
-   * gap from feedbackstowor.txt.
+   * gap from feedbackstowor.txt. May be a `$pN` ref into `tokens.props`
+   * (v0.10+) when the same override map repeats across instances — common
+   * for components with a small number of variant combinations.
    */
-  props?: Record<string, string | boolean | number>;
+  props?: Record<string, string | boolean | number> | string;
   /**
    * Asset id when this node renders an image. Mirrors the first
    * `ImageFill.assetId` in `fills`; surfaced at the top level so the agent
@@ -335,6 +347,11 @@ export interface PdsNode {
    *
    * Only emitted when the path fits in a per-node budget (≤ 600 chars
    * combined). Larger / multi-rule paths still ship via `plumb_assets`.
+   *
+   * May be a `$vN` ref into `tokens.vector` (v0.10+) when the same icon
+   * shape repeats — common for nav/tab icons used across screens. Raw `d`
+   * strings always start with a path command (M/m/L/l/C/c/...) so a leading
+   * `$` is unambiguously a ref, not data.
    */
   vectorPath?: string;
   /**
@@ -366,6 +383,27 @@ export interface TokenTable {
    */
   radius: Record<string, number | "full">;
   shadow: Record<string, string>;
+  /**
+   * Compound token namespaces — v0.10. Each maps `$xN` → the structured
+   * value previously emitted inline on every node. Only present when the
+   * file actually contains repeating compounds; an empty namespace is
+   * omitted rather than emitted as `{}`.
+   *
+   * Resolution rule for agents: when `node.layout` (or .effects/.fills/etc)
+   * is a string, look it up here. When it's the literal value, use as-is.
+   * Both shapes are valid in the same response.
+   */
+  layout?: Record<string, PdsLayout>;
+  effects?: Record<string, Effect[]>;
+  fills?: Record<string, Fill[]>;
+  vector?: Record<string, string>;
+  props?: Record<string, Record<string, string | boolean | number>>;
+  /**
+   * Per-ref hit counts (≥2 only) — measurable proof of dedup. Inspect
+   * `tokens.meta.counts` to see which compounds are doing real work; useful
+   * when comparing "tokens before / tokens after" on a real screen.
+   */
+  meta?: { counts?: Record<string, number> };
 }
 
 export interface PdsDocument {

@@ -5,6 +5,7 @@
  * structured deltas (no CV, no pixel diff). Every comparison is tolerance-aware
  * and edge-case-careful.
  */
+import { resolveLayout } from "./normalize/resolve";
 import type { PdsDocument, PdsNode, TokenTable } from "./pds";
 
 export interface RenderedElement {
@@ -216,8 +217,11 @@ function compareOne(
   if (node.box.h > 0 && r.box.h > 0) pushPx("size.h", node.box.h, r.box.h);
 
   // --- Layout (only if PDS describes one) ---------------------------------
-  if (node.layout) {
-    const pdsFlow = node.layout.flow === "col" ? "column" : "row";
+  // Layout may arrive as a `$lN` ref into tokens.layout (v0.10+) — resolve
+  // once and use the literal everywhere below.
+  const layout = resolveLayout(node.layout, tokens);
+  if (layout) {
+    const pdsFlow = layout.flow === "col" ? "column" : "row";
     const renFlow = styles.flexDirection;
     if (renFlow && renFlow !== pdsFlow) {
       deltas.push({
@@ -229,11 +233,11 @@ function compareOne(
         severity: "error",
       });
     }
-    if (node.layout.gap !== undefined) {
+    if (layout.gap !== undefined) {
       const v = parsePx(styles.gap);
-      if (v !== null) pushPx("layout.gap", node.layout.gap, v);
+      if (v !== null) pushPx("layout.gap", layout.gap, v);
     }
-    const pad = node.layout.pad;
+    const pad = layout.pad;
     const sideMap: Array<[string, number, number | null]> = [
       ["pad.top", pad[0], parsePx(styles.paddingTop)],
       ["pad.right", pad[1], parsePx(styles.paddingRight)],
@@ -243,27 +247,27 @@ function compareOne(
     for (const [kind, expected, actual] of sideMap) {
       if (actual !== null) pushPx(kind, expected, actual);
     }
-    if (node.layout.justify) {
+    if (layout.justify) {
       const v = styles.justifyContent;
-      if (v && v !== node.layout.justify) {
+      if (v && v !== layout.justify) {
         deltas.push({
           el: node.el,
           name: node.name,
           kind: "layout.justify",
-          expected: node.layout.justify,
+          expected: layout.justify,
           actual: v,
           severity: "warn",
         });
       }
     }
-    if (node.layout.align) {
+    if (layout.align) {
       const v = styles.alignItems;
-      if (v && v !== node.layout.align) {
+      if (v && v !== layout.align) {
         deltas.push({
           el: node.el,
           name: node.name,
           kind: "layout.align",
-          expected: node.layout.align,
+          expected: layout.align,
           actual: v,
           severity: "warn",
         });
