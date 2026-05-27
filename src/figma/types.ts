@@ -172,6 +172,30 @@ export interface FigmaNode {
   isMask?: boolean;
   maskType?: "ALPHA" | "LUMINANCE" | "VECTOR" | "GEOMETRY";
 
+  // v0.10 Phase 3 — fidelity additions.
+  /** CSS-shaped rotation in degrees. Figma's `rotation` is anti-clockwise;
+   * plugin converts to CSS-clockwise before emitting. */
+  rotation?: number;
+  /** Layer blend mode. "PASS_THROUGH" (default for frames) and "NORMAL"
+   * are omitted; anything else (MULTIPLY, OVERLAY, SCREEN, ...) ships. */
+  blendMode?: string;
+  /** Figma's "Smooth corners" squircle factor, 0..1. */
+  cornerSmoothing?: number;
+  /** "NONE" | "HEIGHT" | "WIDTH_AND_HEIGHT" | "TRUNCATE" — drives whether
+   * the text box grows with content. */
+  textAutoResize?: string;
+  /** Pinning rules for non-auto-layout children. */
+  constraints?: { horizontal?: string; vertical?: string };
+  // Per-axis size constraints — meaningful when the parent has auto-layout
+  // and the child uses FILL/HUG sizing. A button that hugs content but is
+  // pinned to a 120px floor needs `minWidth: 120` or it collapses.
+  minWidth?: number;
+  maxWidth?: number;
+  minHeight?: number;
+  maxHeight?: number;
+  /** INSTANCE variant selectors, e.g. `{ Size: "md", Style: "primary" }`. */
+  variantProperties?: Record<string, string>;
+
   [key: string]: unknown;
 }
 

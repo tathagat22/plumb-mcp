@@ -281,11 +281,49 @@ export function normalize(
     }
 
     if (fn.type === "INSTANCE" && typeof fn.componentId === "string") {
-      node.component = fn.componentId;
+      // v0.10 Phase 3 — surface variant identity alongside the component
+      // id so agents can route to the right codebase variant without
+      // re-parsing `props`. Flatten variantProperties into Figma's own
+      // "Key=Val,Key=Val" form, which matches how Figma displays variants
+      // in the UI and what most design-system docs call them.
+      const vp = fn.variantProperties;
+      if (vp && typeof vp === "object" && Object.keys(vp).length > 0) {
+        const variant = Object.entries(vp)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(",");
+        node.component = { id: fn.componentId, variant };
+      } else {
+        node.component = fn.componentId;
+      }
     }
 
     const props = normalizeComponentProps(fn.componentProperties);
     if (props) node.props = interner.internProps(props);
+
+    // v0.10 Phase 3 — fidelity passthroughs. Each only emitted when the
+    // plugin captured it (non-default), so unchanged nodes stay terse.
+    if (typeof fn.rotation === "number") node.rotation = round(fn.rotation);
+    if (typeof fn.blendMode === "string") node.blend = cssBlendMode(fn.blendMode);
+    if (typeof fn.cornerSmoothing === "number") node.smooth = fn.cornerSmoothing;
+    if (typeof fn.textAutoResize === "string") {
+      node.textGrow = pdsTextGrow(fn.textAutoResize);
+    }
+    // Constraints only matter when the parent has no auto-layout — flex
+    // children ignore CSS pinning. Drop them on auto-layout children to
+    // save tokens and avoid misleading agents.
+    if (fn.constraints && !(parent?.layoutMode && parent.layoutMode !== "NONE")) {
+      const h = pdsConstraint(fn.constraints.horizontal, "h");
+      const v = pdsConstraint(fn.constraints.vertical, "v");
+      if (h || v) node.constraints = { ...(h && { h }), ...(v && { v }) };
+    }
+    const minSize: { w?: number; h?: number } = {};
+    const maxSize: { w?: number; h?: number } = {};
+    if (typeof fn.minWidth === "number") minSize.w = fn.minWidth;
+    if (typeof fn.minHeight === "number") minSize.h = fn.minHeight;
+    if (typeof fn.maxWidth === "number") maxSize.w = fn.maxWidth;
+    if (typeof fn.maxHeight === "number") maxSize.h = fn.maxHeight;
+    if (minSize.w !== undefined || minSize.h !== undefined) node.sizingMin = minSize;
+    if (maxSize.w !== undefined || maxSize.h !== undefined) node.sizingMax = maxSize;
 
     const motion = motionFromReactions(fn.reactions);
     if (motion) node.motion = motion;
@@ -573,25 +611,27 @@ function normalizeComponentProps(
 /* Inline vector path                                                       */
 /* ---------------------------------------------------------------------- */
 
-/** Per-icon budget. Bigger paths still ship via `plumb_assets`. */
+/** Per-icon budget for the COMBINED `d` (all subpaths). Bigger icons still
+ * ship via `plumb_assets`. */
 const VECTOR_INLINE_MAX = 600;
 
 function inlineVectorPath(fn: FigmaNode): string | undefined {
   const geom = fn.fillGeometry;
   if (!Array.isArray(geom) || geom.length === 0) return undefined;
-  // V1: only inline when there's exactly one path. Multi-path icons (cut-outs
-  // with EVENODD, layered strokes) fall back to plumb_assets — they're rarer
-  // and harder to reassemble correctly inline.
-  if (geom.length !== 1) return undefined;
-  const entry = geom[0];
-  if (!entry) return undefined;
-  // Speak REST (`path`) but tolerate plugin (`data`) just in case the path
-  // didn't get normalized upstream.
-  const d = typeof entry.path === "string" ? entry.path : entry.data;
-  if (typeof d !== "string" || d.length === 0 || d.length > VECTOR_INLINE_MAX) {
-    return undefined;
+  // v0.10 Phase 3 — accept multi-subpath icons. Every production icon set
+  // (Heroicons, Phosphor, Material) uses 2-3 subpaths for cutouts. We
+  // concat the `d` strings with a space — SVG renders that as a single
+  // path command sequence under one fill-rule.
+  const ds: string[] = [];
+  for (const entry of geom) {
+    if (!entry) continue;
+    const d = typeof entry.path === "string" ? entry.path : entry.data;
+    if (typeof d === "string" && d.length > 0) ds.push(d);
   }
-  return d;
+  if (ds.length === 0) return undefined;
+  const combined = ds.join(" ");
+  if (combined.length > VECTOR_INLINE_MAX) return undefined;
+  return combined;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -964,4 +1004,58 @@ function buildNotes(fn: FigmaNode): string[] {
   if (fn.layoutSizingHorizontal === "FILL") notes.push("fills width");
   if (fn.layoutSizingHorizontal === "HUG") notes.push("hugs contents");
   return notes;
+}
+
+/* ---------------------------------------------------------------------- */
+/* v0.10 Phase 3 — fidelity helpers                                         */
+/* ---------------------------------------------------------------------- */
+
+/** Map Figma's blend mode enum to the CSS `mix-blend-mode` keyword. */
+function cssBlendMode(figma: string): string | undefined {
+  switch (figma) {
+    case "PASS_THROUGH":
+    case "NORMAL":
+      return undefined;
+    case "DARKEN": return "darken";
+    case "MULTIPLY": return "multiply";
+    case "LINEAR_BURN": return "plus-darker";
+    case "COLOR_BURN": return "color-burn";
+    case "LIGHTEN": return "lighten";
+    case "SCREEN": return "screen";
+    case "LINEAR_DODGE": return "plus-lighter";
+    case "COLOR_DODGE": return "color-dodge";
+    case "OVERLAY": return "overlay";
+    case "SOFT_LIGHT": return "soft-light";
+    case "HARD_LIGHT": return "hard-light";
+    case "DIFFERENCE": return "difference";
+    case "EXCLUSION": return "exclusion";
+    case "HUE": return "hue";
+    case "SATURATION": return "saturation";
+    case "COLOR": return "color";
+    case "LUMINOSITY": return "luminosity";
+    default: return figma.toLowerCase();
+  }
+}
+
+/** Compress Figma's textAutoResize enum into a 1-char-ish PDS hint. */
+function pdsTextGrow(figma: string): "h" | "wh" | "trunc" | undefined {
+  switch (figma) {
+    case "HEIGHT": return "h";
+    case "WIDTH_AND_HEIGHT": return "wh";
+    case "TRUNCATE": return "trunc";
+    default: return undefined; // NONE / unknown → omit
+  }
+}
+
+/** Map a single Figma constraint enum to a CSS-shaped keyword. */
+function pdsConstraint(figma: string | undefined, axis: "h" | "v"): string | undefined {
+  if (!figma) return undefined;
+  switch (figma) {
+    case "MIN": return axis === "h" ? "left" : "top";
+    case "MAX": return axis === "h" ? "right" : "bottom";
+    case "CENTER": return "center";
+    case "STRETCH": return "stretch";
+    case "SCALE": return "scale";
+    default: return undefined;
+  }
 }

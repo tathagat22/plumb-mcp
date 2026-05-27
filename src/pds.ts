@@ -242,8 +242,14 @@ export interface PdsNode {
   textDecoration?: "underline" | "line-through";
   /** The actual text content (TEXT nodes only). */
   chars?: string;
-  /** mainComponent id (INSTANCE nodes only). */
-  component?: string;
+  /**
+   * mainComponent id (INSTANCE nodes only). May arrive as a structured
+   * object `{ id, variant: "Size=md,Style=primary" }` (v0.10+) when the
+   * underlying component has variants — the variant string is Figma's
+   * `variantProperties` flattened, so an agent can route to the right
+   * codebase variant without a separate `props` round-trip.
+   */
+  component?: string | { id: string; variant?: string };
   /**
    * Component property overrides on an INSTANCE — e.g.
    * `{ Label: "Sign in", Variant: "primary", Icon: true }`. Lets agents
@@ -370,6 +376,40 @@ export interface PdsNode {
    * as `mask-image` and `mask-mode: <mask.maskMode>` on the masked element.
    */
   masked?: string;
+
+  // v0.10 Phase 3 — fidelity additions. Each field is omitted when the
+  // value is the CSS default (no rotation, normal blend, square corners,
+  // text doesn't grow, no constraints, no min/max). Agents that ignore
+  // these still get the right visual; agents that respect them get
+  // pixel-identical output on rotated icons, frosted blends, squircle
+  // surfaces, responsive text, and pinned absolutely-positioned children.
+  rotation?: number;
+  blend?: string;
+  smooth?: number;
+  /**
+   * Text auto-resize:
+   *   "h"  → height grows with content (fixed width)
+   *   "wh" → both axes grow with content
+   *   "trunc" → fixed box, ellipsize when overflowing
+   * Omitted = NONE (fixed box, content wraps/overflows).
+   */
+  textGrow?: "h" | "wh" | "trunc";
+  /**
+   * Pinning rules for children of a non-auto-layout parent. CSS-friendly
+   * shorthand:
+   *   h: "left" | "right" | "center" | "stretch" | "scale"
+   *   v: "top" | "bottom" | "center" | "stretch" | "scale"
+   * Combine with `pos` to lay out absolute children that should pin to
+   * an edge or center inside a resizing parent.
+   */
+  constraints?: { h?: string; v?: string };
+  /**
+   * Per-axis size floor/ceiling — kicks in when `sizing.{w,h}` is "fill"
+   * or "hug" and the layout would otherwise let the box collapse below
+   * `min` or expand past `max`.
+   */
+  sizingMin?: { w?: number; h?: number };
+  sizingMax?: { w?: number; h?: number };
 }
 
 export interface TokenTable {

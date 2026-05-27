@@ -242,6 +242,42 @@ function serialize(
   if (typeof n.opacity === "number" && n.opacity < 1) out.opacity = n.opacity;
   if (n.clipsContent === true) out.clipsContent = true;
 
+  // v0.10 Phase 3 — fidelity additions. Capture each field only when it
+  // diverges from the CSS default so unchanged nodes stay terse.
+  // Figma's `rotation` is in radians, anti-clockwise. CSS rotate() is
+  // degrees, clockwise. Convert here so the consumer doesn't have to.
+  if (typeof n.rotation === "number" && Math.abs(n.rotation) > 0.0001) {
+    out.rotation = -(n.rotation * 180) / Math.PI;
+  }
+  // Blend modes: PASS_THROUGH (frame default) and NORMAL (everything else
+  // default) are CSS's implicit blend behaviour — drop those, keep the rest.
+  if (typeof n.blendMode === "string" && n.blendMode !== "PASS_THROUGH" && n.blendMode !== "NORMAL") {
+    out.blendMode = n.blendMode;
+  }
+  if (typeof n.cornerSmoothing === "number" && n.cornerSmoothing > 0) {
+    out.cornerSmoothing = n.cornerSmoothing;
+  }
+  if (typeof n.textAutoResize === "string" && n.textAutoResize !== "NONE") {
+    out.textAutoResize = n.textAutoResize;
+  }
+  // Constraints — only meaningful on children of a non-auto-layout parent.
+  // The serializer can't know the parent's layout here; emit unconditionally
+  // and let the normalizer drop them where they'd be redundant.
+  const cons = n.constraints as { horizontal?: string; vertical?: string } | undefined;
+  if (cons && (cons.horizontal || cons.vertical)) {
+    out.constraints = { horizontal: cons.horizontal, vertical: cons.vertical };
+  }
+  if (typeof n.minWidth === "number") out.minWidth = n.minWidth;
+  if (typeof n.maxWidth === "number") out.maxWidth = n.maxWidth;
+  if (typeof n.minHeight === "number") out.minHeight = n.minHeight;
+  if (typeof n.maxHeight === "number") out.maxHeight = n.maxHeight;
+  // INSTANCE variant selectors — `variantProperties` flattened to a Figma-style
+  // key=value record. Plugin only; REST puts the same data in `componentProperties`
+  // for VARIANT-type props but the normalizer already pulls those into `props`.
+  if (n.variantProperties && typeof n.variantProperties === "object") {
+    out.variantProperties = n.variantProperties;
+  }
+
   if (n.isMask === true) {
     out.isMask = true;
     if (typeof n.maskType === "string") out.maskType = n.maskType;

@@ -49,4 +49,12 @@ export const KEY_LEGEND: Record<string, string> = {
     "v0.10 compound token tables — repeated structured values (layouts, effect stacks, fill stacks, vector paths, instance prop maps) emitted once and referenced by $-id from the node tree. Resolve $xN refs by looking up the matching table.",
   "tokens.meta.counts":
     "per-ref hit counts (≥2 only) — concrete evidence of dedup, useful for sizing 'tokens before vs after' on a real screen",
+  rotation: "CSS-shaped rotation in degrees (clockwise). Omitted at 0°.",
+  blend: "mix-blend-mode keyword (multiply / overlay / screen / …). Omitted when PASS_THROUGH or NORMAL.",
+  smooth: "Figma squircle factor (0..1) — apply via the `--corner-smoothing` system or @container-style polyfill. Omitted at 0.",
+  textGrow: "text auto-resize hint — 'h' = height grows, 'wh' = both, 'trunc' = ellipsize. Omitted when fixed.",
+  constraints: "pinning for non-auto-layout children — { h?: left/right/center/stretch/scale, v?: top/bottom/center/stretch/scale }. Dropped on flex children where CSS pinning is meaningless.",
+  sizingMin: "per-axis size floor — { w?, h? } in px. Kicks in with FILL/HUG sizing to prevent collapse below the minimum.",
+  sizingMax: "per-axis size ceiling — { w?, h? } in px. Pairs with sizingMin for clamped responsive boxes.",
+  "component (object form)": "{ id, variant?: 'Key=Val,Key=Val' } — variant-aware mainComponent identity. Lets agents route to the right codebase variant without re-parsing `props`.",
 };
