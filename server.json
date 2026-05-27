@@ -7,12 +7,12 @@
     "source": "github"
   },
   "websiteUrl": "https://tathagat22.github.io/plumb-mcp/",
-  "version": "0.10.6",
+  "version": "0.10.7",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "plumb-mcp",
-      "version": "0.10.6",
+      "version": "0.10.7",
       "transport": {
         "type": "stdio"
       },

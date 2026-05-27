@@ -22,7 +22,13 @@ export interface Tolerances {
 
 export const DEFAULT_TOLERANCES: Tolerances = {
   px: { ok: 1, warn: 3 },
-  color: { ok: 6, warn: 24 },
+  // v0.10 Phase 6 — colour distance is ΔE2000 (perceptually uniform). Thresholds:
+  //   ≤ ok (1.0) → just-noticeable, never flag
+  //   ≤ warn (3.5) → clearly different but plausibly within an agent's tolerance
+  //   > warn → likely a real mismatch
+  // Previously this was sum-of-abs-RGB-channel-deltas (ok=6, warn=24); the new
+  // numbers are smaller because ΔE2000 is a different scale.
+  color: { ok: 1, warn: 3.5 },
 };
 
 export type Severity = "error" | "warn" | "info";
@@ -453,6 +459,133 @@ function compareOne(
       }
     }
   }
+
+  // --- v0.10 Phase 6 — shadow / rotation / flex-child / fill-stack -------
+
+  // Shadow: compare resolved CSS string or just confirm the renderer set
+  // a non-empty box-shadow. We deliberately don't byte-compare — small
+  // colour/blur rounding shouldn't flag — but missing it entirely is a real bug.
+  const expectedShadow =
+    typeof node.shadow === "string" && node.shadow.startsWith("$s")
+      ? tokens.shadow[node.shadow]
+      : node.shadow;
+  if (expectedShadow && (!styles.boxShadow || styles.boxShadow === "none")) {
+    deltas.push({
+      el: node.el,
+      name: node.name,
+      kind: "shadow.missing",
+      expected: expectedShadow,
+      actual: styles.boxShadow ?? "(unset)",
+      severity: "error",
+    });
+  }
+
+  // Rotation: parse `transform: rotate(Ndeg)` or a 2D matrix. Allow ±0.5°
+  // slack so subpixel rounding doesn't fire.
+  if (typeof node.rotation === "number" && Math.abs(node.rotation) > 0.5) {
+    const renderedDeg = parseRotation(styles.transform);
+    if (renderedDeg !== null) {
+      const diff = Math.abs(node.rotation - renderedDeg);
+      if (diff > 1) {
+        deltas.push({
+          el: node.el,
+          name: node.name,
+          kind: "rotation",
+          expected: round(node.rotation, 2),
+          actual: round(renderedDeg, 2),
+          diff,
+          severity: diff > 5 ? "error" : "warn",
+        });
+      }
+    }
+  }
+
+  // Flex-child sizing — grow + align-self. Misses here are the #1
+  // "almost right" layout bug from real screens.
+  if (typeof node.grow === "number" && node.grow > 0 && styles.flexGrow) {
+    const v = parseFloat(styles.flexGrow);
+    if (!Number.isNaN(v) && Math.abs(v - node.grow) > 0.01) {
+      deltas.push({
+        el: node.el,
+        name: node.name,
+        kind: "flex.grow",
+        expected: node.grow,
+        actual: v,
+        diff: Math.abs(v - node.grow),
+        severity: "warn",
+      });
+    }
+  }
+  if (node.selfAlign && styles.alignSelf && styles.alignSelf !== "auto") {
+    const cssAlign =
+      node.selfAlign === "stretch"
+        ? "stretch"
+        : node.selfAlign === "min"
+          ? "flex-start"
+          : node.selfAlign === "max"
+            ? "flex-end"
+            : node.selfAlign === "center"
+              ? "center"
+              : undefined;
+    if (cssAlign && cssAlign !== styles.alignSelf) {
+      deltas.push({
+        el: node.el,
+        name: node.name,
+        kind: "flex.selfAlign",
+        expected: cssAlign,
+        actual: styles.alignSelf,
+        severity: "warn",
+      });
+    }
+  }
+
+  // Fill-stack count — when PDS says "this surface has 3 layered fills"
+  // a flat `background-color` rendered alone is a clear miss. Resolve the
+  // fills ref (may be a $fN token) before counting.
+  const fillsValue =
+    typeof node.fills === "string"
+      ? (tokens as TokenTable).fills?.[node.fills]
+      : node.fills;
+  if (Array.isArray(fillsValue) && fillsValue.length > 1) {
+    const bg = styles.backgroundImage ?? "";
+    // Count comma-separated layers in background-image. A single solid
+    // colour shows up as just `background-color` with no `background-image`.
+    const layers = bg && bg !== "none" ? bg.split(/,\s*(?![^()]*\))/).length : 0;
+    if (layers < fillsValue.length) {
+      deltas.push({
+        el: node.el,
+        name: node.name,
+        kind: "fills.count",
+        expected: fillsValue.length,
+        actual: layers,
+        diff: fillsValue.length - layers,
+        severity: "warn",
+      });
+    }
+  }
+}
+
+/**
+ * Pull a Z rotation in degrees out of a CSS `transform` string. Handles
+ * the common `rotate(45deg)` and the 2D `matrix(a,b,c,d,...)` form.
+ * Returns null on `none`, 3D matrices, and anything we don't recognise.
+ */
+function parseRotation(transform: string | undefined): number | null {
+  if (!transform || transform === "none") return null;
+  const rot = transform.match(/rotate(?:Z)?\(\s*(-?\d+(?:\.\d+)?)deg\s*\)/);
+  if (rot && rot[1]) return Number(rot[1]);
+  const m2 = transform.match(/^matrix\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+  if (m2 && m2[1] && m2[2]) {
+    const a = Number(m2[1]);
+    const b = Number(m2[2]);
+    return (Math.atan2(b, a) * 180) / Math.PI;
+  }
+  return null;
+}
+
+function round(n: number, places: number): number {
+  const p = Math.pow(10, places);
+  return Math.round(n * p) / p;
 }
 
 function pushColorDelta(
@@ -531,8 +664,100 @@ export function parseColor(s: string | undefined): Rgba | null {
   return null;
 }
 
+/**
+ * Perceptually-uniform colour distance. Replaces the v0.9 RGB-Manhattan
+ * metric, which scored "8 units off in each channel" the same as
+ * "24 units off in one channel" even though the former is barely visible
+ * and the latter is glaring. ΔE2000 fixes both halves of that bug.
+ *
+ * Implementation: sRGB → linear → XYZ (D65) → Lab → ΔE2000. Numbers
+ * track the CIE 2000 colour-difference formula exactly enough for the
+ * 0..10 range agents see in practice; no parametric weighting (kL=kC=kH=1).
+ */
 function colorDistance(a: Rgba, b: Rgba): number {
-  return Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b);
+  const la = rgbaToLab(a);
+  const lb = rgbaToLab(b);
+  return deltaE2000(la, lb);
+}
+
+interface Lab {
+  l: number;
+  a: number;
+  b: number;
+}
+
+function srgbToLinear(c: number): number {
+  const x = c / 255;
+  return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+}
+
+function rgbaToLab({ r, g, b }: Rgba): Lab {
+  const R = srgbToLinear(r);
+  const G = srgbToLinear(g);
+  const B = srgbToLinear(b);
+  // sRGB → XYZ (D65) per IEC 61966-2-1.
+  const X = R * 0.4124564 + G * 0.3575761 + B * 0.1804375;
+  const Y = R * 0.2126729 + G * 0.7151522 + B * 0.072175;
+  const Z = R * 0.0193339 + G * 0.119192 + B * 0.9503041;
+  // XYZ → Lab (D65 reference white).
+  const Xn = 0.95047;
+  const Yn = 1.0;
+  const Zn = 1.08883;
+  const f = (t: number): number => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27) * t / 116 + 16 / 116);
+  const fx = f(X / Xn);
+  const fy = f(Y / Yn);
+  const fz = f(Z / Zn);
+  return { l: 116 * fy - 16, a: 500 * (fx - fy), b: 200 * (fy - fz) };
+}
+
+function deltaE2000(la: Lab, lb: Lab): number {
+  const deg = (rad: number): number => (rad * 180) / Math.PI;
+  const rad = (d: number): number => (d * Math.PI) / 180;
+
+  const Lbar = (la.l + lb.l) / 2;
+  const C1 = Math.hypot(la.a, la.b);
+  const C2 = Math.hypot(lb.a, lb.b);
+  const Cbar = (C1 + C2) / 2;
+  const G = 0.5 * (1 - Math.sqrt(Math.pow(Cbar, 7) / (Math.pow(Cbar, 7) + Math.pow(25, 7))));
+  const a1 = la.a * (1 + G);
+  const a2 = lb.a * (1 + G);
+  const C1p = Math.hypot(a1, la.b);
+  const C2p = Math.hypot(a2, lb.b);
+  const Cpbar = (C1p + C2p) / 2;
+  const h1 = Math.atan2(la.b, a1);
+  const h2 = Math.atan2(lb.b, a2);
+  const h1d = ((deg(h1) % 360) + 360) % 360;
+  const h2d = ((deg(h2) % 360) + 360) % 360;
+
+  let dhp = h2d - h1d;
+  if (Math.abs(dhp) > 180) dhp += dhp > 0 ? -360 : 360;
+  const dLp = lb.l - la.l;
+  const dCp = C2p - C1p;
+  const dHp = 2 * Math.sqrt(C1p * C2p) * Math.sin(rad(dhp / 2));
+
+  let Hpbar = h1d + h2d;
+  if (Math.abs(h1d - h2d) > 180) Hpbar += Hpbar < 360 ? 360 : -360;
+  Hpbar /= 2;
+
+  const T =
+    1 -
+    0.17 * Math.cos(rad(Hpbar - 30)) +
+    0.24 * Math.cos(rad(2 * Hpbar)) +
+    0.32 * Math.cos(rad(3 * Hpbar + 6)) -
+    0.2 * Math.cos(rad(4 * Hpbar - 63));
+  const SL = 1 + (0.015 * Math.pow(Lbar - 50, 2)) / Math.sqrt(20 + Math.pow(Lbar - 50, 2));
+  const SC = 1 + 0.045 * Cpbar;
+  const SH = 1 + 0.015 * Cpbar * T;
+  const dTheta = 30 * Math.exp(-Math.pow((Hpbar - 275) / 25, 2));
+  const RC = 2 * Math.sqrt(Math.pow(Cpbar, 7) / (Math.pow(Cpbar, 7) + Math.pow(25, 7)));
+  const RT = -RC * Math.sin(2 * rad(dTheta));
+
+  return Math.sqrt(
+    Math.pow(dLp / SL, 2) +
+      Math.pow(dCp / SC, 2) +
+      Math.pow(dHp / SH, 2) +
+      RT * (dCp / SC) * (dHp / SH),
+  );
 }
 
 function rgbToHex(c: Rgba): string {
