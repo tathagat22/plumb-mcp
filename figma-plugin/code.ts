@@ -288,8 +288,13 @@ function serialize(
   // INSTANCE variant selectors — `variantProperties` flattened to a Figma-style
   // key=value record. Plugin only; REST puts the same data in `componentProperties`
   // for VARIANT-type props but the normalizer already pulls those into `props`.
-  if (n.variantProperties && typeof n.variantProperties === "object") {
-    out.variantProperties = n.variantProperties;
+  // The getter throws ("Component set for node has existing errors") when the
+  // mainComponent's set is broken — guard or one bad instance kills the walk.
+  try {
+    const vp = n.variantProperties;
+    if (vp && typeof vp === "object") out.variantProperties = vp;
+  } catch {
+    // Broken component set — skip variant capture for this instance
   }
 
   if (n.isMask === true) {
@@ -410,9 +415,15 @@ function serialize(
     }
     // Property override values — variant, text, boolean, instance-swap.
     // The normalizer strips Figma's internal `#id:idx` key suffix.
-    const props = (node as InstanceNode).componentProperties;
-    if (props && typeof props === "object" && Object.keys(props).length > 0) {
-      out.componentProperties = props;
+    // Same caveat as variantProperties: can throw on instances whose
+    // component-set has errors.
+    try {
+      const props = (node as InstanceNode).componentProperties;
+      if (props && typeof props === "object" && Object.keys(props).length > 0) {
+        out.componentProperties = props;
+      }
+    } catch {
+      // Broken component set — skip prop capture for this instance
     }
   }
 
@@ -429,7 +440,15 @@ function serialize(
         out.childCount = kids.length;
       } else {
         const next = remainingDepth === undefined ? undefined : remainingDepth - 1;
-        out.children = kids.map((kid) => serialize(kid, varMap, next));
+        // Defense in depth — one broken descendant should not abort the whole
+        // screen walk. If a child throws, emit a minimal stub and keep going.
+        out.children = kids.map((kid) => {
+          try {
+            return serialize(kid, varMap, next);
+          } catch {
+            return { id: kid.id, name: kid.name, type: kid.type } as SerialNode;
+          }
+        });
       }
     }
   }
