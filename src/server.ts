@@ -6,6 +6,7 @@ import { registerPlumbDescribe } from "./tools/describe";
 import { registerPlumbFigNode, registerPlumbFigOutline } from "./tools/fig";
 import { registerPlumbNode } from "./tools/node";
 import { registerPlumbOutline } from "./tools/outline";
+import { registerPlumbQuery } from "./tools/query";
 import { registerPlumbScreenshot } from "./tools/screenshot";
 import { registerPlumbSearch } from "./tools/search";
 import { registerPlumbSelection } from "./tools/selection";
@@ -32,8 +33,10 @@ export function createServer(): McpServer {
         "(list / surgical modes); plumb_screenshot renders a node to PNG; " +
         "plumb_search finds nodes; plumb_components lists components and " +
         "instances; plumb_verify diffs your rendered layout against the design " +
-        "and returns structured deltas. Otherwise use the REST path (fileKey + " +
-        "id). Auto-layout is pre-resolved to flexbox.",
+        "and returns structured deltas; plumb_query pulls a slice by pattern " +
+        "(skeleton / buttons / text / components) when the full tree would be " +
+        "too big. Otherwise use the REST path (fileKey + id). Auto-layout is " +
+        "pre-resolved to flexbox.",
     },
   );
 
@@ -48,6 +51,7 @@ export function createServer(): McpServer {
   registerPlumbSearch(server);
   registerPlumbComponents(server);
   registerPlumbVerify(server);
+  registerPlumbQuery(server);
   registerPlumbFigOutline(server);
   registerPlumbFigNode(server);
 

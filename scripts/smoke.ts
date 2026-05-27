@@ -27,6 +27,7 @@ const expected = [
   "plumb_fig_outline",
   "plumb_node",
   "plumb_outline",
+  "plumb_query",
   "plumb_screenshot",
   "plumb_search",
   "plumb_selection",
