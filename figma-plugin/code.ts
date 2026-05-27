@@ -144,7 +144,22 @@ function serializeReactions(node: SceneNode): unknown[] | undefined {
   });
 }
 
-function serialize(node: SceneNode, varMap?: Map<string, string>): SerialNode {
+/**
+ * Serialize a SceneNode to the wire shape.
+ *
+ * `remainingDepth` (v0.10 Phase 2) bounds the walk so dense screens don't
+ * pay full-tree cost when the agent only asked for the top few levels:
+ *   - undefined → walk everything (back-compat default)
+ *   - N ≥ 1 → include children, recurse with N-1
+ *   - 0 → emit this node but omit its `children` array; `childCount` carries
+ *     the real count so the server normalizer can still emit `more: N` at
+ *     its boundary
+ */
+function serialize(
+  node: SceneNode,
+  varMap?: Map<string, string>,
+  remainingDepth?: number,
+): SerialNode {
   const n = node as unknown as Record<string, any>;
   const out: SerialNode = { id: node.id, name: node.name, type: node.type };
 
@@ -301,7 +316,17 @@ function serialize(node: SceneNode, varMap?: Map<string, string>): SerialNode {
 
   if ("children" in node) {
     const kids = (node as ChildrenMixin).children;
-    if (kids.length > 0) out.children = kids.map((kid) => serialize(kid, varMap));
+    if (kids.length > 0) {
+      if (remainingDepth === 0) {
+        // Depth limit hit at this node — omit children, hand the count to
+        // the server so its normalizer can still produce a `more` marker
+        // without re-fetching.
+        out.childCount = kids.length;
+      } else {
+        const next = remainingDepth === undefined ? undefined : remainingDepth - 1;
+        out.children = kids.map((kid) => serialize(kid, varMap, next));
+      }
+    }
   }
 
   return out;
@@ -827,7 +852,11 @@ async function handleServerRequest(req: any): Promise<void> {
     reply({
       t: "node",
       reqId: req.reqId,
-      doc: serialize(scene, varMap),
+      doc: serialize(
+        scene,
+        varMap,
+        typeof req.depth === "number" ? req.depth : undefined,
+      ),
       nodeName: scene.name,
     });
     return;

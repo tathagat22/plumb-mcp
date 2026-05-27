@@ -83,6 +83,13 @@ export interface FigmaNode {
   type: string;
   visible?: boolean;
   children?: FigmaNode[];
+  /**
+   * v0.10 Phase 2 — plugin-side depth bound. When the Figma plugin truncates
+   * the walk at a requested depth, it omits `children` but still ships
+   * `childCount` so the normalizer can emit `more: N` at its boundary
+   * without a follow-up call.
+   */
+  childCount?: number;
   absoluteBoundingBox?: { x: number; y: number; width: number; height: number } | null;
 
   // Auto-layout

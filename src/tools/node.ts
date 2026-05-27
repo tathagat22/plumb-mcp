@@ -101,7 +101,11 @@ export function registerPlumbNode(server: McpServer): void {
                 "`box` (w×h) — pick the one you want and re-call plumb_node with its `id`.",
             });
           }
-          const { doc, nodeName } = await requestNode(resolved.id);
+          // Ask the plugin for depth+1 levels so the normalizer can still
+          // compute `more` counts at its own boundary. expandAll bypasses
+          // the bound — caller has explicitly asked for everything.
+          const pluginDepth = expandAll ? undefined : depth + 1;
+          const { doc, nodeName } = await requestNode(resolved.id, pluginDepth);
           if (!doc) {
             throw new PlumbError(
               `The Plumb plugin could not find node "${resolved.id}".`,

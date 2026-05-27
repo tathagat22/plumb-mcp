@@ -97,11 +97,22 @@ function request<T>(
   });
 }
 
-/** Ask the plugin to serialize a node by id. */
+/**
+ * Ask the plugin to serialize a node by id. `depth` (v0.10+) bounds the
+ * subtree walk inside the plugin so dense screens don't pay full-tree
+ * serialization cost on every call — pass `normalize-depth + 1` so the
+ * normalizer can still emit accurate `more` counts at its boundary. Omit
+ * to fall back to the v0.9 unbounded walk (used by selection / verify).
+ */
 export function requestNode(
   nodeId: string,
+  depth?: number,
 ): Promise<{ doc: FigmaNode | null; nodeName: string | null }> {
-  return request((reqId) => ({ t: "get-node", reqId, nodeId }), 60_000, "node");
+  return request(
+    (reqId) => ({ t: "get-node", reqId, nodeId, depth }),
+    60_000,
+    "node",
+  );
 }
 
 export interface RequestAssetsOptions {

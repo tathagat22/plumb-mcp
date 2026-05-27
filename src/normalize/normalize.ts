@@ -298,9 +298,13 @@ export function normalize(
     // Progressive disclosure (plan §5/§7): expand children only while above the
     // disclosure depth. At the boundary, record how many children exist via
     // `more` so the agent knows to drill in with another plumb_node call.
+    // Plugin-side truncation (v0.10 Phase 2) hands us `childCount` instead
+    // of an inflated children array; honour it when present.
     const kids = (fn.children ?? []).filter((k) => k.visible !== false);
-    if (level >= depth) {
-      if (kids.length) node.more = kids.length;
+    const truncatedHere = kids.length === 0 && typeof fn.childCount === "number" && fn.childCount > 0;
+    if (level >= depth || truncatedHere) {
+      const remaining = truncatedHere ? fn.childCount : kids.length;
+      if (remaining) node.more = remaining;
     } else {
       const childEls: string[] = [];
       // A mask child shapes every later sibling inside the same container
