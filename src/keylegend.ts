@@ -60,4 +60,5 @@ export const KEY_LEGEND: Record<string, string> = {
   "chars (run array)": "mixed-style text — array of { t, s?, c?, d? } where t is the substring, s is a $tN style override, c is a $cN colour override, d is 'underline'/'line-through'. Omit overrides on runs that match the dominant style/colour/decoration on the node.",
   "fills[].crop": "2×3 affine matrix Figma applies to an IMAGE paint to position/crop the source. Pair with `fills[].rotation` for rotated photos.",
   "motion.overlay": "{ pos?, background? } when the action opens an overlay. Without this an agent defaults to a centred modal; with it, agents reconstruct top-pinned sheets, custom-position drawers, dimmed backdrops correctly.",
+  "repeat (array form)": "v0.10 Phase 4 — when a parent has multiple repeating clusters ('Header + 6 rows + Spacer + 4 cards'), repeat is an array, one { template, data } per run. Normalise with `Array.isArray(parent.repeat) ? parent.repeat : [parent.repeat]`.",
 };

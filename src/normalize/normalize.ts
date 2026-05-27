@@ -585,50 +585,50 @@ function deleteSubtree(el: string, nodes: Record<string, PdsNode>): void {
 /**
  * After the parent's children have been walked, detect consecutive runs of
  * identical-fingerprint siblings (≥ REPEAT_MIN) and collapse each run into
- * a single template + per-instance override map on the parent's `repeat`
- * field. Mutates `nodes` in place (removes compressed siblings).
+ * a template + per-instance override map. v0.10 Phase 4 — finds ALL runs in
+ * the parent's children, not just the first; a screen like "Header + 6 rows
+ * + Spacer + 4 cards" compresses both clusters. Mutates `nodes` in place
+ * (removes compressed siblings).
  */
 function compressRepeats(parent: PdsNode, nodes: Record<string, PdsNode>): void {
   const kids = parent.children;
   if (!kids || kids.length < REPEAT_MIN) return;
   const prints = kids.map((k) => fingerprintSubtree(k, nodes));
-  // Find the first run of REPEAT_MIN+ identical fingerprints. V1: collapse
-  // ONE run per parent — the most common shape (homogeneous list inside a
-  // single container). Heterogeneous lists with multiple runs can come later.
-  let runStart = -1;
-  let runLen = 0;
-  for (let i = 0; i < prints.length; i++) {
-    if (i > 0 && prints[i] === prints[i - 1] && prints[i]!.length > 0) {
-      if (runStart === -1) {
-        runStart = i - 1;
-        runLen = 2;
-      } else {
-        runLen++;
-      }
-    } else if (runStart !== -1 && runLen >= REPEAT_MIN) {
-      break;
-    } else {
-      runStart = -1;
-      runLen = 0;
-    }
-  }
-  if (runStart === -1 || runLen < REPEAT_MIN) return;
 
-  const templateEl = kids[runStart]!;
-  const data: Record<
-    string,
-    Record<
-      string,
-      { chars?: string | import("../pds").PdsTextRun[]; assetId?: string; iconHint?: string }
-    >
-  > = {};
-  for (let i = runStart + 1; i < runStart + runLen; i++) {
-    const instanceEl = kids[i]!;
-    const overrides = extractOverrides(templateEl, instanceEl, nodes);
-    data[instanceEl] = overrides;
-    deleteSubtree(instanceEl, nodes);
+  const groups: import("../pds").PdsRepeatGroup[] = [];
+  let i = 0;
+  while (i < prints.length) {
+    // Walk forward as long as the print matches the run's anchor.
+    if (!prints[i] || prints[i]!.length === 0) {
+      i++;
+      continue;
+    }
+    let j = i + 1;
+    while (j < prints.length && prints[j] === prints[i]) j++;
+    const runLen = j - i;
+    if (runLen >= REPEAT_MIN) {
+      const templateEl = kids[i]!;
+      const data: Record<
+        string,
+        Record<
+          string,
+          { chars?: string | import("../pds").PdsTextRun[]; assetId?: string; iconHint?: string }
+        >
+      > = {};
+      for (let k = i + 1; k < j; k++) {
+        const instanceEl = kids[k]!;
+        data[instanceEl] = extractOverrides(templateEl, instanceEl, nodes);
+        deleteSubtree(instanceEl, nodes);
+      }
+      groups.push({ template: templateEl, data });
+    }
+    i = j;
   }
-  parent.repeat = { template: templateEl, data };
+  if (groups.length === 0) return;
+  // Keep v0.9-shaped output (single object) for the common one-run case so
+  // existing agents see no change; switch to the array shape only when the
+  // parent actually contains multiple runs.
+  parent.repeat = groups.length === 1 ? groups[0] : groups;
 }
 
 /* ---------------------------------------------------------------------- */

@@ -32,6 +32,21 @@ export interface PdsLayout {
 }
 
 /**
+ * One repeating sibling cluster: a template el (kept fully in `nodes`) and a
+ * per-instance delta map for every compressed sibling that follows it. The
+ * compressed sibling els still appear in `parent.children` so the renderer
+ * walks them in order; their entries are missing from `nodes` (intentional)
+ * and the renderer hydrates them by reading the matching `data` entry.
+ */
+export interface PdsRepeatGroup {
+  template: string;
+  data: Record<
+    string,
+    Record<string, { chars?: string | PdsTextRun[]; assetId?: string; iconHint?: string }>
+  >;
+}
+
+/**
  * A single styled run inside a TEXT node with mixed inline styles. The
  * dominant style still sits on the node (`text`, `fill`) so simple
  * renderers can ignore runs and ship the concatenated text correctly;
@@ -359,30 +374,29 @@ export interface PdsNode {
    * appear here as per-instance overrides keyed by the EL inside the
    * template that varies.
    *
-   * Render once, fill in per-row data:
+   * Render by walking `parent.children` in order — for each el, look it up
+   * in `nodes`. Misses are compressed siblings; find them in the matching
+   * `parent.repeat` group's `data` and render with `nodes[group.template]`
+   * + the per-instance overrides:
    *
-   *   const rows = parent.repeat
-   *     ? [{}, ...Object.values(parent.repeat.data)]
-   *     : parent.children.map(el => nodes[el]);
-   *   for (const overrides of rows) renderTemplate(parent.repeat.template, overrides);
-   *
-   * Compressed sibling els still appear in `children` so plumb_verify
-   * can tag rendered DOM with `data-plumb-id="<el>"`. They're just not in
-   * `nodes` (lookup misses are intentional).
+   *   const groups = Array.isArray(parent.repeat)
+   *     ? parent.repeat
+   *     : parent.repeat ? [parent.repeat] : [];
+   *   for (const el of parent.children) {
+   *     const full = nodes[el];
+   *     if (full) { render(full); continue; }
+   *     const g = groups.find((g) => g.data[el]);
+   *     if (g) render(nodes[g.template], g.data[el]);
+   *   }
    *
    * Closes the biggest agent-token bleed: a 10-row settings list ships
    * as 1 template + 9 small override maps instead of 10 full subtrees.
+   *
+   * v0.10 Phase 4: when the parent contains several distinct repeating
+   * clusters (Header + rows + Spacer + cards), `repeat` is an array, one
+   * group per run.
    */
-  repeat?: {
-    template: string;
-    data: Record<
-      string,
-      Record<
-        string,
-        { chars?: string | PdsTextRun[]; assetId?: string; iconHint?: string }
-      >
-    >;
-  };
+  repeat?: PdsRepeatGroup | PdsRepeatGroup[];
   /**
    * Set instead of `children` at the disclosure boundary: this many children
    * exist but were not included. Call plumb_node again on this node's `id`
