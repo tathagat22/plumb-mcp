@@ -35,6 +35,45 @@ export interface NormalizeOptions {
   notes?: boolean;
   /** Soft token budget; the response flags itself if it exceeds this. */
   maxTokens?: number;
+  /**
+   * Pre-built el/minter state. When provided, normalize skips its own preWalk
+   * and reuses this state — used by `normalizeToBudget` so multi-iteration
+   * budget loops don't re-walk the input tree N times.
+   */
+  precomputed?: PrecomputedHandles;
+}
+
+export interface PrecomputedHandles {
+  elById: Map<string, string>;
+  minter: HandleMinter;
+}
+
+/**
+ * Build the depth-independent el-handle map for a Figma tree.
+ *
+ * Walks the entire visible tree exactly once and assigns each node a stable
+ * `el` handle. Pulled out of `normalize` so a budget loop can reuse this work
+ * across depth-step iterations — the el assignment doesn't change with depth,
+ * so re-walking it for every retry is pure waste.
+ *
+ * The minter is returned alongside so walks that encounter a node missing
+ * from `elById` (e.g. an invisible root that's now being emitted at level 0)
+ * can mint a fresh handle without colliding with existing ones.
+ */
+export function buildPreWalk(file: FigmaFileResult): PrecomputedHandles {
+  const minter = new HandleMinter();
+  const elById = new Map<string, string>();
+  // Walk visible nodes only — invisible subtrees never appear in PDS, so
+  // there's no value in claiming handles for them and risking collisions
+  // with descendants of visible ones.
+  function preWalk(fn: FigmaNode, level: number): void {
+    if (level > 0 && fn.visible === false) return;
+    elById.set(fn.id, minter.mint(fn.name ?? "", fn.type ?? ""));
+    const kids = (fn.children ?? []).filter((k) => k.visible !== false);
+    for (const child of kids) preWalk(child, level + 1);
+  }
+  preWalk(file.document, 0);
+  return { elById, minter };
 }
 
 /**
@@ -48,22 +87,13 @@ export function normalize(
   opts: NormalizeOptions = {},
 ): PdsDocument {
   const interner = new TokenInterner();
-  const minter = new HandleMinter();
   const nodes: Record<string, PdsNode> = {};
 
-  // Pre-pass: walk the entire visible tree (ignoring `depth`) so every node
-  // gets its el assigned in a deterministic, depth-independent order. Without
-  // this, a deeper walk visits more sibling/descendant nodes named "vector"
-  // or "group" between two same-named cousins, shifting which one gets the
-  // un-suffixed handle — which broke plumb_verify across different depths.
-  const elById = new Map<string, string>();
-  function preWalk(fn: FigmaNode, level: number): void {
-    if (level > 0 && fn.visible === false) return;
-    elById.set(fn.id, minter.mint(fn.name ?? "", fn.type ?? ""));
-    const kids = (fn.children ?? []).filter((k) => k.visible !== false);
-    for (const child of kids) preWalk(child, level + 1);
-  }
-  preWalk(file.document, 0);
+  // Reuse pre-built el/minter state when provided (budget-loop fast path),
+  // otherwise walk the tree to build them. The pre-pass is depth-independent
+  // — the el assignment doesn't change between iterations — so reusing it
+  // turns a multi-step budget loop from N walks into 1.
+  const { elById, minter } = opts.precomputed ?? buildPreWalk(file);
 
   // Surfaces of interest for inheritedFill — nodes a renderer would tag with
   // `background:` if they had their own fill. Text/vector/icon-like leaves
@@ -78,6 +108,7 @@ export function normalize(
     parentPath?: string,
     inheritedFill?: string,
     grandparent?: FigmaNode,
+    ancestors: FigmaNode[] = [],
   ): string | undefined {
     // Prune invisible nodes — but never the requested root (level 0).
     if (level > 0 && fn.visible === false) return undefined;
@@ -174,7 +205,7 @@ export function normalize(
     // otherwise whatever it inherited.
     const fillForChildren = fill ?? inheritedFill;
 
-    const iconHint = inferIconHint(fn, parent, grandparent, node);
+    const iconHint = inferIconHint(fn, parent, grandparent, ancestors, node);
     if (iconHint) node.iconHint = iconHint;
 
     const pattern = inferPattern(fn, node);
@@ -272,8 +303,11 @@ export function normalize(
       // subsequent siblings with `masked` so the renderer can apply the
       // mask's fills as CSS `mask-image` instead of drawing it standalone.
       let currentMaskEl: string | undefined;
+      // Trim to 4 deep — enough for iconHint to climb past a few generic
+      // containers without retaining an unbounded ancestor chain in memory.
+      const childAncestors = [fn, ...ancestors].slice(0, 4);
       for (const child of kids) {
-        const childEl = walk(child, level + 1, fn, path, fillForChildren, parent);
+        const childEl = walk(child, level + 1, fn, path, fillForChildren, parent, childAncestors);
         if (!childEl) continue;
         childEls.push(childEl);
         if (child.isMask === true) {
@@ -820,6 +854,7 @@ function inferIconHint(
   fn: FigmaNode,
   parent: FigmaNode | undefined,
   grandparent: FigmaNode | undefined,
+  ancestors: FigmaNode[],
   node: PdsNode,
 ): string | undefined {
   if (!isIconShaped(node, fn)) return undefined;
@@ -829,13 +864,16 @@ function inferIconHint(
   }
   const label = siblingLabel(fn, parent, grandparent);
   if (label) return label;
-  if (parent && isDescriptive(parent.name ?? "")) {
-    const p = cleanIconLabel(parent.name ?? "");
-    if (p) return p;
-  }
-  if (grandparent && isDescriptive(grandparent.name ?? "")) {
-    const g = cleanIconLabel(grandparent.name ?? "");
-    if (g) return g;
+  // Climb the ancestor chain, skipping generic names ("Group", "Frame 12",
+  // "Vector") rather than stopping at the first non-descriptive container.
+  // A real-world icon often lives 3–4 levels deep under generic wrappers
+  // while the semantic name sits on a higher container ("Notifications",
+  // "Settings"). Capped at 4 to avoid promoting an icon to a screen-level
+  // label like "App / Workspace / Home".
+  for (const anc of ancestors) {
+    if (!isDescriptive(anc.name ?? "")) continue;
+    const ancLabel = cleanIconLabel(anc.name ?? "");
+    if (ancLabel) return ancLabel;
   }
   return undefined;
 }

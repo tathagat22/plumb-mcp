@@ -95,8 +95,18 @@ function normalizePaint(p: unknown, varName?: string): unknown {
  * Remote variables (imported from a library) aren't in `getLocalVariables`
  * — bindings to those resolve to undefined and the agent falls back to
  * the hex value. Acceptable for V1.
+ *
+ * Cached across calls — `getLocalVariablesAsync()` is non-trivial on large
+ * design-system files (500+ vars) and `serialize()` is called once per
+ * `get-node` request. The cache is invalidated on documentchange (see
+ * `start()`), which covers variable creates/renames/deletes; remote-library
+ * updates don't fire documentchange but those didn't surface in the cache
+ * anyway.
  */
+let variableMapCache: Map<string, string> | null = null;
+
 async function buildVariableMap(): Promise<Map<string, string>> {
+  if (variableMapCache) return variableMapCache;
   const map = new Map<string, string>();
   try {
     const vars = await figma.variables.getLocalVariablesAsync();
@@ -105,7 +115,12 @@ async function buildVariableMap(): Promise<Map<string, string>> {
     // File has no variables or the API is unavailable — return an empty
     // map; bindings will silently no-op.
   }
+  variableMapCache = map;
   return map;
+}
+
+function invalidateVariableMapCache(): void {
+  variableMapCache = null;
 }
 
 /** Look up a variable binding entry's id and resolve it via the map. */
@@ -917,6 +932,10 @@ async function start(): Promise<void> {
 
   let changeTimer: ReturnType<typeof setTimeout> | null = null;
   figma.on("documentchange", () => {
+    // Drop the variable-map cache on every documentchange — cheap to rebuild
+    // and ensures variable renames/creates/deletes are picked up by the next
+    // `get-node`. Selection/inventory pushes are still debounced.
+    invalidateVariableMapCache();
     if (changeTimer !== null) clearTimeout(changeTimer);
     changeTimer = setTimeout(() => {
       pushSelection();
