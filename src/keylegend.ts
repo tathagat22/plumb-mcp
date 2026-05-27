@@ -57,4 +57,7 @@ export const KEY_LEGEND: Record<string, string> = {
   sizingMin: "per-axis size floor — { w?, h? } in px. Kicks in with FILL/HUG sizing to prevent collapse below the minimum.",
   sizingMax: "per-axis size ceiling — { w?, h? } in px. Pairs with sizingMin for clamped responsive boxes.",
   "component (object form)": "{ id, variant?: 'Key=Val,Key=Val' } — variant-aware mainComponent identity. Lets agents route to the right codebase variant without re-parsing `props`.",
+  "chars (run array)": "mixed-style text — array of { t, s?, c?, d? } where t is the substring, s is a $tN style override, c is a $cN colour override, d is 'underline'/'line-through'. Omit overrides on runs that match the dominant style/colour/decoration on the node.",
+  "fills[].crop": "2×3 affine matrix Figma applies to an IMAGE paint to position/crop the source. Pair with `fills[].rotation` for rotated photos.",
+  "motion.overlay": "{ pos?, background? } when the action opens an overlay. Without this an agent defaults to a centred modal; with it, agents reconstruct top-pinned sheets, custom-position drawers, dimmed backdrops correctly.",
 };

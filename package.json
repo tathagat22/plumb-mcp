@@ -1,6 +1,6 @@
 {
   "name": "plumb-mcp",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "mcpName": "io.github.tathagat22/plumb-mcp",
   "description": "Local Figma MCP server with no REST rate limits, no metered tool-call quotas, and a built-in verification loop. Works on every Figma plan including Free. Drop-in alternative to Figma's Dev Mode MCP and Framelink for Claude Code, Cursor, Windsurf, and any MCP-compatible AI coding agent.",
   "type": "module",

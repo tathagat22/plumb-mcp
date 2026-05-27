@@ -29,6 +29,15 @@ export interface FigmaPaint {
   /** FILL | FIT | CROP | TILE (Figma's enum). */
   scaleMode?: string;
   /**
+   * 2×3 affine matrix Figma uses to crop / position an IMAGE paint inside
+   * the node box (v0.10 Phase 3). When absent, the image fills via
+   * `scaleMode`. When present, agents reconstruct the crop with CSS
+   * `transform` on a wrapping `<img>` or by computing the source rect.
+   */
+  imageTransform?: number[][];
+  /** Image rotation in degrees (CSS-shaped, clockwise). */
+  rotation?: number;
+  /**
    * Resolved Figma Variable name for the paint's COLOR (e.g.
    * `"colors/brand/primary"`). Injected by the plugin path when this paint
    * was bound to a Variable — REST path can't always resolve variable IDs
@@ -62,6 +71,12 @@ export interface FigmaReaction {
     type?: string; // NODE | URL | BACK | CLOSE | ...
     destinationId?: string;
     transition?: FigmaTransition;
+    // Overlay positioning (v0.10 Phase 3) — only meaningful when the
+    // destination is configured as an overlay in Figma. Without these,
+    // an agent would default to a centered modal even when the design
+    // intends a top-anchored sheet or a custom-position drawer.
+    overlayRelativePosition?: { x: number; y: number };
+    overlayBackground?: { type: string; color?: RgbaColor };
   };
 }
 
@@ -141,6 +156,17 @@ export interface FigmaNode {
   // Text
   characters?: string;
   style?: FigmaTypeStyle;
+  /**
+   * Per-segment styled text (v0.10 Phase 3). Emitted by the plugin via
+   * `getStyledTextSegments` when a TEXT node has more than one inline
+   * style — a bold word inside a sentence, a coloured link, mixed sizes.
+   * Each run carries its own style + optional per-run fills.
+   */
+  characterRuns?: Array<{
+    characters: string;
+    style: FigmaTypeStyle;
+    fills?: FigmaPaint[];
+  }>;
 
   // Component
   componentId?: string;

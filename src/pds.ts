@@ -31,6 +31,25 @@ export interface PdsLayout {
   contentMain?: number;
 }
 
+/**
+ * A single styled run inside a TEXT node with mixed inline styles. The
+ * dominant style still sits on the node (`text`, `fill`) so simple
+ * renderers can ignore runs and ship the concatenated text correctly;
+ * run-aware renderers compose `<span>`s with the per-run overrides.
+ *
+ * `s` and `c` are emitted only when the run diverges from the dominant.
+ */
+export interface PdsTextRun {
+  /** Literal text for this run. */
+  t: string;
+  /** Type-style override — `$tN` ref into `tokens.text`. Omit if matches dominant. */
+  s?: string;
+  /** Colour override — `$cN` ref into `tokens.color`. Omit if matches dominant. */
+  c?: string;
+  /** "underline" / "line-through" override. Omit if matches dominant. */
+  d?: "underline" | "line-through";
+}
+
 /** A single colour stop inside a gradient fill. `at` is 0..1. */
 export interface GradientStop {
   at: number;
@@ -78,6 +97,14 @@ export interface ImageFill {
   /** Figma's CSS-equivalent scale mode. */
   scaleMode?: "fill" | "fit" | "stretch" | "crop" | "tile";
   opacity?: number;
+  /**
+   * 2×3 affine crop matrix (v0.10+). Present when the user dragged the
+   * source image around inside the node — without it, agents render a
+   * default-centered crop and the photo lands wrong.
+   */
+  crop?: number[][];
+  /** Image rotation, degrees clockwise (v0.10+). Omitted at 0°. */
+  rotation?: number;
 }
 
 export type Fill = SolidFill | GradientFill | ImageFill;
@@ -121,6 +148,17 @@ export interface MotionSpec {
   easing?: string;
   /** Destination node id, when the action is a NODE transition. */
   target?: string;
+  /**
+   * Overlay positioning when the action opens an overlay (v0.10+). Without
+   * this, agents default a destination overlay to a centered modal even
+   * when the design intends a top-pinned sheet or absolutely-positioned drawer.
+   */
+  overlay?: {
+    /** Pixel offset from the parent overlay's top-left. */
+    pos?: { x: number; y: number };
+    /** Backdrop colour (CSS hex) — empty/absent means transparent. */
+    background?: string;
+  };
 }
 
 export interface PdsNode {
@@ -240,8 +278,14 @@ export interface PdsNode {
    * checklist items (strike-through), inline links (underline), etc.
    */
   textDecoration?: "underline" | "line-through";
-  /** The actual text content (TEXT nodes only). */
-  chars?: string;
+  /**
+   * The actual text content (TEXT nodes only). When the Figma node has
+   * mixed inline styles — bold word in a sentence, coloured link in a
+   * paragraph, anything where `getStyledTextSegments` returns more than
+   * one run — this is a `PdsTextRun[]` instead of a string. The dominant
+   * style sits on `text` / `fill`; per-run overrides ride on the run.
+   */
+  chars?: string | PdsTextRun[];
   /**
    * mainComponent id (INSTANCE nodes only). May arrive as a structured
    * object `{ id, variant: "Size=md,Style=primary" }` (v0.10+) when the
@@ -333,7 +377,10 @@ export interface PdsNode {
     template: string;
     data: Record<
       string,
-      Record<string, { chars?: string; assetId?: string; iconHint?: string }>
+      Record<
+        string,
+        { chars?: string | PdsTextRun[]; assetId?: string; iconHint?: string }
+      >
     >;
   };
   /**

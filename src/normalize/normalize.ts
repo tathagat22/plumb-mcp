@@ -274,10 +274,40 @@ export function normalize(
     if (fn.type === "TEXT") {
       const text = interner.internText(fn.style);
       if (text) node.text = text;
-      if (typeof fn.characters === "string") node.chars = fn.characters;
       const dec = fn.style?.textDecoration;
       if (dec === "UNDERLINE") node.textDecoration = "underline";
       else if (dec === "STRIKETHROUGH") node.textDecoration = "line-through";
+
+      // v0.10 Phase 3 — mixed inline styles. When the plugin captured runs
+      // (a bold word inside a sentence, a coloured link, etc.) emit them
+      // as a PdsTextRun[] under `chars`. The dominant style still sits on
+      // node.text / node.fill so simple renderers can ignore runs and ship
+      // the concatenated string correctly.
+      const runs = fn.characterRuns;
+      const dominantFill = node.fill;
+      if (Array.isArray(runs) && runs.length > 1) {
+        const builtRuns: import("../pds").PdsTextRun[] = runs.map((r) => {
+          const sRef = interner.internText(r.style);
+          const cRef = interner.internColor(r.fills);
+          const runDec = r.style?.textDecoration;
+          const dRun =
+            runDec === "UNDERLINE"
+              ? ("underline" as const)
+              : runDec === "STRIKETHROUGH"
+                ? ("line-through" as const)
+                : undefined;
+          const out: import("../pds").PdsTextRun = { t: r.characters };
+          // Only emit overrides — agents reconstruct by inheriting from
+          // the node's dominant style/fill/decoration when these are absent.
+          if (sRef && sRef !== text) out.s = sRef;
+          if (cRef && cRef !== dominantFill) out.c = cRef;
+          if (dRun && dRun !== node.textDecoration) out.d = dRun;
+          return out;
+        });
+        node.chars = builtRuns;
+      } else if (typeof fn.characters === "string") {
+        node.chars = fn.characters;
+      }
     }
 
     if (fn.type === "INSTANCE" && typeof fn.componentId === "string") {
@@ -508,13 +538,23 @@ function extractOverrides(
   templateEl: string,
   instanceEl: string,
   nodes: Record<string, PdsNode>,
-): Record<string, { chars?: string; assetId?: string; iconHint?: string }> {
-  const out: Record<string, { chars?: string; assetId?: string; iconHint?: string }> = {};
+): Record<
+  string,
+  { chars?: string | import("../pds").PdsTextRun[]; assetId?: string; iconHint?: string }
+> {
+  const out: Record<
+    string,
+    { chars?: string | import("../pds").PdsTextRun[]; assetId?: string; iconHint?: string }
+  > = {};
   function walkPair(tEl: string, iEl: string): void {
     const t = nodes[tEl];
     const i = nodes[iEl];
     if (!t || !i) return;
-    const delta: { chars?: string; assetId?: string; iconHint?: string } = {};
+    const delta: {
+      chars?: string | import("../pds").PdsTextRun[];
+      assetId?: string;
+      iconHint?: string;
+    } = {};
     if (t.chars !== i.chars && i.chars !== undefined) delta.chars = i.chars;
     if (t.assetId !== i.assetId && i.assetId !== undefined) delta.assetId = i.assetId;
     if (t.iconHint !== i.iconHint && i.iconHint !== undefined) delta.iconHint = i.iconHint;
@@ -575,7 +615,13 @@ function compressRepeats(parent: PdsNode, nodes: Record<string, PdsNode>): void 
   if (runStart === -1 || runLen < REPEAT_MIN) return;
 
   const templateEl = kids[runStart]!;
-  const data: Record<string, Record<string, { chars?: string; assetId?: string }>> = {};
+  const data: Record<
+    string,
+    Record<
+      string,
+      { chars?: string | import("../pds").PdsTextRun[]; assetId?: string; iconHint?: string }
+    >
+  > = {};
   for (let i = runStart + 1; i < runStart + runLen; i++) {
     const instanceEl = kids[i]!;
     const overrides = extractOverrides(templateEl, instanceEl, nodes);
@@ -786,6 +832,28 @@ function motionFromReactions(reactions: FigmaReaction[] | undefined): MotionSpec
     const easing = easingFromFigma(tr);
     if (easing) spec.easing = easing;
     if (action.destinationId) spec.target = action.destinationId;
+    // v0.10 Phase 3 — overlay positioning. Captured by plugin's
+    // serializeReactions; REST tolerated but typically absent.
+    const overlayPos = action.overlayRelativePosition;
+    const overlayBg = action.overlayBackground;
+    if (overlayPos || overlayBg) {
+      const overlay: NonNullable<MotionSpec["overlay"]> = {};
+      if (overlayPos && typeof overlayPos.x === "number" && typeof overlayPos.y === "number") {
+        overlay.pos = { x: round(overlayPos.x), y: round(overlayPos.y) };
+      }
+      if (overlayBg && overlayBg.type !== "NONE") {
+        const c = overlayBg.color;
+        if (c) {
+          // RGBA → CSS hex with alpha.
+          const channel = (n: number): string =>
+            Math.round(n * 255).toString(16).padStart(2, "0");
+          let hex = `#${channel(c.r)}${channel(c.g)}${channel(c.b)}`;
+          if (c.a !== undefined && c.a < 1) hex += channel(c.a);
+          overlay.background = hex;
+        }
+      }
+      if (overlay.pos || overlay.background) spec.overlay = overlay;
+    }
     out.push(spec);
   }
   return out.length ? out : undefined;

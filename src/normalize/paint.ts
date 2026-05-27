@@ -130,6 +130,12 @@ function fillOf(p: FigmaPaint): Fill | undefined {
     if (p.imageRef) out.assetId = p.imageRef;
     if (p.scaleMode && SCALE_MODE[p.scaleMode]) out.scaleMode = SCALE_MODE[p.scaleMode];
     if (p.opacity !== undefined && p.opacity < 1) out.opacity = round(p.opacity, 2);
+    // v0.10 Phase 3 — image crop + rotation. Plugin spreads these from the
+    // raw Figma paint; REST may or may not, so guard on shape.
+    if (Array.isArray(p.imageTransform)) out.crop = p.imageTransform as number[][];
+    if (typeof p.rotation === "number" && Math.abs(p.rotation) > 0.0001) {
+      out.rotation = round(p.rotation, 2);
+    }
     return out;
   }
   return undefined;

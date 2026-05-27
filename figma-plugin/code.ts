@@ -135,11 +135,25 @@ function serializeReactions(node: SceneNode): unknown[] | undefined {
   const r = (node as unknown as { reactions?: unknown }).reactions;
   if (!Array.isArray(r) || r.length === 0) return undefined;
   // Plugin reactions are already shape-compatible with REST after a shallow
-  // copy. Filter out the noisy `actions: []` legacy field if present.
+  // copy. Filter out the noisy `actions: []` legacy field if present, and
+  // preserve overlay positioning (v0.10 Phase 3) when the action opens
+  // an overlay — otherwise agents default a destination overlay to a
+  // centered modal even when the design pinned it elsewhere.
   return r.map((entry) => {
     if (!entry || typeof entry !== "object") return entry;
     const { actions: _drop, ...rest } = entry as Record<string, unknown>;
     void _drop;
+    const action = rest.action as Record<string, unknown> | undefined;
+    if (action) {
+      // Pull overlay fields onto the action so the normalizer can find them
+      // in a single place. Figma uses `overlayRelativePosition` + `overlayBackground`.
+      const overlayPos = action.overlayRelativePosition;
+      const overlayBg = action.overlayBackground;
+      const out: Record<string, unknown> = { ...action };
+      if (overlayPos) out.overlayRelativePosition = overlayPos;
+      if (overlayBg) out.overlayBackground = overlayBg;
+      rest.action = out;
+    }
     return rest;
   });
 }
@@ -330,6 +344,61 @@ function serialize(
       style.textDecoration = t.textDecoration;
     }
     out.style = style;
+
+    // v0.10 Phase 3 — capture styled segments so mixed-style text (a bold
+    // word inside a sentence, a coloured link, etc.) survives the round-trip
+    // instead of silently collapsing to the dominant style. Only emit when
+    // there's actually more than one run; single-style text is a no-op.
+    try {
+      const segments = t.getStyledTextSegments([
+        "fontSize",
+        "fontName",
+        "fills",
+        "lineHeight",
+        "letterSpacing",
+        "textDecoration",
+      ]);
+      if (segments.length > 1) {
+        out.characterRuns = segments.map((seg) => {
+          const runStyle: Record<string, unknown> = {};
+          if (typeof seg.fontSize === "number") runStyle.fontSize = seg.fontSize;
+          if (seg.fontName) {
+            runStyle.fontFamily = seg.fontName.family;
+            runStyle.fontWeight = weightOf(seg.fontName.style);
+          }
+          if (seg.lineHeight) {
+            if (seg.lineHeight.unit === "PIXELS") {
+              runStyle.lineHeightPx = seg.lineHeight.value;
+            } else if (
+              seg.lineHeight.unit === "PERCENT" &&
+              typeof seg.fontSize === "number"
+            ) {
+              runStyle.lineHeightPx = (seg.fontSize * seg.lineHeight.value) / 100;
+            }
+          }
+          if (seg.letterSpacing && seg.letterSpacing.unit === "PIXELS") {
+            runStyle.letterSpacing = seg.letterSpacing.value;
+          }
+          if (seg.textDecoration && seg.textDecoration !== "NONE") {
+            runStyle.textDecoration = seg.textDecoration;
+          }
+          const runOut: Record<string, unknown> = {
+            characters: seg.characters,
+            style: runStyle,
+          };
+          // Per-run fills — only emit when this segment's fills diverge from
+          // the node's dominant fills. The normalizer interns matching fills
+          // to the same colour token so identical runs don't duplicate.
+          if (Array.isArray(seg.fills) && seg.fills.length > 0) {
+            runOut.fills = seg.fills.map((p) => normalizePaint(p, undefined));
+          }
+          return runOut;
+        });
+      }
+    } catch {
+      // getStyledTextSegments can throw on certain placeholder text nodes
+      // (e.g. missing fonts not yet loaded). Single-style fallback wins.
+    }
   }
 
   if (node.type === "INSTANCE") {

@@ -201,7 +201,12 @@ export function describePds(doc: PdsDocument): DescribeResult {
     if (!hasAutoLayout && k.pos) {
       summary.region = regionOf(root.box, k.pos, k.box);
     }
-    if (k.chars) summary.chars = k.chars;
+    if (k.chars) {
+      // v0.10 Phase 3 — flatten mixed-style runs back to a plain string for
+      // the text-only description. The structural runs live on the PDS;
+      // describe is a prose summary so the concatenated text is enough.
+      summary.chars = typeof k.chars === "string" ? k.chars : k.chars.map((r) => r.t).join("");
+    }
     return summary;
   });
 
