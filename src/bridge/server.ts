@@ -103,16 +103,29 @@ function request<T>(
  * serialization cost on every call — pass `normalize-depth + 1` so the
  * normalizer can still emit accurate `more` counts at its boundary. Omit
  * to fall back to the v0.9 unbounded walk (used by selection / verify).
+ *
+ * Responses are cached on the server keyed on `(nodeId, depth)` and
+ * invalidated whenever the plugin pushes a new inventory (which it does
+ * on every `documentchange`). That makes the drill-into-then-back-out
+ * workflow effectively free after the first call, and the verify loop
+ * stops re-fetching every parent for each delta check.
  */
-export function requestNode(
+export async function requestNode(
   nodeId: string,
   depth?: number,
 ): Promise<{ doc: FigmaNode | null; nodeName: string | null }> {
-  return request(
+  const key = `${nodeId}:${depth ?? "all"}`;
+  const cached = bridge.nodeCache.get(key);
+  if (cached && cached.fileVersion === bridge.fileVersion) {
+    return { doc: cached.doc, nodeName: cached.nodeName };
+  }
+  const result = await request<{ doc: FigmaNode | null; nodeName: string | null }>(
     (reqId) => ({ t: "get-node", reqId, nodeId, depth }),
     60_000,
     "node",
   );
+  bridge.nodeCache.set(key, { ...result, fileVersion: bridge.fileVersion });
+  return result;
 }
 
 export interface RequestAssetsOptions {
@@ -319,6 +332,12 @@ export async function startBridge(): Promise<void> {
           break;
         case "inventory":
           bridge.inventory = { fileName: msg.fileName, pages: msg.pages };
+          // Plugin debounce-pushes inventory on every `documentchange`,
+          // so this is our cheapest signal that something in the file may
+          // have changed. Bump the version and nuke the node cache so the
+          // next request actually re-fetches.
+          bridge.fileVersion += 1;
+          if (bridge.nodeCache.size > 0) bridge.nodeCache.clear();
           log(`inventory: ${msg.pages.reduce((n, p) => n + p.frames.length, 0)} screen(s)`);
           break;
         case "node":

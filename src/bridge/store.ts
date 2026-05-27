@@ -1,6 +1,14 @@
 import type { FigmaNode } from "../figma/types";
 import type { InventoryPage } from "./protocol";
 
+/** A previously-served plugin response, keyed by `${nodeId}:${depth}`. */
+export interface CachedNodeResult {
+  doc: FigmaNode | null;
+  nodeName: string | null;
+  /** The fileVersion the response was generated at — invalidates on edit. */
+  fileVersion: number;
+}
+
 /** The current selection the paired plugin has streamed. */
 export interface BridgeSelection {
   doc: FigmaNode;
@@ -32,6 +40,20 @@ class BridgeStore {
   inventory: BridgeInventory | null = null;
   /** Last time any message arrived from the plugin (epoch ms). */
   lastSeen = 0;
+  /**
+   * Monotonic counter bumped on every inventory push (plugin debounces those
+   * on `documentchange`, so the bump tracks "the file has changed somehow").
+   * Cached node responses store the fileVersion they were generated at —
+   * a mismatch on lookup means the cache is stale.
+   */
+  fileVersion = 0;
+  /**
+   * Server-side cache of `requestNode` responses, keyed `${nodeId}:${depth}`.
+   * Hit rate matters most during drill-down loops and verify cycles where
+   * the agent re-asks for parent/sibling subtrees that haven't changed.
+   * Cleared wholesale on every fileVersion bump — simple, correct.
+   */
+  nodeCache = new Map<string, CachedNodeResult>();
 
   /** Clear pairing-scoped state — called when the plugin disconnects. */
   reset(): void {
@@ -39,6 +61,8 @@ class BridgeStore {
     this.pluginVersion = null;
     this.selection = null;
     this.inventory = null;
+    this.fileVersion = 0;
+    this.nodeCache.clear();
   }
 }
 
