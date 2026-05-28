@@ -63,6 +63,8 @@ export default defineConfig({
           { text: "plumb_status", link: "/tools/plumb_status" },
           { text: "plumb_outline", link: "/tools/plumb_outline" },
           { text: "plumb_node", link: "/tools/plumb_node" },
+          { text: "plumb_query", link: "/tools/plumb_query" },
+          { text: "plumb_describe", link: "/tools/plumb_describe" },
           { text: "plumb_tokens", link: "/tools/plumb_tokens" },
           { text: "plumb_selection", link: "/tools/plumb_selection" },
           { text: "plumb_assets", link: "/tools/plumb_assets" },

@@ -65,20 +65,22 @@ plumb-mcp verify http://localhost:5173/dashboard --url <figma-url>
 
 ---
 
-## 十二个工具
+## 十四个工具
 
 | 工具 | 作用 |
 |---|---|
 | `plumb_status` | 自描述、键名说明、连接状态。首先调用此工具。 |
 | `plumb_outline` | 列出文件中每一个屏幕（id、名称、尺寸）。 |
 | `plumb_node` | 将屏幕提取为紧凑的 PDS —— 通过 id 或名称。 |
+| `plumb_query` | 按模式拉取子树切片（`skeleton` / `buttons` / `text` / `components`），适用于完整树会撑爆 token 预算的密集屏幕。 |
+| `plumb_describe` | 仅文本的视觉描述 —— 按区域叙述 + 子节点摘要，适用于无法读取截图的代理或 token 敏感流程。 |
 | `plumb_tokens` | 设计 token 表（颜色、文字、圆角、阴影）。 |
 | `plumb_selection` | 用户在 Figma 中当前选中的对象。 |
 | `plumb_assets` | 导出图标（SVG）和图像（PNG）—— 三种模式：递归、清单、精准 ids。 |
 | `plumb_screenshot` | 将任意节点渲染为 PNG/JPG。 |
 | `plumb_search` | 按名称和/或类型查找节点。 |
 | `plumb_components` | 列出组件及其实例使用情况。 |
-| `plumb_verify` | 将你渲染的布局与设计稿对比，返回结构化差异。 |
+| `plumb_verify` | 将你渲染的布局与设计稿对比，返回结构化差异 —— 采用 ΔE2000 感知色差，附带阴影／旋转／弹性子节点／填充堆叠校验，不做像素比较。 |
 | `plumb_fig_outline` | 无需 Figma 桌面应用，直接从磁盘读取已保存的 `.fig` 文件并列出所有屏幕。 |
 | `plumb_fig_node` | 无需 Figma 桌面应用，按 id 从已保存的 `.fig` 文件中获取一个节点。 |
 

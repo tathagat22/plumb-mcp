@@ -65,20 +65,22 @@ plumb-mcp verify http://localhost:5173/dashboard --url <figma-url>
 
 ---
 
-## 12 個のツール
+## 14 個のツール
 
 | ツール | 機能 |
 |---|---|
 | `plumb_status` | 自己記述、キー凡例、接続状態。最初に呼び出すツール。 |
 | `plumb_outline` | ファイル内のすべての画面（id、名前、サイズ）。 |
 | `plumb_node` | 画面をコンパクトな PDS として抽出 — id または名前で指定。 |
+| `plumb_query` | パターン指定でサブツリーをスライス取得（`skeleton` / `buttons` / `text` / `components`）— ツリー全体がトークン予算を超えてしまう密な画面で使用。 |
+| `plumb_describe` | テキストのみの視覚的記述 — 領域別ナラティブ + 子要素サマリー。スクリーンショットを読めないエージェントやトークン重視のフロー向け。 |
 | `plumb_tokens` | デザイントークンテーブル（色、書式、角丸、シャドウ）。 |
 | `plumb_selection` | Figma 上でユーザーが現在選択している対象。 |
 | `plumb_assets` | アイコン（SVG）と画像（PNG）をエクスポート — 3 つのモード：再帰、リスト、特定 ids。 |
 | `plumb_screenshot` | 任意のノードを PNG/JPG にレンダリング。 |
 | `plumb_search` | 名前および/または種類でノードを検索。 |
 | `plumb_components` | コンポーネントとインスタンス使用箇所をリスト。 |
-| `plumb_verify` | レンダリング済みレイアウトをデザインと比較 — 構造化された差分を返す。 |
+| `plumb_verify` | レンダリング済みレイアウトをデザインと比較 — 構造化された差分、ΔE2000 知覚色差を採用、シャドウ／回転／フレックス子要素／塗りスタックのチェック付き、ピクセル比較なし。 |
 | `plumb_fig_outline` | Figma デスクトップなしで、保存された `.fig` ファイルからすべての画面を列挙。 |
 | `plumb_fig_node` | Figma デスクトップなしで、保存された `.fig` ファイルから id 指定でノードを取得。 |
 

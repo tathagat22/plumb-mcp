@@ -74,12 +74,19 @@ Each `RenderedElement`:
 | `radius` | Border radius |
 | `stroke`, `stroke.width` | Border colour and width |
 | `opacity` | Element opacity |
+| `text.decoration` | Underline / strikethrough mismatch |
+| `shadow.missing` | Design has a drop/inner shadow your render doesn't |
+| `rotation` | Element rotated in the design but not in code (or vice versa) |
+| `flex.grow` | Auto-layout `layoutGrow` ↔ CSS `flex-grow` |
+| `flex.selfAlign` | Per-child `layoutAlign` ↔ CSS `align-self` |
+| `fills.count` | Stacked paint count mismatch (e.g. gradient over solid) |
+| `ua-style-fallthrough` | Rendered style is a browser default — agent forgot to style it |
 | `missing-in-pds` | Element you rendered that doesn't exist in the design |
 
 ## Default tolerances
 
 - Pixels: ok ≤ 1px, warn ≤ 3px, error > 3px
-- Colour: ok ≤ ΔE 6, warn ≤ ΔE 24, error > 24
+- Colour: ok ≤ ΔE 6, warn ≤ ΔE 24, error > 24 (ΔE2000 — perceptually uniform, not raw RGB distance)
 - Text size: ok ≤ 0.5px, warn ≤ 1.5px
 - Text weight: warn if off by ≤ 100, error otherwise
 - Line height ratio: warn if off by > 0.05, error if > 0.15

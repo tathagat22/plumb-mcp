@@ -63,20 +63,22 @@ Other install paths: `npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/p
 
 ---
 
-## The twelve MCP tools
+## The fourteen MCP tools
 
 | Tool | What it does |
 |---|---|
 | `plumb_status` | Self-description, key legend, connection state. Call first. |
 | `plumb_outline` | Every screen in the file (id, name, size). |
 | `plumb_node` | Extract a screen as compact PDS — by id or by name. |
+| `plumb_query` | Pull a slice (`skeleton` / `buttons` / `text` / `components`) when a full screen would blow the token budget. |
+| `plumb_describe` | Text-only visual description — per-region narrative + child summary, for image-blind harnesses. |
 | `plumb_tokens` | Design-token table (colours, type, radii, shadows). |
 | `plumb_selection` | The user's live Figma selection. |
 | `plumb_assets` | Export icons (SVG) + images (PNG) — three modes: recursive, list (manifest only), or surgical by ids. |
 | `plumb_screenshot` | Render any node to PNG/JPG. |
 | `plumb_search` | Find nodes by name and/or type. |
 | `plumb_components` | List components + instance usages. |
-| `plumb_verify` | Diff your rendered layout against the design — structured deltas, no pixel diff. |
+| `plumb_verify` | Diff your rendered layout against the design — structured deltas with ΔE2000 perceptual colour distance, shadow/rotation/flex-child/fill-stack checks, no pixel diff. |
 | `plumb_fig_outline` | Headless: read a saved `.fig` file from disk and list every screen. No Figma desktop, no token. |
 | `plumb_fig_node` | Headless: fetch one node from a saved `.fig` file by id. |
 
@@ -132,9 +134,9 @@ Plumb MCP server  —  `npx plumb-mcp` / `node dist/index.js`
   │      (mints handles in a full pre-walk so the same node gets the same
   │       el regardless of the requested depth — `plumb_verify` needs this)
   │  • Version-keyed cache, fit-to-budget (maxTokens → auto-depth)
-  │  • Twelve MCP tools (status / outline / node / tokens / selection /
-  │    assets / screenshot / search / components / verify /
-  │    fig_outline / fig_node)
+  │  • Fourteen MCP tools (status / outline / node / query / describe /
+  │    tokens / selection / assets / screenshot / search / components /
+  │    verify / fig_outline / fig_node)
   ▼
   stdio MCP
   ▼
@@ -166,7 +168,7 @@ Cache and outputs:
 ```bash
 npm run typecheck   # strict TS (server + plugin)
 npm run build       # bundle server + plugin
-npm run smoke       # MCP handshake; expects 12 tools
+npm run smoke       # MCP handshake; expects 14 tools
 npm run check       # offline fit-to-budget + cache verification
 npm run bridge      # simulated plugin + every tool offline
 npm run prove       # normalizer depth/token curve (fixture or live)
@@ -182,7 +184,7 @@ npm run connect     # live end-to-end against a paired plugin
 plumb-mcp/
 ├── src/
 │   ├── index.ts          # bin entry: stdio MCP server + bridge
-│   ├── server.ts         # registers the twelve tools
+│   ├── server.ts         # registers the fourteen tools
 │   ├── verify.ts         # the plumb_verify comparison engine
 │   ├── cache.ts          # on-disk version-keyed result cache
 │   ├── assets.ts         # writes exported assets to disk
@@ -193,7 +195,7 @@ plumb-mcp/
 │   ├── figma/            # REST ingest + raw Figma types
 │   ├── bridge/           # localhost WebSocket bridge to the plugin
 │   ├── normalize/        # raw Figma → PDS (handles, layout, paint, …)
-│   ├── tools/            # the twelve MCP tools (one file each)
+│   ├── tools/            # the fourteen MCP tools (one file each)
 │   ├── cli/init.ts       # `plumb init` — write editor MCP configs
 │   └── util/             # round, estimateTokens, …
 ├── figma-plugin/

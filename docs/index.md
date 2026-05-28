@@ -34,5 +34,5 @@ features:
   - title: Everything local
     details: Plugin and server talk over the loopback interface. Nothing about your design ever leaves your machine. No analytics, no third-party endpoints.
   - title: Open source
-    details: MIT-licensed. Twelve focused tools + offline `.fig` parser. Issues, source, and roadmap on GitHub.
+    details: MIT-licensed. Fourteen focused tools + offline `.fig` parser. Issues, source, and roadmap on GitHub.
 ---

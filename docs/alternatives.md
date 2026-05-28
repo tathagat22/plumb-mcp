@@ -29,7 +29,7 @@ plumb-mcp init     # auto-detects Claude Code / Cursor / VS Code / Windsurf
 
 Then in Figma: sideload the plugin (one-time), click "Pair with Plumb". Done.
 
-See [Get started](/getting-started) for the full walkthrough, or [Tool reference](/tools/) for the twelve MCP tools that come in the box.
+See [Get started](/getting-started) for the full walkthrough, or [Tool reference](/tools/) for the fourteen MCP tools that come in the box.
 
 ## Why does Plumb exist?
 

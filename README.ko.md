@@ -65,20 +65,22 @@ plumb-mcp verify http://localhost:5173/dashboard --url <figma-url>
 
 ---
 
-## 12 개 도구
+## 14 개 도구
 
 | 도구 | 역할 |
 |---|---|
 | `plumb_status` | 자기 설명, 키 범례, 연결 상태. 가장 먼저 호출. |
 | `plumb_outline` | 파일 안의 모든 화면（id, 이름, 크기）. |
 | `plumb_node` | 화면을 간결한 PDS 로 추출 — id 또는 이름으로. |
+| `plumb_query` | 패턴으로 서브트리 슬라이스（`skeleton` / `buttons` / `text` / `components`）— 전체 트리가 토큰 예산을 초과하는 밀집 화면에서 사용. |
+| `plumb_describe` | 텍스트 전용 시각 설명 — 영역별 내러티브 + 자식 요약. 스크린샷을 읽지 못하는 에이전트나 토큰 민감 플로우용. |
 | `plumb_tokens` | 디자인 토큰 테이블（색, 타입, 라운드, 그림자）. |
 | `plumb_selection` | 사용자가 Figma 에서 현재 선택한 대상. |
 | `plumb_assets` | 아이콘（SVG）과 이미지（PNG）내보내기 — 세 가지 모드: 재귀, 목록, 특정 ids. |
 | `plumb_screenshot` | 임의 노드를 PNG/JPG 로 렌더링. |
 | `plumb_search` | 이름 및/또는 타입으로 노드 검색. |
 | `plumb_components` | 컴포넌트와 인스턴스 사용처 목록. |
-| `plumb_verify` | 렌더링된 레이아웃을 디자인과 비교 — 구조화된 delta 반환. |
+| `plumb_verify` | 렌더링된 레이아웃을 디자인과 비교 — 구조화된 delta, ΔE2000 지각 색차 사용, 그림자／회전／플렉스 자식／채움 스택 검사 포함, 픽셀 비교 없음. |
 | `plumb_fig_outline` | Figma 데스크톱 없이 저장된 `.fig` 파일에서 모든 화면 나열. |
 | `plumb_fig_node` | Figma 데스크톱 없이 저장된 `.fig` 파일에서 id 로 노드 가져오기. |
 
