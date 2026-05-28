@@ -1,4 +1,4 @@
-cname: Release · npm + MCP Registry
+name: Release · npm + MCP Registry
 
 # Fires on any v* tag push (e.g. v0.7.2). Publishes plumb-mcp to npm AND
 # ships server.json to registry.modelcontextprotocol.io in one shot, so the
