@@ -1,7 +1,9 @@
 import type { FigmaNode } from "../figma/types";
 
 /** Localhost ports the bridge tries to bind, and the plugin scans to find it. */
-export const BRIDGE_PORTS = [31337, 31338, 31339, 31340, 31341];
+export const BRIDGE_PORTS = [
+  31337, 31338, 31339, 31340, 31341, 31342, 31343, 31344, 31345, 31346,
+];
 
 /** One screen (top-level frame) in the file inventory. */
 export interface InventoryFrame {
