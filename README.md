@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/tathagat22-plumb-mcp-badge.png)](https://mseep.ai/app/tathagat22-plumb-mcp)
+
 <p align="center">
   <img src="./docs/public/banner.png" alt="Plumb — Figma ↔ AI coding, plumbed." width="100%">
 </p>
