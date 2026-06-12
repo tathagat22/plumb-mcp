@@ -1,4 +1,4 @@
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/tathagat22-plumb-mcp-badge.png)](https://mseep.ai/app/tathagat22-plumb-mcp)
+
 
 <p align="center">
   <img src="./docs/public/banner.png" alt="Plumb — Figma ↔ AI coding, plumbed." width="100%">
@@ -242,7 +242,7 @@ plumb-mcp/
   is consumed only by the server's own outbound `fetch` calls.
 
 ---
-
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/tathagat22-plumb-mcp-badge.png)](https://mseep.ai/app/tathagat22-plumb-mcp)
 ## License
 
 MIT © Tathagat Maitray. See [`LICENSE`](./LICENSE).
