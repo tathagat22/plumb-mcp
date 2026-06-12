@@ -243,6 +243,7 @@ plumb-mcp/
 
 ---
 [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/tathagat22-plumb-mcp-badge.png)](https://mseep.ai/app/tathagat22-plumb-mcp)
+[![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/a9f8a315-d08c-48df-a817-c65ed22c2730)
 ## License
 
 MIT © Tathagat Maitray. See [`LICENSE`](./LICENSE).
