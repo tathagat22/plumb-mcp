@@ -4,6 +4,7 @@ import { registerPlumbAssets } from "./tools/assets";
 import { registerPlumbComponents } from "./tools/components";
 import { registerPlumbDescribe } from "./tools/describe";
 import { registerPlumbFigNode, registerPlumbFigOutline } from "./tools/fig";
+import { registerPlumbFit } from "./tools/fit";
 import { registerPlumbNode } from "./tools/node";
 import { registerPlumbOutline } from "./tools/outline";
 import { registerPlumbQuery } from "./tools/query";
@@ -33,7 +34,10 @@ export function createServer(): McpServer {
         "(list / surgical modes); plumb_screenshot renders a node to PNG; " +
         "plumb_search finds nodes; plumb_components lists components and " +
         "instances; plumb_verify diffs your rendered layout against the design " +
-        "and returns structured deltas; plumb_query pulls a slice by pattern " +
+        "and returns structured deltas; plumb_fit wraps that diff in a 0–100 " +
+        "convergence score + prioritised fixes so you can iterate to a " +
+        "pixel-perfect match (build → plumb_fit → fix → repeat until done); " +
+        "plumb_query pulls a slice by pattern " +
         "(skeleton / buttons / text / components) when the full tree would be " +
         "too big. Otherwise use the REST path (fileKey + id). Auto-layout is " +
         "pre-resolved to flexbox.",
@@ -51,6 +55,7 @@ export function createServer(): McpServer {
   registerPlumbSearch(server);
   registerPlumbComponents(server);
   registerPlumbVerify(server);
+  registerPlumbFit(server);
   registerPlumbQuery(server);
   registerPlumbFigOutline(server);
   registerPlumbFigNode(server);

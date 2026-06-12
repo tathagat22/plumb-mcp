@@ -40,6 +40,7 @@ export default defineConfig({
     nav: [
       { text: "Get started", link: "/getting-started" },
       { text: "Tools", link: "/tools/" },
+      { text: "Playground", link: "/play/" },
       { text: "Architecture", link: "/architecture" },
       { text: "GitHub", link: "https://github.com/tathagat22/plumb-mcp" },
       { text: "npm", link: "https://www.npmjs.com/package/plumb-mcp" },
@@ -72,6 +73,7 @@ export default defineConfig({
           { text: "plumb_search", link: "/tools/plumb_search" },
           { text: "plumb_components", link: "/tools/plumb_components" },
           { text: "plumb_verify", link: "/tools/plumb_verify" },
+          { text: "plumb_fit", link: "/tools/plumb_fit" },
           { text: "plumb_fig_outline", link: "/tools/plumb_fig_outline" },
           { text: "plumb_fig_node", link: "/tools/plumb_fig_node" },
         ],

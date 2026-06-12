@@ -1,0 +1,24 @@
+{
+  "name": "plumb-playground",
+  "private": true,
+  "version": "0.12.0",
+  "type": "module",
+  "description": "The Plumb self-healing loop, running in your browser — paste a Figma URL, watch it converge to pixel-perfect. Static, BYO-key, no backend.",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

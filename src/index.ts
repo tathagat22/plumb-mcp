@@ -1,5 +1,6 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { startBridge } from "./bridge/server";
+import { runFitCli } from "./cli/fit";
 import { runInit } from "./cli/init";
 import { runVerifyCli } from "./cli/verify";
 import { SERVER_VERSION } from "./meta";
@@ -24,12 +25,18 @@ Usage:
                              installed Chrome. Run \`plumb-mcp verify --help\`
                              for the full option list.
 
+  plumb-mcp fit <figma-url>  Self-healing build loop: generate an HTML build
+                             from the design, render it, diff it, and correct
+                             it pass-by-pass until it matches pixel-for-pixel.
+                             Needs ANTHROPIC_API_KEY. Run \`plumb-mcp fit --help\`.
+
   plumb-mcp --help, -h       Print this message and exit.
   plumb-mcp --version, -v    Print the version and exit.
 
-Thirteen tools exposed once running: plumb_status, plumb_outline, plumb_node,
+Fifteen tools exposed once running: plumb_status, plumb_outline, plumb_node,
 plumb_tokens, plumb_selection, plumb_assets, plumb_screenshot, plumb_describe,
-plumb_search, plumb_components, plumb_verify, plumb_fig_outline, plumb_fig_node.
+plumb_search, plumb_components, plumb_verify, plumb_fit, plumb_query,
+plumb_fig_outline, plumb_fig_node.
 
 Docs:    https://tathagat22.github.io/plumb-mcp/
 Source:  https://github.com/tathagat22/plumb-mcp
@@ -60,6 +67,10 @@ async function main(): Promise<void> {
   }
   if (arg === "verify") {
     const code = await runVerifyCli(process.argv.slice(3));
+    process.exit(code);
+  }
+  if (arg === "fit") {
+    const code = await runFitCli(process.argv.slice(3));
     process.exit(code);
   }
   if (arg && arg.startsWith("-")) {

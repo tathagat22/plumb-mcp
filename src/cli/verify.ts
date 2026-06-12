@@ -10,7 +10,8 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { chromeInstallHint, findChrome } from "./chrome";
-import { evaluate, launchBrowser, navigate, type Browser } from "./cdp";
+import { launchBrowser } from "./cdp";
+import { captureRendered } from "../render/capture";
 import { fetchNodeViaRest } from "../figma/rest";
 import { resolveFigmaTarget } from "../figma/url";
 import { normalizeToBudget } from "../normalize/budget";
@@ -97,80 +98,6 @@ function parseArgs(argv: string[]): CliArgs {
     else throw new Error(`Unexpected positional argument "${a}".`);
   }
   return out;
-}
-
-/** Browser-side capture script. Injected as a single expression. */
-function captureExpression(selector: string): string {
-  // Stringify the selector so injecting "[data-plumb-id]" is safe.
-  const sel = JSON.stringify(selector);
-  return `(${captureFn.toString()})(${sel})`;
-}
-
-/**
- * The actual function injected into the page. Kept self-contained — no
- * closure capture beyond its single argument. Returns the same shape as the
- * `rendered` array plumb_verify expects.
- *
- * NB: this runs in the browser; the DOM globals it references aren't in this
- * package's lib. We deliberately keep this as a `Function` typed for the
- * Node side and stringify it via .toString() in `captureExpression`.
- */
-const captureFn = function (selector: string): unknown {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const win = (globalThis as any).window ?? globalThis;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const doc = (globalThis as any).document ?? win.document;
-  const out: unknown[] = [];
-  const els = doc.querySelectorAll(selector);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  els.forEach((el: any) => {
-    const id = el.getAttribute("data-plumb-id");
-    if (!id) return;
-    const rect = el.getBoundingClientRect();
-    const cs = win.getComputedStyle(el);
-    const styles: Record<string, string> = {
-      backgroundColor: cs.backgroundColor,
-      color: cs.color,
-      fontFamily: cs.fontFamily,
-      fontSize: cs.fontSize,
-      fontWeight: cs.fontWeight,
-      lineHeight: cs.lineHeight,
-      paddingTop: cs.paddingTop,
-      paddingRight: cs.paddingRight,
-      paddingBottom: cs.paddingBottom,
-      paddingLeft: cs.paddingLeft,
-      gap: cs.gap,
-      flexDirection: cs.flexDirection,
-      justifyContent: cs.justifyContent,
-      alignItems: cs.alignItems,
-      borderRadius: cs.borderRadius,
-      borderColor: cs.borderColor,
-      borderWidth: cs.borderWidth,
-      opacity: cs.opacity,
-      textDecorationLine: cs.textDecorationLine ?? cs.textDecoration ?? "",
-    };
-    out.push({
-      el: id,
-      box: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
-      text: el.textContent ?? "",
-      styles,
-    });
-  });
-  return out;
-};
-
-async function captureRendered(
-  b: Browser,
-  pageUrl: string,
-  selector: string,
-  waitMs: number,
-): Promise<RenderedElement[]> {
-  await navigate(b, pageUrl, waitMs);
-  // Wait an extra frame in case the page is doing client-side route
-  // hydration — saw flicker without this on a Vite + React Router app.
-  await evaluate<true>(b, "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))");
-  const result = await evaluate<RenderedElement[]>(b, captureExpression(selector));
-  return Array.isArray(result) ? result : [];
 }
 
 function requireToken(): string {

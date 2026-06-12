@@ -26,7 +26,13 @@ Three other Figma MCP servers worth knowing:
 - **Framelink** — thin REST wrapper. Two tools. No verification, inherits rate limits.
 - **cursor-talk-to-figma** — bidirectional automation for designers working *in* Figma.
 
-Plumb is the only one that **closes the loop on code.** `plumb_verify` (MCP tool) and `plumb-mcp verify` (CLI) tell you whether the code your agent shipped actually matches the design — colour-coded deltas, no pixel diff, runs in CI.
+Plumb is the only one that **closes the loop on code.** `plumb_verify` tells you whether the code your agent shipped actually matches the design — colour-coded deltas, no pixel diff, runs in CI. And `plumb_fit` turns that into a **self-healing loop**: it scores the build 0–100, hands back the exact deltas to fix, and the agent iterates until it's pixel-perfect.
+
+Run the loop three ways:
+
+- **In your editor** — `plumb_fit` (MCP). Claude Code / Cursor build, call it, and self-correct. Free; the agent is the generator.
+- **From the terminal** — `plumb-mcp fit <figma-url>` generates a build, renders it headless in your Chrome, diffs, and corrects it pass-by-pass until it matches. (Needs `ANTHROPIC_API_KEY`.)
+- **In the browser** — the [Playground](https://tathagat22.github.io/plumb-mcp/play/): paste a Figma URL or pick a demo and watch it converge, with your own key. No install, no backend.
 
 ---
 
@@ -63,13 +69,16 @@ echo "$(npm root -g)/plumb-mcp/figma-plugin/manifest.json"
 
 # 4. Optional — verify rendered code against Figma from the terminal
 plumb-mcp verify http://localhost:5173/dashboard --url <figma-url>
+
+# …or let it build + self-correct to pixel-perfect on its own (BYO Anthropic key)
+plumb-mcp fit <figma-url>
 ```
 
 Other install paths: `npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/plumb-mcp:latest` · [build from source](https://github.com/tathagat22/plumb-mcp).
 
 ---
 
-## The fourteen MCP tools
+## The fifteen MCP tools
 
 | Tool | What it does |
 |---|---|
@@ -85,6 +94,7 @@ Other install paths: `npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/p
 | `plumb_search` | Find nodes by name and/or type. |
 | `plumb_components` | List components + instance usages. |
 | `plumb_verify` | Diff your rendered layout against the design — structured deltas with ΔE2000 perceptual colour distance, shadow/rotation/flex-child/fill-stack checks, no pixel diff. |
+| `plumb_fit` | The self-healing loop: `plumb_verify` plus a 0–100 convergence score and prioritised fixes, so the agent iterates to pixel-perfect instead of one-shot checking. |
 | `plumb_fig_outline` | Headless: read a saved `.fig` file from disk and list every screen. No Figma desktop, no token. |
 | `plumb_fig_node` | Headless: fetch one node from a saved `.fig` file by id. |
 
@@ -97,10 +107,11 @@ plumb_outline()                                  // 1. list screens
 plumb_node({ name: "Settings" })                 // 2. extract PDS
 plumb_assets({ name: "Settings", ids: [...] })   // 3. pull only the icons you need
 // 4. Build the UI — tag each element data-plumb-id="<el>" using the el from PDS
-plumb_verify({ name: "Settings", rendered })     // 5. structural diff
+plumb_fit({ name: "Settings", rendered })        // 5. score it, fix the deltas, repeat
+// 6. ...until plumb_fit returns done:true — pixel-perfect
 ```
 
-For the `rendered` payload shape, see [the verify docs](https://tathagat22.github.io/plumb-mcp/verify.html) — or skip the in-browser capture entirely and use the `plumb-mcp verify` CLI to drive headless Chrome end-to-end.
+`plumb_fit` is `plumb_verify` plus a convergence target — use it to iterate to a match. For a one-shot check, call `plumb_verify` instead. For the `rendered` payload shape, see [the verify docs](https://tathagat22.github.io/plumb-mcp/tools/plumb_verify.html) — or skip the in-browser capture entirely and use the `plumb-mcp verify` / `plumb-mcp fit` CLIs to drive headless Chrome end-to-end.
 
 ---
 
@@ -140,9 +151,9 @@ Plumb MCP server  —  `npx plumb-mcp` / `node dist/index.js`
   │      (mints handles in a full pre-walk so the same node gets the same
   │       el regardless of the requested depth — `plumb_verify` needs this)
   │  • Version-keyed cache, fit-to-budget (maxTokens → auto-depth)
-  │  • Fourteen MCP tools (status / outline / node / query / describe /
+  │  • Fifteen MCP tools (status / outline / node / query / describe /
   │    tokens / selection / assets / screenshot / search / components /
-  │    verify / fig_outline / fig_node)
+  │    verify / fit / fig_outline / fig_node)
   ▼
   stdio MCP
   ▼
@@ -174,7 +185,7 @@ Cache and outputs:
 ```bash
 npm run typecheck   # strict TS (server + plugin)
 npm run build       # bundle server + plugin
-npm run smoke       # MCP handshake; expects 14 tools
+npm run smoke       # MCP handshake; expects 15 tools
 npm run check       # offline fit-to-budget + cache verification
 npm run bridge      # simulated plugin + every tool offline
 npm run prove       # normalizer depth/token curve (fixture or live)
@@ -190,8 +201,9 @@ npm run connect     # live end-to-end against a paired plugin
 plumb-mcp/
 ├── src/
 │   ├── index.ts          # bin entry: stdio MCP server + bridge
-│   ├── server.ts         # registers the fourteen tools
+│   ├── server.ts         # registers the fifteen tools
 │   ├── verify.ts         # the plumb_verify comparison engine
+│   ├── fit.ts            # the convergence score + self-healing coaching
 │   ├── cache.ts          # on-disk version-keyed result cache
 │   ├── assets.ts         # writes exported assets to disk
 │   ├── pds.ts            # Plumb Design Spec types
@@ -201,13 +213,17 @@ plumb-mcp/
 │   ├── figma/            # REST ingest + raw Figma types
 │   ├── bridge/           # localhost WebSocket bridge to the plugin
 │   ├── normalize/        # raw Figma → PDS (handles, layout, paint, …)
-│   ├── tools/            # the fourteen MCP tools (one file each)
+│   ├── tools/            # the fifteen MCP tools (one file each)
+│   ├── fit/              # autonomous `plumb fit` loop — generate + serve
+│   ├── render/           # shared headless / browser DOM capture
 │   ├── cli/init.ts       # `plumb init` — write editor MCP configs
+│   ├── cli/fit.ts        # `plumb fit` — self-healing build loop
 │   └── util/             # round, estimateTokens, …
 ├── figma-plugin/
 │   ├── manifest.json
 │   ├── code.ts           # main thread — reads, serializes, exports
 │   └── ui.html           # the panel (dot + pair button)
+├── playground/           # the browser self-healing loop (Vite SPA, BYO-key)
 ├── scripts/              # smoke · check · bridge · connect · prove · outline
 └── README.md             # you are here
 ```

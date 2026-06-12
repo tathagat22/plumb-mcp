@@ -20,13 +20,16 @@ hero:
       text: Tool reference
       link: /tools/
     - theme: alt
+      text: Playground
+      link: /play/
+    - theme: alt
       text: GitHub
       link: https://github.com/tathagat22/plumb-mcp
 features:
   - title: No rate limits, on any plan
     details: Reads through a companion Figma plugin — no REST rate limits (no Framelink 429), no metered per-call quota (no Dev Mode MCP 6-call/month wall), no plan-gating. Free, Starter, Professional, Organization, Enterprise.
-  - title: Verification loop
-    details: '`plumb_verify` (MCP tool) and `plumb-mcp verify` (CLI) diff your rendered DOM against the design — colour-coded deltas, no pixel diff, runs in CI. No other Figma MCP closes this loop.'
+  - title: Self-healing loop
+    details: '`plumb_verify` diffs your rendered DOM against the design; `plumb_fit` turns that into a 0–100 convergence score and prioritised fixes, so the agent iterates to pixel-perfect. Run it in your editor, the `plumb-mcp fit` CLI, or the browser Playground. No other Figma MCP closes this loop.'
   - title: Token-frugal PDS
     details: Returns a deduplicated design spec instead of the 351,378-token JSON the Dev Mode MCP emits. Tokens shrink to `$c1`, `$t1` refs; auto-layout pre-resolved to flexbox. A 178-node dialog comes back at ~2.6k tokens.
   - title: Multi-agent connect
@@ -34,5 +37,5 @@ features:
   - title: Everything local
     details: Plugin and server talk over the loopback interface. Nothing about your design ever leaves your machine. No analytics, no third-party endpoints.
   - title: Open source
-    details: MIT-licensed. Fourteen focused tools + offline `.fig` parser. Issues, source, and roadmap on GitHub.
+    details: MIT-licensed. Fifteen focused tools + offline `.fig` parser. Issues, source, and roadmap on GitHub.
 ---

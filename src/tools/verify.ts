@@ -1,15 +1,9 @@
 import { z } from "zod";
-import { formatScreenMatches, resolveScreen } from "../bridge/inventory";
-import { requestNode } from "../bridge/server";
-import { bridge } from "../bridge/store";
 import { PlumbError } from "../errors";
-import { fetchNodeViaRest } from "../figma/rest";
-import { resolveFigmaTarget } from "../figma/url";
-import { normalizeToBudget } from "../normalize/budget";
 import { DEFAULT_TOLERANCES, verifyAgainst } from "../verify";
-import { fail, ok, requireToken } from "./shared";
+import { resolveVerifyTarget } from "./resolveTarget";
+import { fail, ok } from "./shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { FigmaFileResult } from "../figma/types";
 import type { Tolerances } from "../verify";
 
 const DESCRIPTION =
@@ -91,57 +85,17 @@ export function registerPlumbVerify(server: McpServer): void {
         }
 
         const depth = args.depth ?? 12;
-        const { fileKey, id } = resolveFigmaTarget({
-          url: args.url,
-          fileKey: args.fileKey,
-          id: args.id,
-        });
-        let pds;
-        let screen: string | null = null;
-        const source: "plugin" | "rest" = bridge.paired && !fileKey ? "plugin" : "rest";
-
-        if (source === "plugin") {
-          const resolved = resolveScreen(id, args.name);
-          if ("ambiguous" in resolved) {
-            return ok({
-              ambiguous: true,
-              matches: formatScreenMatches(resolved.ambiguous),
-              next:
-                "Several screens share that name. Each row shows `page` and " +
-                "`box` (w×h) — pick the one you want and re-call plumb_verify with its `id`.",
-            });
-          }
-          const { doc, nodeName } = await requestNode(resolved.id);
-          if (!doc) {
-            throw new PlumbError(
-              `The Plumb plugin could not find node "${resolved.id}".`,
-              "Call plumb_outline for the current screen list — it may have been deleted or renamed.",
-            );
-          }
-          screen = nodeName;
-          const file: FigmaFileResult = {
-            document: doc,
-            fileName: bridge.inventory?.fileName ?? "",
-            version: `plugin-${Date.now()}`,
-          };
-          pds = normalizeToBudget(file, depth, undefined, { notes: false });
-        } else {
-          if (!fileKey || !id) {
-            throw new PlumbError(
-              "plumb_verify needs the Plumb plugin paired (id/name), or a fileKey + id (or a Figma url) for the REST path.",
-              "Pair the Plumb plugin in Figma, paste a Figma URL via `url`, or pass both fileKey and id.",
-            );
-          }
-          const token = requireToken();
-          const file = await fetchNodeViaRest({
-            fileKey,
-            nodeId: id,
-            depth: depth + 1,
-            token,
+        const target = await resolveVerifyTarget(args, depth);
+        if (target.kind === "ambiguous") {
+          return ok({
+            ambiguous: true,
+            matches: target.matches,
+            next:
+              "Several screens share that name. Each row shows `page` and " +
+              "`box` (w×h) — pick the one you want and re-call plumb_verify with its `id`.",
           });
-          screen = file.document.name;
-          pds = normalizeToBudget(file, depth, undefined, { notes: false });
         }
+        const { source, screen, pds } = target;
 
         const tolerances: Tolerances = {
           px: { ...DEFAULT_TOLERANCES.px, ...(args.tolerances?.px ?? {}) },

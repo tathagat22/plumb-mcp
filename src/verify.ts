@@ -54,6 +54,15 @@ export interface CoverageInfo {
    * float to the top — these are usually the ones an agent forgot to tag.
    */
   untagged: string[];
+  /**
+   * Count of reachable nodes that carry real visual signal (text, fill,
+   * effect, image, radius, icon — see {@link isImportantNode}). Skeleton
+   * frames are excluded. The denominator the fit score uses so "I built
+   * every node that matters" can reach 100% without tagging spacer frames.
+   */
+  importantTotal: number;
+  /** How many of those important nodes were actually tagged/built. */
+  importantMatched: number;
 }
 
 export interface VerifyResult {
@@ -169,11 +178,18 @@ function computeCoverage(pds: PdsDocument, matchedEls: Set<string>): CoverageInf
   }
   const importantUntagged: string[] = [];
   const plainUntagged: string[] = [];
+  let importantTotal = 0;
+  let importantMatched = 0;
   for (const el of reachable) {
-    if (matchedEls.has(el)) continue;
     const node = pds.nodes[el];
     if (!node) continue;
-    if (isImportantNode(node)) importantUntagged.push(el);
+    const important = isImportantNode(node);
+    if (important) importantTotal += 1;
+    if (matchedEls.has(el)) {
+      if (important) importantMatched += 1;
+      continue;
+    }
+    if (important) importantUntagged.push(el);
     else plainUntagged.push(el);
   }
   // Cap the surfaced list — agents don't need 200 names, the top ~20 is plenty
@@ -188,6 +204,8 @@ function computeCoverage(pds: PdsDocument, matchedEls: Set<string>): CoverageInf
     matched: matchedEls.size,
     coverage: Math.round(coverage * 100) / 100,
     untagged,
+    importantTotal,
+    importantMatched,
   };
 }
 

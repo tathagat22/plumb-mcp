@@ -1,11 +1,11 @@
 ---
 title: MCP tool reference — Plumb Figma MCP server
-description: Fourteen Model Context Protocol tools that expose Figma to Claude Code, Cursor, Windsurf, and other AI coding agents. Outline, node, query, describe, assets, screenshot, search, components, verify, and more.
+description: Fifteen Model Context Protocol tools that expose Figma to Claude Code, Cursor, Windsurf, and other AI coding agents. Outline, node, query, describe, assets, screenshot, search, components, verify, the self-healing fit loop, and more.
 ---
 
 # Tools
 
-Plumb exposes **fourteen** MCP tools. Each one has a focused, single responsibility — the agent composes them.
+Plumb exposes **fifteen** MCP tools. Each one has a focused, single responsibility — the agent composes them.
 
 | Tool | What it does |
 |---|---|
@@ -21,6 +21,7 @@ Plumb exposes **fourteen** MCP tools. Each one has a focused, single responsibil
 | [`plumb_search`](/tools/plumb_search) | Find nodes by name and/or type. |
 | [`plumb_components`](/tools/plumb_components) | List components + instance usages. |
 | [`plumb_verify`](/tools/plumb_verify) | Diff your rendered layout against the design — ΔE2000 colour distance, shadow/rotation/flex-child/fill-stack checks. |
+| [`plumb_fit`](/tools/plumb_fit) | The self-healing loop: `plumb_verify` plus a 0–100 convergence score and prioritised fixes, so the agent iterates to pixel-perfect instead of one-shot checking. |
 | [`plumb_fig_outline`](/tools/plumb_fig_outline) | Headless: list every screen in a saved `.fig` file from disk. |
 | [`plumb_fig_node`](/tools/plumb_fig_node) | Headless: fetch one node from a saved `.fig` file by id. |
 
@@ -30,9 +31,9 @@ If you only remember three:
 
 - **`plumb_outline`** — figure out which screens exist.
 - **`plumb_node`** — get the design spec for one of them.
-- **`plumb_verify`** — confirm your code matches.
+- **`plumb_fit`** — build it, then iterate to a pixel-perfect match (or `plumb_verify` for a one-shot check).
 
-The other eleven are how the agent fills in the details — exports, screenshots, search, design tokens, component awareness, sliced queries for dense screens, and text descriptions for image-blind harnesses.
+The other twelve are how the agent fills in the details — exports, screenshots, search, design tokens, component awareness, sliced queries for dense screens, and text descriptions for image-blind harnesses.
 
 ## How the agent picks paths
 
@@ -40,4 +41,4 @@ Most tools accept either `id` (canonical) or `name` (looked up against the live 
 
 Tools that need design data auto-pick between the **plugin path** (instant, no rate limits, requires Figma open) and the **REST path** (headless, rate-limited, requires `FIGMA_TOKEN`). With the plugin paired, omit `fileKey`. For REST, pass `fileKey` + `id`.
 
-The plugin-path tools — `plumb_outline`, `plumb_selection`, `plumb_assets`, `plumb_screenshot`, `plumb_search`, `plumb_components` — require the plugin paired and won't fall back to REST. The other tools (`plumb_node`, `plumb_query`, `plumb_describe`, `plumb_tokens`, `plumb_verify`) work on both paths.
+The plugin-path tools — `plumb_outline`, `plumb_selection`, `plumb_assets`, `plumb_screenshot`, `plumb_search`, `plumb_components` — require the plugin paired and won't fall back to REST. The other tools (`plumb_node`, `plumb_query`, `plumb_describe`, `plumb_tokens`, `plumb_verify`, `plumb_fit`) work on both paths.

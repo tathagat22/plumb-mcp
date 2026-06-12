@@ -22,7 +22,7 @@
 - **Framelink** —— 轻量级 REST 包装。两个工具。无验证，继承 REST 速率限制。
 - **cursor-talk-to-figma** —— 面向设计师在 Figma 内自动化的双向工具。
 
-Plumb 是唯一**在代码侧闭环**的方案。`plumb_verify`（MCP 工具）与 `plumb-mcp verify`（CLI）告诉你代理生成的代码是否真的匹配设计 —— 带颜色编码的 delta、无像素对比、可在 CI 中运行。
+Plumb 是唯一**在代码侧闭环**的方案。`plumb_verify` 告诉你代理生成的代码是否真的匹配设计 —— 带颜色编码的 delta、无像素对比、可在 CI 中运行。而 `plumb_fit` 把它变成**自愈循环**：它给构建打 0–100 的分数，返回需要修正的精确 delta，代理据此迭代直到像素级匹配。三种运行方式：在编辑器中（`plumb_fit`，免费）、在终端（`plumb-mcp fit <figma-url>`）、或在浏览器 [Playground](https://tathagat22.github.io/plumb-mcp/play/) 中（自带 key，无需安装、无需后端）。
 
 ---
 
@@ -59,13 +59,16 @@ echo "$(npm root -g)/plumb-mcp/figma-plugin/manifest.json"
 
 # 4. 可选 —— 从终端直接验证渲染代码与 Figma 是否一致
 plumb-mcp verify http://localhost:5173/dashboard --url <figma-url>
+
+# …或让它自动构建并自我修正到像素级匹配（自带 ANTHROPIC_API_KEY）
+plumb-mcp fit <figma-url>
 ```
 
 其他安装方式：`npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/plumb-mcp:latest` · [从源码构建](https://github.com/tathagat22/plumb-mcp)。
 
 ---
 
-## 十四个工具
+## 十五个工具
 
 | 工具 | 作用 |
 |---|---|
@@ -81,6 +84,7 @@ plumb-mcp verify http://localhost:5173/dashboard --url <figma-url>
 | `plumb_search` | 按名称和/或类型查找节点。 |
 | `plumb_components` | 列出组件及其实例使用情况。 |
 | `plumb_verify` | 将你渲染的布局与设计稿对比，返回结构化差异 —— 采用 ΔE2000 感知色差，附带阴影／旋转／弹性子节点／填充堆叠校验，不做像素比较。 |
+| `plumb_fit` | 自愈循环：在 `plumb_verify` 基础上增加 0–100 收敛分数与优先级修正建议，让代理迭代到像素级匹配，而非一次性检查。 |
 | `plumb_fig_outline` | 无需 Figma 桌面应用，直接从磁盘读取已保存的 `.fig` 文件并列出所有屏幕。 |
 | `plumb_fig_node` | 无需 Figma 桌面应用，按 id 从已保存的 `.fig` 文件中获取一个节点。 |
 

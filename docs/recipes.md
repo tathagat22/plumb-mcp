@@ -13,7 +13,7 @@ What the agent does:
 3. `plumb_tokens` if it needs the raw token table separately.
 4. `plumb_assets` with the same name to export icons and images. Files land in `./plumb-assets/settings-profile/`.
 5. Writes the component, referencing the exported asset paths and the token table.
-6. `plumb_verify` against its own DOM to catch any drift before reporting back.
+6. `plumb_fit` against its own DOM — scores the build and iterates on the deltas until it's pixel-perfect (or `plumb_verify` for a one-shot drift check before reporting back).
 
 ## Audit how a component is used
 

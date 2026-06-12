@@ -22,7 +22,7 @@
 - **Framelink** — 軽量 REST ラッパー。ツール 2 個。検証なし、レート制限を継承。
 - **cursor-talk-to-figma** — Figma 内で作業するデザイナー向けの双方向自動化ツール。
 
-Plumb は**コード側でループを閉じる**唯一の選択肢。`plumb_verify`（MCP ツール）と `plumb-mcp verify`（CLI）が、エージェントが出力したコードが実際にデザインと一致するかを教えてくれます — カラーコード付きの delta、ピクセル比較なし、CI で実行可能。
+Plumb は**コード側でループを閉じる**唯一の選択肢。`plumb_verify` が、エージェントが出力したコードが実際にデザインと一致するかを教えてくれます — カラーコード付きの delta、ピクセル比較なし、CI で実行可能。さらに `plumb_fit` はそれを**自己修復ループ**に変えます：ビルドを 0〜100 でスコアリングし、修正すべき正確な delta を返し、エージェントはピクセル単位で一致するまで反復します。3 つの実行方法：エディタ内（`plumb_fit`、無料）、ターミナル（`plumb-mcp fit <figma-url>`）、ブラウザの [Playground](https://tathagat22.github.io/plumb-mcp/play/)（自分の鍵を使用、インストール不要・バックエンド不要）。
 
 ---
 
@@ -59,13 +59,16 @@ echo "$(npm root -g)/plumb-mcp/figma-plugin/manifest.json"
 
 # 4. 任意 — ターミナルからレンダリングされたコードを Figma と検証
 plumb-mcp verify http://localhost:5173/dashboard --url <figma-url>
+
+# …または、自動でビルドしてピクセル単位で一致するまで自己修正させる（ANTHROPIC_API_KEY が必要）
+plumb-mcp fit <figma-url>
 ```
 
 他のインストール方法：`npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/plumb-mcp:latest` · [ソースからビルド](https://github.com/tathagat22/plumb-mcp)。
 
 ---
 
-## 14 個のツール
+## 15 個のツール
 
 | ツール | 機能 |
 |---|---|
@@ -81,6 +84,7 @@ plumb-mcp verify http://localhost:5173/dashboard --url <figma-url>
 | `plumb_search` | 名前および/または種類でノードを検索。 |
 | `plumb_components` | コンポーネントとインスタンス使用箇所をリスト。 |
 | `plumb_verify` | レンダリング済みレイアウトをデザインと比較 — 構造化された差分、ΔE2000 知覚色差を採用、シャドウ／回転／フレックス子要素／塗りスタックのチェック付き、ピクセル比較なし。 |
+| `plumb_fit` | 自己修復ループ：`plumb_verify` に 0〜100 の収束スコアと優先順位付きの修正提案を加え、一度きりのチェックではなくピクセル単位の一致まで反復させる。 |
 | `plumb_fig_outline` | Figma デスクトップなしで、保存された `.fig` ファイルからすべての画面を列挙。 |
 | `plumb_fig_node` | Figma デスクトップなしで、保存された `.fig` ファイルから id 指定でノードを取得。 |
 
