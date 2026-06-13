@@ -17,7 +17,7 @@ const SITE_DESCRIPTION =
 //      you can see the counts).
 //   3. Set GOATCOUNTER_CODE below to that code and redeploy.
 // Left blank = no script is injected at all (zero third-party requests).
-const GOATCOUNTER_CODE = "";
+const GOATCOUNTER_CODE = "plumb";
 
 export default defineConfig({
   title: "Plumb",
