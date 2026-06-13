@@ -9,6 +9,16 @@ const SITE_DESCRIPTION =
   "Drop-in alternative to Figma's Dev Mode MCP and Framelink — works on every " +
   "Figma plan including Free.";
 
+// Private visitor analytics (GoatCounter) — owner-only dashboard, no cookies,
+// no banner, nothing visible to visitors. To enable:
+//   1. Sign up free at https://www.goatcounter.com/ and pick a code (e.g. "plumb")
+//      — your dashboard lives at https://<code>.goatcounter.com.
+//   2. In GoatCounter → Settings, set the dashboard to require login (so only
+//      you can see the counts).
+//   3. Set GOATCOUNTER_CODE below to that code and redeploy.
+// Left blank = no script is injected at all (zero third-party requests).
+const GOATCOUNTER_CODE = "";
+
 export default defineConfig({
   title: "Plumb",
   description: SITE_DESCRIPTION,
@@ -33,6 +43,18 @@ export default defineConfig({
     ["meta", { name: "twitter:title", content: SITE_TITLE }],
     ["meta", { name: "twitter:description", content: SITE_DESCRIPTION }],
     ["meta", { name: "twitter:image", content: `${SITE_URL}banner.png` }],
+    ...(GOATCOUNTER_CODE
+      ? [
+          [
+            "script",
+            {
+              "data-goatcounter": `https://${GOATCOUNTER_CODE}.goatcounter.com/count`,
+              async: "",
+              src: "//gc.zgo.at/count.js",
+            },
+          ] as [string, Record<string, string>],
+        ]
+      : []),
   ],
   themeConfig: {
     logo: "/logo.png",

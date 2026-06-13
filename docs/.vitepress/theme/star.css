@@ -1,0 +1,21 @@
+/* The navbar "Star on GitHub" button. */
+.nav-star-btn {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 8px 0 4px;
+  transition: transform 0.12s ease;
+}
+.nav-star-btn:hover {
+  transform: translateY(-1px);
+}
+.nav-star-btn img {
+  display: block;
+}
+
+/* On narrow screens the navbar collapses to a hamburger; hide the badge there
+   to avoid crowding (the homepage + README CTAs still cover mobile). */
+@media (max-width: 768px) {
+  .nav-star-btn {
+    display: none;
+  }
+}
