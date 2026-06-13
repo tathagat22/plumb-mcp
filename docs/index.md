@@ -23,7 +23,7 @@ hero:
       text: Playground
       link: /play/
     - theme: alt
-      text: GitHub
+      text: ★ Star on GitHub
       link: https://github.com/tathagat22/plumb-mcp
 features:
   - title: No rate limits, on any plan
@@ -39,3 +39,19 @@ features:
   - title: Open source
     details: MIT-licensed. Fifteen focused tools + offline `.fig` parser. Issues, source, and roadmap on GitHub.
 ---
+
+<div style="text-align: center; margin: 64px auto 16px; max-width: 640px;">
+
+## Like Plumb? Give it a ⭐
+
+Plumb is free and MIT-licensed. A star is how other devs find it — and how we know to keep shipping. Takes two seconds.
+
+<a href="https://github.com/tathagat22/plumb-mcp" target="_blank" rel="noopener">
+  <img alt="Star plumb-mcp on GitHub" src="https://img.shields.io/github/stars/tathagat22/plumb-mcp?style=social" />
+</a>
+
+<p style="margin-top: 16px;">
+  <a href="https://github.com/tathagat22/plumb-mcp" target="_blank" rel="noopener"><strong>★ Star us on GitHub →</strong></a>
+</p>
+
+</div>

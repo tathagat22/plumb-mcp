@@ -6,6 +6,16 @@
 
 # Plumb (`plumb-mcp`)
 
+<p align="center">
+  <a href="https://github.com/tathagat22/plumb-mcp"><img alt="GitHub stars" src="https://img.shields.io/github/stars/tathagat22/plumb-mcp?style=social"></a>
+  &nbsp;
+  <a href="https://www.npmjs.com/package/plumb-mcp"><img alt="npm version" src="https://img.shields.io/npm/v/plumb-mcp?color=cb3837&logo=npm&logoColor=white"></a>
+  &nbsp;
+  <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue">
+</p>
+
+<p align="center"><b>⭐ If Plumb saves you tokens, <a href="https://github.com/tathagat22/plumb-mcp">star it on GitHub</a> — it helps others find it.</b></p>
+
 **The Figma → code MCP with a verification loop.** Designs go in, normalised specs come out, and `plumb-mcp verify` drives headless Chrome to prove your rendered code actually matches what's in Figma.
 
 📖 Full docs: **<https://tathagat22.github.io/plumb-mcp/>** &nbsp;·&nbsp; 📦 npm: [`plumb-mcp`](https://www.npmjs.com/package/plumb-mcp) &nbsp;·&nbsp; 🇨🇳 [简体中文](./README.zh-cn.md) &nbsp;·&nbsp; 🇯🇵 [日本語](./README.ja.md) &nbsp;·&nbsp; 🇰🇷 [한국어](./README.ko.md)
