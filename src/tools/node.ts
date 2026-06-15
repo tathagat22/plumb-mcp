@@ -7,6 +7,7 @@ import { PlumbError } from "../errors";
 import { fetchNodeViaRest } from "../figma/rest";
 import { resolveFigmaTarget } from "../figma/url";
 import { normalizeToBudget } from "../normalize/budget";
+import { emitStudio } from "../studio/events";
 import { fail, ok, requireToken } from "./shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { FigmaFileResult } from "../figma/types";
@@ -118,6 +119,7 @@ export function registerPlumbNode(server: McpServer): void {
             version: `plugin-${Date.now()}`,
           };
           const pds = normalizeToBudget(file, depth, maxTokens, { notes: args.notes });
+          emitStudio({ kind: "screen", tool: "plumb_node", screen: nodeName, summary: `extracted ${nodeName}` });
           return ok({ ...pds, source: "plugin", node: nodeName });
         }
 
@@ -143,6 +145,7 @@ export function registerPlumbNode(server: McpServer): void {
         });
         const pds = normalizeToBudget(file, depth, maxTokens, { notes: args.notes });
         cacheSet(cacheKey, file.version, pds);
+        emitStudio({ kind: "screen", tool: "plumb_node", screen: file.document.name, summary: `extracted ${file.document.name}` });
         return ok({ ...pds, source: "rest", cached: false });
       } catch (e) {
         return fail(e);

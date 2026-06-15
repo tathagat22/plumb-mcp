@@ -7,6 +7,8 @@ import { BRIDGE_PORTS } from "./protocol";
 import { bridge } from "./store";
 import { PlumbError } from "../errors";
 import { SERVER_VERSION } from "../meta";
+import { onStudio, recentStudio } from "../studio/events";
+import { serveStudio, studioAvailable } from "../studio/serve";
 import type { FigmaNode } from "../figma/types";
 import type {
   ComponentInfo,
@@ -221,6 +223,11 @@ function handleHttp(req: IncomingMessage, res: ServerResponse): void {
     res.end();
     return;
   }
+  // GET (anything but the plugin's upload POST) → the Plumb Studio SPA.
+  if (req.method === "GET") {
+    serveStudio(req, res);
+    return;
+  }
   const m = req.url && /^\/upload\/([A-Za-z0-9_-]+)\.([a-z0-9]+)$/.exec(req.url);
   if (!m || req.method !== "POST") {
     res.writeHead(404);
@@ -242,6 +249,21 @@ function handleHttp(req: IncomingMessage, res: ServerResponse): void {
     res.writeHead(500);
     res.end();
   });
+}
+
+/**
+ * A connected Plumb Studio UI. Replays the recent event backlog, then streams
+ * live events from the bus until the socket closes. Read-only — Studio clients
+ * never send into the bridge's plugin protocol.
+ */
+function handleStudioClient(ws: WebSocket): void {
+  const sendEvent = (payload: unknown): void => {
+    if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(payload));
+  };
+  sendEvent({ t: "studio-hello", serverVersion: SERVER_VERSION, backlog: recentStudio() });
+  const unsubscribe = onStudio((e) => sendEvent({ t: "studio-event", event: e }));
+  ws.on("close", unsubscribe);
+  ws.on("error", unsubscribe);
 }
 
 function bindPort(port: number): Promise<{ wss: WebSocketServer; http: Server } | null> {
@@ -285,8 +307,17 @@ export async function startBridge(): Promise<void> {
   bridge.port = chosen;
   const sessionLabel = process.env.PLUMB_SESSION_NAME?.trim() || basename(process.cwd());
   log(`listening on 127.0.0.1:${chosen} as "${sessionLabel}"`);
+  if (studioAvailable()) {
+    log(`Plumb Studio (live cockpit): http://127.0.0.1:${chosen}/  ·  run \`plumb-mcp studio\` to open it`);
+  }
 
   wss.on("connection", (ws, req) => {
+    // Studio UIs connect to /studio — they only listen to the event bus, never
+    // take part in the plugin pairing handshake.
+    if (req.url && req.url.startsWith("/studio")) {
+      handleStudioClient(ws);
+      return;
+    }
     log(`connection from origin ${req.headers.origin ?? "(none)"}`);
     send(ws, { t: "plumb-hello", serverVersion: SERVER_VERSION, sessionLabel });
 

@@ -12,6 +12,7 @@
 import { z } from "zod";
 import { PlumbError } from "../errors";
 import { buildFitResponse, DEFAULT_ACCEPT } from "../fit";
+import { emitStudio } from "../studio/events";
 import { DEFAULT_TOLERANCES, verifyAgainst } from "../verify";
 import { resolveVerifyTarget } from "./resolveTarget";
 import { fail, ok } from "./shared";
@@ -121,6 +122,22 @@ export function registerPlumbFit(server: McpServer): void {
         const fit = buildFitResponse(result, {
           accept: args.accept,
           iteration: args.iteration,
+        });
+
+        // Surface the convergence to any open Studio cockpit, live.
+        emitStudio({
+          kind: "fit",
+          tool: "plumb_fit",
+          screen,
+          score: fit.score,
+          done: fit.done,
+          matched: fit.matched,
+          importantMatched: fit.importantMatched,
+          importantTotal: fit.importantTotal,
+          deltas: result.deltas
+            .slice(0, 12)
+            .map((d) => ({ el: d.el, kind: d.kind, severity: d.severity })),
+          summary: `fit ${fit.score.toFixed(1)}% — ${fit.errors} err / ${fit.warns} warn${fit.done ? " · done ✓" : ""}`,
         });
 
         // Return the coaching payload up front, then the raw deltas + coverage

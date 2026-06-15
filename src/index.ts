@@ -2,6 +2,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { startBridge } from "./bridge/server";
 import { runFitCli } from "./cli/fit";
 import { runInit } from "./cli/init";
+import { runStudioCli } from "./cli/studio";
 import { runVerifyCli } from "./cli/verify";
 import { SERVER_VERSION } from "./meta";
 import { createServer } from "./server";
@@ -29,6 +30,11 @@ Usage:
                              from the design, render it, diff it, and correct
                              it pass-by-pass until it matches pixel-for-pixel.
                              Needs ANTHROPIC_API_KEY. Run \`plumb-mcp fit --help\`.
+
+  plumb-mcp studio           Open Plumb Studio — a live local cockpit that
+                             mirrors what your AI agent is doing (design, live
+                             build, match score, activity) and can drive Plumb's
+                             own self-healing loop with in-UI approvals.
 
   plumb-mcp --help, -h       Print this message and exit.
   plumb-mcp --version, -v    Print the version and exit.
@@ -71,6 +77,10 @@ async function main(): Promise<void> {
   }
   if (arg === "fit") {
     const code = await runFitCli(process.argv.slice(3));
+    process.exit(code);
+  }
+  if (arg === "studio") {
+    const code = await runStudioCli(process.argv.slice(3));
     process.exit(code);
   }
   if (arg && arg.startsWith("-")) {

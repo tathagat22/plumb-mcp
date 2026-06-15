@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PlumbError } from "../errors";
+import { emitStudio } from "../studio/events";
 import { DEFAULT_TOLERANCES, verifyAgainst } from "../verify";
 import { resolveVerifyTarget } from "./resolveTarget";
 import { fail, ok } from "./shared";
@@ -105,6 +106,16 @@ export function registerPlumbVerify(server: McpServer): void {
         const result = verifyAgainst(pds, args.rendered, tolerances);
         const errs = result.deltas.filter((d) => d.severity === "error").length;
         const warns = result.deltas.filter((d) => d.severity === "warn").length;
+
+        emitStudio({
+          kind: "tool",
+          tool: "plumb_verify",
+          screen,
+          deltas: result.deltas
+            .slice(0, 12)
+            .map((d) => ({ el: d.el, kind: d.kind, severity: d.severity })),
+          summary: `verify — ${result.matched} matched, ${errs} err / ${warns} warn`,
+        });
 
         // Coverage-aware hint: 21% coverage with 0 deltas is a lie. Tell the
         // agent what they forgot to tag so the next round is actually useful.

@@ -57,7 +57,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsup && tsx scripts/build-plugin.ts",
+    "build": "tsup && tsx scripts/build-plugin.ts && npm --prefix studio ci && npm --prefix studio run build",
     "build:plugin": "tsx scripts/build-plugin.ts",
     "dev": "tsup --watch",
     "start": "node dist/index.js",
@@ -71,7 +71,8 @@
     "smoke": "tsx scripts/smoke.ts",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "docs:preview": "vitepress preview docs",
+    "build:studio": "npm --prefix studio ci && npm --prefix studio run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.0",
