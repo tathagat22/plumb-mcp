@@ -9,6 +9,7 @@ After the agent renders a screen in code, it walks the DOM and for every element
 - **box** — `getBoundingClientRect()` → `{ x, y, w, h }`
 - **styles** — a subset of `getComputedStyle`: background colour, text colour, font family / size / weight / line-height, padding (4 sides), gap, flex direction, justify / align, border radius / colour / width, opacity
 - **text** — `textContent` for text nodes
+- **asset** — for image/icon/logo nodes: the `data-plumb-asset="<assetId>"` it rendered, plus whether it's a real `<img>`/`<svg>` (not a redrawn div or CSS gradient)
 
 It assembles a `rendered` payload and calls `plumb_verify`. The tool re-fetches the live PDS, joins by `el`, runs every comparison with tolerances, returns a sorted list of structured deltas.
 
@@ -80,6 +81,9 @@ Each `RenderedElement`:
 | `flex.grow` | Auto-layout `layoutGrow` ↔ CSS `flex-grow` |
 | `flex.selfAlign` | Per-child `layoutAlign` ↔ CSS `align-self` |
 | `fills.count` | Stacked paint count mismatch (e.g. gradient over solid) |
+| `asset.missing` | A logo/icon/image node rendered with **no real asset** — redrawn as a styled div, or omitted (error) |
+| `asset.mismatch` | A different `data-plumb-asset` id than the design's export was used (error) |
+| `asset.untagged` | An image rendered, but no `data-plumb-asset` — can't confirm it's the export (warn) |
 | `ua-style-fallthrough` | Rendered style is a browser default — agent forgot to style it |
 | `missing-in-pds` | Element you rendered that doesn't exist in the design |
 

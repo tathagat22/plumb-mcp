@@ -18,6 +18,10 @@ const DESCRIPTION =
   "gap, flexDirection, justifyContent, alignItems, borderRadius, borderColor, " +
   "borderWidth, opacity, textDecorationLine\n" +
   "  • text — textContent for TEXT nodes\n" +
+  "  • asset — for image/icon/logo nodes (assetId or vector): the " +
+  'data-plumb-asset="<assetId>" you rendered, plus img:true when it is a real ' +
+  "<img>/<svg> (not a redrawn div). Verify errors on a visual node rendered with " +
+  "no real asset, so a redrawn/omitted logo lowers the score.\n" +
   "Pass them as `rendered`. The tool joins by `el` (loose) or `path` (strict) and " +
   "returns deltas like { kind:'size.w', expected:528, actual:530, severity:'warn' }. " +
   "The response also includes `coverage` — how many PDS els in the subtree were " +

@@ -13,6 +13,10 @@ export interface RenderedElement {
   box: { x: number; y: number; w: number; h: number };
   text?: string;
   styles?: Record<string, string>;
+  /** `data-plumb-asset` value — the exported asset id this element rendered. */
+  asset?: string;
+  /** Whether the element rendered real image/vector content (vs. a redrawn div). */
+  img?: boolean;
 }
 
 export interface Tolerances {
@@ -577,6 +581,51 @@ function compareOne(
         expected: fillsValue.length,
         actual: layers,
         diff: fillsValue.length - layers,
+        severity: "warn",
+      });
+    }
+  }
+
+  // --- Asset fidelity (real-world: a logo/icon/image must be the actual
+  //     exported asset or vector — NOT a redrawn box). Structural checks can't
+  //     see that a logo is the *wrong picture*, but they can catch the cases
+  //     that quietly inflate the score: the asset wasn't used at all (redrawn
+  //     as a styled div) or a different asset id was swapped in. Only fires on
+  //     elements the agent actually tagged. ---
+  const isRaster = typeof node.assetId === "string" && node.assetId.length > 0;
+  const isVectorAsset =
+    node.type === "vector" || node.type === "image" || node.vectorPath !== undefined;
+  if (isRaster || isVectorAsset) {
+    const rAsset = r.asset;
+    if (isRaster && rAsset && rAsset !== node.assetId) {
+      deltas.push({
+        el: node.el,
+        name: node.name,
+        kind: "asset.mismatch",
+        expected: node.assetId ?? null,
+        actual: rAsset,
+        severity: "error",
+      });
+    } else if (isRaster && rAsset === node.assetId) {
+      // exact exported asset used — perfect, no delta.
+    } else if (!r.img) {
+      // a visual node rendered with no real image/vector content → redrawn or omitted.
+      deltas.push({
+        el: node.el,
+        name: node.name,
+        kind: "asset.missing",
+        expected: isRaster ? (node.assetId ?? "exported asset") : "image/vector content",
+        actual: "(none — redrawn or omitted)",
+        severity: "error",
+      });
+    } else if (isRaster && !rAsset) {
+      // rendered an image but didn't tag which — can't confirm it's the export.
+      deltas.push({
+        el: node.el,
+        name: node.name,
+        kind: "asset.untagged",
+        expected: node.assetId ?? null,
+        actual: "(image present, data-plumb-asset missing)",
         severity: "warn",
       });
     }

@@ -39,6 +39,11 @@ export interface CapturedElement {
   box: { x: number; y: number; w: number; h: number };
   text: string;
   styles: Record<string, string>;
+  /** The `data-plumb-asset` value, when the element rendered an exported asset. */
+  asset?: string;
+  /** True when the element actually rendered image/vector content (img/svg/bg-image),
+   *  vs. being a redrawn styled div. Lets verify catch a missing/faked logo. */
+  img?: boolean;
 }
 
 /**
@@ -83,11 +88,23 @@ export const captureFn = function (selector: string): unknown {
       opacity: cs.opacity,
       textDecorationLine: cs.textDecorationLine ?? cs.textDecoration ?? "",
     };
+    // Asset fidelity: did this element render the real exported asset, or is it
+    // an empty/redrawn box? Capture the data-plumb-asset tag + whether any
+    // actual image/vector content is present.
+    const tag = (el.tagName || "").toLowerCase();
+    let img = tag === "img" || tag === "svg" || tag === "picture" || tag === "canvas";
+    // A CSS gradient is NOT a real asset — only count a background that loads an
+    // actual image (url(...)), so a redrawn gradient logo still reads as "no asset".
+    if (!img && cs.backgroundImage && cs.backgroundImage.indexOf("url(") !== -1) img = true;
+    if (!img && typeof el.querySelector === "function") img = !!el.querySelector("img,svg,picture,canvas");
+    const assetAttr = el.getAttribute("data-plumb-asset");
     out.push({
       el: id,
       box: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
       text: el.textContent ?? "",
       styles,
+      asset: assetAttr || undefined,
+      img: img || undefined,
     });
   });
   return out;
