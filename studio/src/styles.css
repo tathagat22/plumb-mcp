@@ -39,6 +39,16 @@ body { margin: 0; background: radial-gradient(900px 500px at 50% -10%, #161b2b 0
 .fill.done { background: var(--good); }
 .meta { margin-top: 8px; font-size: 13px; color: var(--dim); }
 
+.stage { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.stage figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.stage figcaption { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); padding: 9px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+.stage figcaption .ok { color: var(--good); text-transform: none; letter-spacing: 0; }
+.stage figcaption .dim { text-transform: none; letter-spacing: 0; }
+.stage img, .stage iframe { display: block; width: 100%; height: 420px; border: 0; background: #fff; object-fit: contain; }
+.stage .ph { height: 420px; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 13px; }
+.spin { width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
 .grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 16px; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
 .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); margin: 0 0 12px; }
@@ -66,4 +76,4 @@ body { margin: 0; background: radial-gradient(900px 500px at 50% -10%, #161b2b 0
 
 .foot { margin-top: 32px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--dim); font-size: 12.5px; }
 
-@media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .grid, .stage { grid-template-columns: 1fr; } }

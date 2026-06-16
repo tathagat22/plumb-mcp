@@ -19,6 +19,12 @@ export interface StudioEvent {
   importantTotal?: number;
   deltas?: StudioDelta[];
   via?: string;
+  /** URL of a render of the Figma design (for the "Design" panel). */
+  image?: string;
+  /** The build's HTML, rendered live in the "Built" panel iframe. */
+  buildHtml?: string;
+  /** A dev-server URL to embed in the "Built" panel (mirror mode). */
+  buildUrl?: string;
 }
 
 export type Incoming =

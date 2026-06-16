@@ -78,6 +78,8 @@ export default function App() {
     [...events].reverse().find((e) => e.screen)?.screen ?? null;
   const score = lastFit?.score;
   const done = lastFit?.done ?? false;
+  const designImage = [...events].reverse().find((e) => e.image)?.image ?? null;
+  const build = [...events].reverse().find((e) => e.buildHtml || e.buildUrl) ?? null;
 
   return (
     <div className="app">
@@ -109,6 +111,31 @@ export default function App() {
             {lastFit.importantMatched}/{lastFit.importantTotal} key nodes built
           </div>
         )}
+      </section>
+
+      <section className="stage">
+        <figure>
+          <figcaption>Design</figcaption>
+          {designImage ? (
+            <img src={designImage} alt="Figma design" />
+          ) : (
+            <div className="ph">waiting for the design…</div>
+          )}
+        </figure>
+        <figure>
+          <figcaption>
+            Built
+            {build && !done && <span className="spin" />}
+            {build && (done ? <span className="ok"> matched ✓</span> : <span className="dim"> converging…</span>)}
+          </figcaption>
+          {build?.buildHtml ? (
+            <iframe title="built" srcDoc={build.buildHtml} />
+          ) : build?.buildUrl ? (
+            <iframe title="built" src={build.buildUrl} />
+          ) : (
+            <div className="ph">what Plumb builds will render here</div>
+          )}
+        </figure>
       </section>
 
       {mode === "mirror" ? (
