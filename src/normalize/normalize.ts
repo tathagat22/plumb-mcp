@@ -417,6 +417,11 @@ export function normalize(
   const tokens = interner.table();
   const estTokens = estimateTokens(JSON.stringify({ tokens, nodes }));
 
+  // Count top-level image asset nodes so the `next` hint can tell the agent
+  // to download them before generating HTML. Without this, agents skip
+  // plumb_assets and fall back to placeholders, which tanks the verify score.
+  const assetCount = Object.values(nodes).filter((n) => n.assetId).length;
+
   const doc: PdsDocument = {
     file: { name: file.fileName, version: file.version },
     root,
@@ -431,7 +436,13 @@ export function normalize(
       "Read `tokens` for the design system, then build the UI from `nodes`. " +
       "Tag each rendered element data-plumb-id=\"<el>\". " +
       "A node with a `more` count has that many children not yet included — " +
-      "call plumb_node again on that node's `id` to expand them.",
+      "call plumb_node again on that node's `id` to expand them." +
+      (assetCount > 0
+        ? ` This screen has ${assetCount} image asset(s) (nodes with \`assetId\`). ` +
+          "Call plumb_assets with this screen's id to download them to disk BEFORE " +
+          "generating HTML — without the real files any <img> will be a placeholder " +
+          "and plumb_verify will flag every image node as asset.missing."
+        : ""),
   };
 
   const suspicious = detectSuspiciousText(nodes);
