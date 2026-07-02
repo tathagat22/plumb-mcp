@@ -1,13 +1,16 @@
 import { defineConfig } from "vitepress";
 
 const SITE_URL = "https://tathagat22.github.io/plumb-mcp/";
-const SITE_TITLE = "Plumb — Figma MCP server with no rate limits, on any plan";
+const SITE_TITLE =
+  "Plumb — the two-way Figma MCP: design → code, and prompt → design";
 const SITE_DESCRIPTION =
-  "Local Figma MCP server for Claude Code, Cursor, Windsurf. No REST rate " +
-  "limits, no metered tool-call quotas, no 25k token cap explosions, with a " +
-  "built-in verification loop that diffs rendered code against the design. " +
-  "Drop-in alternative to Figma's Dev Mode MCP and Framelink — works on every " +
-  "Figma plan including Free.";
+  "Local two-way Figma MCP server for Claude Code, Cursor, Windsurf. Design → " +
+  "code: normalised specs out and a verification loop that diffs rendered code " +
+  "against the design. Prompt → design: an AI design director that researches " +
+  "references, extracts a brand, and generates a full on-brand Figma page — no " +
+  "extra API key. No REST rate limits, no metered tool-call quotas, no 25k " +
+  "token cap explosions. Drop-in alternative to Figma's Dev Mode MCP and " +
+  "Framelink — works on every Figma plan including Free.";
 
 // Private visitor analytics (GoatCounter) — owner-only dashboard, no cookies,
 // no banner, nothing visible to visitors. To enable:
@@ -30,7 +33,7 @@ export default defineConfig({
     ["link", { rel: "icon", type: "image/png", href: "/plumb-mcp/favicon.png" }],
     ["meta", { name: "theme-color", content: "#0c8ce9" }],
     ["meta", { name: "author", content: "Tathagat Maitray" }],
-    ["meta", { name: "keywords", content: "figma mcp, figma mcp server, figma mcp rate limit, figma dev mode mcp, figma dev mode mcp alternative, figma dev mode mcp token limit, 25k token cap, framelink figma-developer-mcp, framelink 429, figma rest rate limit, figma free plan mcp, figma variables enterprise, claude code figma, cursor figma mcp, windsurf figma, model context protocol, design to code, ai coding agent, figma plugin mcp, plumb mcp" }],
+    ["meta", { name: "keywords", content: "figma mcp, figma mcp server, figma to code, design to code, figma dev mode mcp alternative, framelink alternative, figma mcp rate limit, figma dev mode mcp, figma dev mode mcp token limit, 25k token cap, framelink figma-developer-mcp, framelink 429, figma rest rate limit, figma free plan mcp, figma variables enterprise, verification loop, design tokens, prompt to design, prompt to figma, text to figma, ai design generator, generate figma designs, ai ui/ux designer, ai design director, ai design agent, mcp design generation, claude code figma, cursor figma mcp, windsurf figma, model context protocol, ai coding agent, figma plugin mcp, plumb mcp" }],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:title", content: SITE_TITLE }],
     ["meta", { property: "og:description", content: SITE_DESCRIPTION }],
@@ -61,6 +64,7 @@ export default defineConfig({
     siteTitle: "Plumb",
     nav: [
       { text: "Get started", link: "/getting-started" },
+      { text: "Prompt → design", link: "/prompt-to-design" },
       { text: "Tools", link: "/tools/" },
       { text: "Playground", link: "/play/" },
       { text: "Architecture", link: "/architecture" },
@@ -73,6 +77,7 @@ export default defineConfig({
         items: [
           { text: "Overview", link: "/" },
           { text: "Get started", link: "/getting-started" },
+          { text: "Prompt → design", link: "/prompt-to-design" },
           { text: "Alternatives & migration", link: "/alternatives" },
           { text: "Architecture", link: "/architecture" },
           { text: "Recipes", link: "/recipes" },
@@ -80,7 +85,7 @@ export default defineConfig({
         ],
       },
       {
-        text: "Tools",
+        text: "Tools · Figma → code",
         link: "/tools/",
         items: [
           { text: "plumb_status", link: "/tools/plumb_status" },
@@ -98,6 +103,16 @@ export default defineConfig({
           { text: "plumb_fit", link: "/tools/plumb_fit" },
           { text: "plumb_fig_outline", link: "/tools/plumb_fig_outline" },
           { text: "plumb_fig_node", link: "/tools/plumb_fig_node" },
+        ],
+      },
+      {
+        text: "Tools · prompt → design",
+        items: [
+          { text: "plumb_studio", link: "/tools/plumb_studio" },
+          { text: "plumb_brand", link: "/tools/plumb_brand" },
+          { text: "plumb_design", link: "/tools/plumb_design" },
+          { text: "plumb_review", link: "/tools/plumb_review" },
+          { text: "plumb_source", link: "/tools/plumb_source" },
         ],
       },
     ],

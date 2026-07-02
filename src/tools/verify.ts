@@ -16,7 +16,7 @@ const DESCRIPTION =
   "  • styles — a subset of getComputedStyle: backgroundColor, color, " +
   "fontFamily, fontSize, fontWeight, lineHeight, padding{Top,Right,Bottom,Left}, " +
   "gap, flexDirection, justifyContent, alignItems, borderRadius, borderColor, " +
-  "borderWidth, opacity, textDecorationLine\n" +
+  "borderWidth, opacity, textDecorationLine, boxShadow, backdropFilter\n" +
   "  • text — textContent for TEXT nodes\n" +
   "  • asset — for image/icon/logo nodes (assetId or vector): the " +
   'data-plumb-asset="<assetId>" you rendered, plus img:true when it is a real ' +
@@ -26,7 +26,12 @@ const DESCRIPTION =
   "returns deltas like { kind:'size.w', expected:528, actual:530, severity:'warn' }. " +
   "The response also includes `coverage` — how many PDS els in the subtree were " +
   "actually tagged, plus an `untagged` list so you know what to add next round. " +
-  "ok=true means no errors; warns are differences you may have meant.";
+  "QA-strict on appearance — colour (ΔE2000), icon/asset fidelity, box-shadow, " +
+  "backdrop-filter (glass) and the rest flag even small misses — but content-aware " +
+  "on text: a mismatch on placeholder/template copy (lorem, generic labels, numeric " +
+  "stubs, copy-pasted cells) is advisory `info` (kind 'text.placeholder', doesn't " +
+  "dent the score), since you're meant to swap real content in. Real UI labels still " +
+  "warn (kind 'text.chars'). ok=true means no errors; warns are differences you may have meant.";
 
 const renderedElementSchema = z.object({
   el: z.string(),
@@ -38,6 +43,10 @@ const renderedElementSchema = z.object({
   }),
   text: z.string().optional(),
   styles: z.record(z.string(), z.string()).optional(),
+  // Asset-fidelity inputs — without these, zod strips them and every tagged
+  // image/icon/logo falls into the "asset.missing" branch (false errors).
+  asset: z.string().optional(),
+  img: z.boolean().optional(),
 });
 
 /** Registers the `plumb_verify` MCP tool (plan §8, the closer). */

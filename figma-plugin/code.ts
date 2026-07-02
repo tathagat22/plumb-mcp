@@ -8,7 +8,11 @@
  * iframe is a pure relay to/from the localhost WebSocket.
  */
 
-const PLUGIN_VERSION = "0.0.1";
+import { applyDesign } from "./emit";
+import { applyFoundations } from "./foundations";
+import { wireMotion } from "./motion-emit";
+
+const PLUGIN_VERSION = "0.12.0";
 const PANEL = { w: 240, h: 144 };
 const DOT = { w: 60, h: 60 };
 
@@ -955,7 +959,15 @@ function queueUploadOp<T>(fn: () => Promise<T>): Promise<T> {
 
 async function dispatchServerRequest(req: any): Promise<void> {
   if (!req || typeof req.t !== "string") return;
-  if (req.t === "get-assets" || req.t === "get-screenshot") {
+  // Heavy mutations + exports share the UI↔IPC byte channel and must not
+  // interleave across sessions — serialize them through the upload queue.
+  if (
+    req.t === "get-assets" ||
+    req.t === "get-screenshot" ||
+    req.t === "apply-design" ||
+    req.t === "apply-foundations" ||
+    req.t === "apply-motion"
+  ) {
     await queueUploadOp(() => handleServerRequest(req));
     return;
   }
@@ -1028,6 +1040,40 @@ async function handleServerRequest(req: any): Promise<void> {
 
   if (req.t === "get-components") {
     await handleGetComponents(req.reqId);
+    return;
+  }
+
+  // ---- Write direction: three sequenced mutations ------------------------
+  if (req.t === "apply-design") {
+    try {
+      const result = await applyDesign(req.plan, (phase, done, total, note) =>
+        reply({ t: "apply-progress", reqId: req.reqId, phase, done, total, note }),
+      );
+      reply({ t: "applied", reqId: req.reqId, result, error: null });
+    } catch (e) {
+      reply({ t: "applied", reqId: req.reqId, result: null, error: errMsg(e) });
+    }
+    return;
+  }
+
+  if (req.t === "apply-foundations") {
+    try {
+      const result = await applyFoundations(req.plan, req.dryRun);
+      reply({ t: "foundations", reqId: req.reqId, result, error: null });
+    } catch (e) {
+      reply({ t: "foundations", reqId: req.reqId, result: null, error: errMsg(e) });
+    }
+    return;
+  }
+
+  if (req.t === "apply-motion") {
+    try {
+      const idMap = new Map<string, string>(Object.entries(req.idMap ?? {}));
+      const result = await wireMotion(req.plan, idMap);
+      reply({ t: "motion", reqId: req.reqId, result, error: null });
+    } catch (e) {
+      reply({ t: "motion", reqId: req.reqId, result: null, error: errMsg(e) });
+    }
     return;
   }
 }

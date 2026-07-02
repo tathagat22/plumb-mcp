@@ -100,6 +100,14 @@ export function verifyAgainst(
     if (node.path) byPath.set(node.path, node);
   }
 
+  // Content-awareness pass: designers copy-paste the *same* placeholder string
+  // across many cells/rows purely to mock the layout — the real build drops
+  // entirely different content into those slots. A string the design repeats ≥3
+  // times is template filler, so a content swap there must not be flagged as a
+  // fidelity miss (style on those nodes is still checked at full strictness).
+  const dupChars = collectDuplicateChars(pds);
+  const ctx: CompareContext = { dupChars };
+
   const deltas: Delta[] = [];
   let matched = 0;
   let unmatched = 0;
@@ -122,7 +130,7 @@ export function verifyAgainst(
     }
     matched += 1;
     matchedEls.add(node.el);
-    compareOne(node, r, pds.tokens, tolerances, deltas);
+    compareOne(node, r, pds.tokens, tolerances, deltas, ctx);
   }
 
   // Coverage: the verifier's most useful affordance, per real-world feedback.
@@ -217,12 +225,19 @@ function computeCoverage(pds: PdsDocument, matchedEls: Set<string>): CoverageInf
 /* compareOne — every typed check                                          */
 /* ---------------------------------------------------------------------- */
 
+/** Per-run context shared across every {@link compareOne} call. */
+interface CompareContext {
+  /** Trimmed `chars` strings the design repeats ≥3× — treated as template filler. */
+  dupChars: Set<string>;
+}
+
 function compareOne(
   node: PdsNode,
   r: RenderedElement,
   tokens: TokenTable,
   tol: Tolerances,
   deltas: Delta[],
+  ctx: CompareContext,
 ): void {
   const styles = r.styles ?? {};
 
@@ -241,8 +256,19 @@ function compareOne(
   };
 
   // --- Size ----------------------------------------------------------------
-  if (node.box.w > 0 && r.box.w > 0) pushPx("size.w", node.box.w, r.box.w);
-  if (node.box.h > 0 && r.box.h > 0) pushPx("size.h", node.box.h, r.box.h);
+  // Skip axes the compiler can only ESTIMATE: fill/hug auto-layout children and
+  // text with content-driven auto-resize get their real size from Figma's layout
+  // engine, so a delta vs the authored estimate is noise, not a defect.
+  const wEstimate =
+    node.sizing?.w === "fill" ||
+    node.sizing?.w === "hug" ||
+    (node.type === "text" && node.textGrow === "wh");
+  const hEstimate =
+    node.sizing?.h === "fill" ||
+    node.sizing?.h === "hug" ||
+    (node.type === "text" && (node.textGrow === "h" || node.textGrow === "wh"));
+  if (node.box.w > 0 && r.box.w > 0 && !wEstimate) pushPx("size.w", node.box.w, r.box.w);
+  if (node.box.h > 0 && r.box.h > 0 && !hEstimate) pushPx("size.h", node.box.h, r.box.h);
 
   // --- Layout (only if PDS describes one) ---------------------------------
   // Layout may arrive as a `$lN` ref into tokens.layout (v0.10+) — resolve
@@ -337,17 +363,24 @@ function compareOne(
   }
 
   // --- Text content ------------------------------------------------------
+  // Content vs. fidelity: a wrong *colour* or *icon* is always a bug, but a
+  // wrong *string* often isn't — the agent is supposed to drop real content
+  // into the design's placeholder slots. So a mismatch on filler text (lorem,
+  // generic labels, numeric stubs, repeated copy-paste cells, long body copy)
+  // is surfaced as advisory `info` (visible, but it doesn't dent the fit score
+  // or the fix list). A mismatch on a meaningful UI label still warns.
   if (typeof node.chars === "string" && typeof r.text === "string") {
     const exp = node.chars.trim();
     const act = r.text.trim();
     if (exp !== act) {
+      const placeholder = isPlaceholderText(exp, ctx.dupChars.has(exp));
       deltas.push({
         el: node.el,
         name: node.name,
-        kind: "text.chars",
+        kind: placeholder ? "text.placeholder" : "text.chars",
         expected: exp,
         actual: act,
-        severity: "warn",
+        severity: placeholder ? "info" : "warn",
       });
     }
   }
@@ -500,6 +533,60 @@ function compareOne(
       actual: styles.boxShadow ?? "(unset)",
       severity: "error",
     });
+  } else if (expectedShadow && styles.boxShadow) {
+    // Shadow present but visibly off — a 2px blur where the design has a 24px
+    // soft drop is the kind of "tiny detail" that quietly cheapens a build.
+    const expBlur = parseShadowBlur(expectedShadow);
+    const renBlur = parseShadowBlur(styles.boxShadow);
+    if (expBlur !== null && renBlur !== null) {
+      const diff = Math.abs(expBlur - renBlur);
+      if (diff > tol.px.warn) {
+        deltas.push({
+          el: node.el,
+          name: node.name,
+          kind: "shadow.blur",
+          expected: expBlur,
+          actual: renBlur,
+          diff,
+          severity: "warn",
+        });
+      }
+    }
+  }
+
+  // Backdrop filter (glassmorphism / frosted surfaces). PDS carries a CSS-ready
+  // `backdrop-filter` string; agents routinely drop it, leaving a flat opaque
+  // panel where the design had a translucent blurred one. A missing backdrop is
+  // an error; a present-but-different blur radius is a warn.
+  if (node.backdropFilter) {
+    const ren = (styles.backdropFilter ?? "").trim();
+    if (!ren || ren.toLowerCase() === "none") {
+      deltas.push({
+        el: node.el,
+        name: node.name,
+        kind: "backdrop.missing",
+        expected: node.backdropFilter,
+        actual: ren || "(unset)",
+        severity: "error",
+      });
+    } else {
+      const expBlur = parseBlurRadius(node.backdropFilter);
+      const renBlur = parseBlurRadius(ren);
+      if (expBlur !== null && renBlur !== null) {
+        const diff = Math.abs(expBlur - renBlur);
+        if (diff > tol.px.warn) {
+          deltas.push({
+            el: node.el,
+            name: node.name,
+            kind: "backdrop.blur",
+            expected: expBlur,
+            actual: renBlur,
+            diff,
+            severity: "warn",
+          });
+        }
+      }
+    }
   }
 
   // Rotation: parse `transform: rotate(Ndeg)` or a 2D matrix. Allow ±0.5°
@@ -653,6 +740,104 @@ function parseRotation(transform: string | undefined): number | null {
 function round(n: number, places: number): number {
   const p = Math.pow(10, places);
   return Math.round(n * p) / p;
+}
+
+/**
+ * Pull the blur radius out of a CSS filter function string — `blur(12px)`,
+ * `blur(12px) saturate(180%)`, etc. Returns the first blur in px, or null.
+ */
+function parseBlurRadius(s: string | undefined): number | null {
+  if (!s) return null;
+  const m = s.match(/blur\(\s*(-?\d+(?:\.\d+)?)px\s*\)/i);
+  return m && m[1] ? parseFloat(m[1]) : null;
+}
+
+/**
+ * The blur radius of a box-shadow. Computed box-shadow normalises to
+ * `<color> <offX> <offY> <blur> [<spread>]`; design tokens may put the colour
+ * last. Either way, stripping colour functions + the `inset` keyword leaves the
+ * offset/blur/spread numbers in order, and blur is the third (index 2).
+ */
+function parseShadowBlur(s: string | undefined): number | null {
+  if (!s || s === "none") return null;
+  // Only the first shadow layer matters for a rough magnitude check.
+  const first = s.split(/,(?![^()]*\))/)[0] ?? s;
+  const stripped = first
+    .replace(/(?:rgba?|hsla?)\([^)]*\)/gi, " ")
+    .replace(/#[0-9a-f]+/gi, " ")
+    .replace(/\binset\b/gi, " ");
+  const nums = stripped.match(/-?\d+(?:\.\d+)?px/gi);
+  if (!nums || nums.length < 3) return null;
+  return parseFloat(nums[2]!);
+}
+
+/**
+ * Collect every trimmed string `chars` value the design repeats ≥3 times. These
+ * are copy-pasted template cells (table rows, list items, card stacks the
+ * designer duplicated to show layout) — content the build legitimately replaces.
+ */
+function collectDuplicateChars(pds: PdsDocument): Set<string> {
+  const counts = new Map<string, number>();
+  for (const el of Object.keys(pds.nodes)) {
+    const node = pds.nodes[el];
+    if (!node || typeof node.chars !== "string") continue;
+    const t = node.chars.trim();
+    if (!t) continue;
+    counts.set(t, (counts.get(t) ?? 0) + 1);
+  }
+  const dup = new Set<string>();
+  for (const [s, n] of counts) if (n >= 3) dup.add(s);
+  return dup;
+}
+
+/** Generic structural stand-ins designers type into a mockup, lowercased. */
+const PLACEHOLDER_LABELS = new Set([
+  "title",
+  "subtitle",
+  "heading",
+  "subheading",
+  "header",
+  "body",
+  "body text",
+  "text",
+  "label",
+  "caption",
+  "description",
+  "placeholder",
+  "content",
+  "lorem ipsum",
+  "name",
+  "first name",
+  "last name",
+  "full name",
+  "your name",
+  "email",
+  "email address",
+  "username",
+  "company name",
+  "address",
+]);
+
+/**
+ * True when an expected string is template filler rather than meaningful copy —
+ * so a content swap there is expected, not a fidelity bug. Conservative on
+ * purpose: real UI labels ("Save", "Dashboard", "Get started") must NOT match
+ * here, or genuine wrong-label bugs would be silenced.
+ */
+export function isPlaceholderText(s: string, isDuplicate: boolean): boolean {
+  if (isDuplicate) return true; // copy-pasted across the design → filler
+  const t = s.trim();
+  if (t === "") return true;
+  const low = t.toLowerCase();
+  if (PLACEHOLDER_LABELS.has(low)) return true;
+  if (/lorem ipsum|\bdummy\b|\bplaceholder\b|sample text/i.test(t)) return true;
+  // Long body copy is filler the agent rewrites with real content.
+  if (t.length > 60) return true;
+  // A single character repeated (xxx, •••, ———, ...).
+  if (/^(.)\1{2,}$/.test(t)) return true;
+  // Numeric / currency / time stubs ($0.00, 1,234, 00:00, 12%, -, —).
+  if (/\d/.test(t) && /^[\s$€£₹%.,:+\-–—()0-9/]+$/.test(t)) return true;
+  return false;
 }
 
 function pushColorDelta(

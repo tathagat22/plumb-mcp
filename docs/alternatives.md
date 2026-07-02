@@ -41,6 +41,17 @@ The Figma → code MCP space has three other servers worth knowing:
 
 Plumb is the only one focused on **shipping code that matches the design** — token-frugal PDS in, verification loop out, no metering, no rate limits, on every plan. See the [README on GitHub](https://github.com/tathagat22/plumb-mcp#how-plumb-is-different) for the full positioning.
 
+## Plumb also goes the other way: prompt → design
+
+Every server above is figma → code only — you bring the design, they read it. Plumb is the one Figma MCP that also runs **prompt → design**: give it a one-line brief and it becomes an **AI design director** that *generates* a full, on-brand Figma design for you.
+
+- **Prompt to Figma, not just Figma to code.** `plumb_studio` turns a brief like *"a premium fintech dashboard"* into a composed page — nav, hero, features, gallery, CTA, footer — built as real Figma nodes.
+- **Researched, not hallucinated.** It screenshots best-in-class reference sites live and extracts a coherent brand palette + type scale from their computed CSS before it composes anything.
+- **Self-critiquing.** `plumb_review` blends a structural diff, a design rubric, and the calling agent's own vision grade of the render into one score, then iterates until it clears the bar.
+- **No extra API key.** There's no second model to buy — the AI agent already driving the MCP server (Claude Code, Cursor, any MCP client with vision) *is* the creative director. That's MCP design generation with zero network model calls.
+
+So if you searched for **"prompt to design," "text to Figma," "AI design generator," or "AI that designs UI in Figma,"** the same server that fixes your Figma MCP errors also generates the design in the first place. See [Prompt to design](/prompt-to-design) for the full walkthrough.
+
 ## Multi-agent sessions
 
 As of [v0.7.0](https://github.com/tathagat22/plumb-mcp/releases/tag/v0.7.0), one Figma plugin can pair with **multiple `plumb-mcp` servers at once**, so two Claude / Cursor sessions on different projects can share the same Figma file with zero contention. Each session gets a labelled row in the plugin UI.

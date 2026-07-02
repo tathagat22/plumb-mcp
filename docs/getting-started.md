@@ -94,6 +94,14 @@ The agent will call `plumb_outline`. From there it can fetch any screen as a com
 
 The [tool reference](/tools/) covers each tool individually. The [recipes](/recipes) page collects common workflows.
 
+### Generate a design from a prompt
+
+That's the figma → code direction. Plumb goes the other way too: hand it a one-line brief and it becomes an **AI design director** — researching live reference sites, extracting a brand, and composing a full, on-brand Figma page, then critiquing its own render until it's good. No extra API key; the agent driving Plumb *is* the creative director.
+
+> *Use plumb_studio to design a premium fintech dashboard, then screenshot it and run plumb_review until it clears the bar.*
+
+See [Prompt to design](/prompt-to-design) for the full director walkthrough.
+
 ## What happens on disk
 
 Two folders appear in your current working directory the first time the agent calls them:

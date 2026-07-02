@@ -1,5 +1,6 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { startBridge } from "./bridge/server";
+import { loadEnv } from "./env";
 import { runFitCli } from "./cli/fit";
 import { runInit } from "./cli/init";
 import { runStudioCli } from "./cli/studio";
@@ -57,6 +58,9 @@ Source:  https://github.com/tathagat22/plumb-mcp
  * logging once we're past arg-parsing goes to stderr.
  */
 async function main(): Promise<void> {
+  // Read .env before anything touches process.env (asset providers read keys
+  // lazily at call time, so this only needs to run before the server starts).
+  loadEnv();
   const arg = process.argv[2];
 
   if (arg === "--help" || arg === "-h" || arg === "help") {

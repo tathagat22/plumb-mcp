@@ -105,7 +105,7 @@
   <div id="collapsed" title="Click to expand"><div id="bigdot"></div></div>
 <script>
   var PORTS = [31337, 31338, 31339, 31340, 31341, 31342, 31343, 31344, 31345, 31346];
-  var PLUGIN_VERSION = "0.0.1";
+  var PLUGIN_VERSION = "0.12.0";
   var autoPair = false;
   var lastSelection = null, lastInventory = null;
 
@@ -317,7 +317,11 @@
         return;
       }
 
-      if (msg.reqId && typeof msg.t === "string" && msg.t.indexOf("get-") === 0) {
+      // FULLY GENERIC forward filter (blueprint §4): any reqId-bearing frame
+      // whose `t` is a string is a server request — get-* reads AND the write
+      // verbs (apply-design/apply-foundations/apply-motion). No allow-set to
+      // keep in sync as new verbs land.
+      if (msg.reqId && typeof msg.t === "string") {
         // Rewrite reqId so different servers' reqIds (both mint `r1`) can't
         // collide on the plugin-worker side. Original reqId stays on the wire.
         var mainReqId = rewriteIn(port, msg.reqId);
@@ -325,7 +329,15 @@
         var copy = {};
         for (var k in msg) copy[k] = msg[k];
         copy.reqId = mainReqId;
-        toMain({ type: "server-request", req: copy });
+        // apply-design ships assets by reference; eager-hydrate their bytes off
+        // the loopback /asset route BEFORE forwarding to main (once).
+        if (msg.t === "apply-design" && copy.plan && copy.plan.assets && copy.plan.assets.length) {
+          hydrateAssets(port, copy, function (hydrated) {
+            toMain({ type: "server-request", req: hydrated });
+          });
+        } else {
+          toMain({ type: "server-request", req: copy });
+        }
         return;
       }
 
@@ -448,8 +460,40 @@
     var out = {};
     for (var k in reply) out[k] = reply[k];
     out.reqId = originalOf(reply.reqId);
-    delete routing[reply.reqId];
+    // apply-progress is a NON-TERMINAL heartbeat — keep the routing entry so
+    // the terminal `applied` reply can still find its way home.
+    if (reply.t !== "apply-progress") delete routing[reply.reqId];
     sendRaw(s.ws, out);
+  }
+
+  // Eager-hydrate an apply-design plan's assets: GET each /asset/:ref.:ext off
+  // the loopback bridge, attach the bytes as a Uint8Array on the asset, and
+  // invoke cb(req) ONCE when every fetch settles. A missing/failed asset is
+  // left without `data` — the plugin warns + stub-and-continues, never blocks.
+  function hydrateAssets(port, req, cb) {
+    var assets = (req.plan && req.plan.assets) || [];
+    var toFetch = [];
+    for (var i = 0; i < assets.length; i++) {
+      var a = assets[i];
+      if (a && !a.svgInline && a.ref) toFetch.push(a);
+    }
+    if (toFetch.length === 0) { cb(req); return; }
+    var pending = toFetch.length;
+    var done = false;
+    function settle() {
+      pending -= 1;
+      if (pending <= 0 && !done) { done = true; cb(req); }
+    }
+    for (var j = 0; j < toFetch.length; j++) {
+      (function (asset) {
+        var url = "http://localhost:" + port + "/asset/" + asset.ref + "." + (asset.ext || "png");
+        fetch(url)
+          .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.arrayBuffer(); })
+          .then(function (buf) { asset.data = new Uint8Array(buf); })
+          .catch(function () { /* leave asset.data unset */ })
+          .then(settle, settle);
+      })(toFetch[j]);
+    }
   }
 
   function postBinary(url, bytes) {

@@ -13,12 +13,22 @@
       "http://localhost:31339",
       "http://localhost:31340",
       "http://localhost:31341",
+      "http://localhost:31342",
+      "http://localhost:31343",
+      "http://localhost:31344",
+      "http://localhost:31345",
+      "http://localhost:31346",
       "ws://localhost:31337",
       "ws://localhost:31338",
       "ws://localhost:31339",
       "ws://localhost:31340",
-      "ws://localhost:31341"
+      "ws://localhost:31341",
+      "ws://localhost:31342",
+      "ws://localhost:31343",
+      "ws://localhost:31344",
+      "ws://localhost:31345",
+      "ws://localhost:31346"
     ],
-    "reasoning": "Plumb pairs the plugin with a local MCP server running on the same machine (127.0.0.1, on one of ports 31337–31341). The WebSocket carries the control channel (which screens to read, which assets to export); the HTTP channel carries binary uploads (screenshots and exported icons/images) so they never have to be base64-encoded over the WebSocket. No request ever leaves the user's machine. No analytics, no third-party endpoints. The MCP server it talks to is open source: https://github.com/tathagat22/plumb-mcp."
+    "reasoning": "Plumb pairs the plugin with a local MCP server running on the same machine (127.0.0.1, on one of ports 31337–31346). The WebSocket carries the control channel (which screens to read/build, which assets to export); the HTTP channel carries binary uploads (screenshots and exported icons/images) and inbound asset GETs (bytes for the build path) so they never have to be base64-encoded over the WebSocket. No request ever leaves the user's machine. No analytics, no third-party endpoints. The MCP server it talks to is open source: https://github.com/tathagat22/plumb-mcp."
   }
 }

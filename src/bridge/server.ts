@@ -11,8 +11,15 @@ import { onStudio, recentStudio } from "../studio/events";
 import { serveStudio, studioAvailable } from "../studio/serve";
 import type { FigmaNode } from "../figma/types";
 import type {
+  ApplyProgressMessage,
   ComponentInfo,
+  EmitPlan,
+  EmitResult,
+  FoundationsPlan,
+  FoundationsResult,
   InstanceInfo,
+  MotionPlan,
+  MotionResult,
   PluginMessage,
   SearchMatch,
   ServerMessage,
@@ -30,9 +37,31 @@ const uploadMap = new Map<string, { path: string }>();
 interface Pending {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
+  /** Reassignable: an apply-progress heartbeat resets the watchdog in place. */
   timer: ReturnType<typeof setTimeout>;
+  /** ms — the timeout to re-arm on each heartbeat (write ops only). */
+  timeoutMs: number;
+  label: string;
 }
 const pending = new Map<string, Pending>();
+
+/** Non-terminal apply-progress listeners, keyed by reqId (write ops only). */
+const progressListeners = new Map<string, (p: ApplyProgressMessage) => void>();
+
+/** Staged inbound asset bytes the plugin pulls via GET /asset/:key.:ext.
+ *  TTL 10 min, lazy-expired on read. */
+const inbound = new Map<string, { bytes: Buffer; contentType: string; expires: number }>();
+const INBOUND_TTL_MS = 10 * 60 * 1000;
+let inboundCounter = 0;
+
+const EXT_CONTENT_TYPE: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+};
 
 function send(ws: WebSocket, msg: ServerMessage): void {
   try {
@@ -66,6 +95,7 @@ function rejectAllPending(error: Error): void {
     p.reject(error);
   }
   pending.clear();
+  progressListeners.clear();
 }
 
 /** Send a request to the paired plugin and await its matching reply. */
@@ -87,6 +117,7 @@ function request<T>(
     const reqId = `r${++reqCounter}`;
     const timer = setTimeout(() => {
       pending.delete(reqId);
+      progressListeners.delete(reqId);
       reject(
         new PlumbError(
           `The Plumb plugin did not answer the ${label} request in time.`,
@@ -94,7 +125,13 @@ function request<T>(
         ),
       );
     }, timeoutMs);
-    pending.set(reqId, { resolve: resolve as (v: unknown) => void, reject, timer });
+    pending.set(reqId, {
+      resolve: resolve as (v: unknown) => void,
+      reject,
+      timer,
+      timeoutMs,
+      label,
+    });
     send(pairedSocket, build(reqId));
   });
 }
@@ -211,20 +248,108 @@ export function requestComponents(): Promise<{
   );
 }
 
-/** HTTP request handler for the bridge's loopback server. Serves CORS preflight
- *  and the `/upload/:reqId.:ext` POST that the plugin UI uses to ship raw
- *  screenshot bytes — no base64 anywhere in the hot path. */
+/* ------------------------------------------------------------------ */
+/* Write direction — apply wrappers + inbound asset staging            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Build + apply a full design (blueprint §3). Uses a 600s watchdog that each
+ * non-terminal `apply-progress` heartbeat RESETS in place — a big page that
+ * keeps making progress never times out, but a genuinely hung apply still does.
+ */
+export function requestApplyDesign(
+  plan: EmitPlan,
+  onProgress?: (p: ApplyProgressMessage) => void,
+): Promise<{ result: EmitResult | null; error: string | null }> {
+  return new Promise((resolve, reject) => {
+    request<{ result: EmitResult | null; error: string | null }>(
+      (reqId) => {
+        if (onProgress) progressListeners.set(reqId, onProgress);
+        return { t: "apply-design", reqId, plan };
+      },
+      600_000,
+      "apply-design",
+    ).then(resolve, reject);
+  });
+}
+
+/** Alias — the blueprint refers to this wrapper as `requestApply`. */
+export const requestApply = requestApplyDesign;
+
+/** Apply Variables / text / effect / grid styles (blueprint §3). */
+export async function requestApplyFoundations(
+  plan: FoundationsPlan,
+  dryRun?: boolean,
+): Promise<FoundationsResult> {
+  return request<FoundationsResult>(
+    (reqId) => ({ t: "apply-foundations", reqId, plan, dryRun }),
+    120_000,
+    "foundations",
+  );
+}
+
+/** Wire prototype reactions / flows / device onto the built nodes (blueprint §3). */
+export async function requestApplyMotion(
+  plan: MotionPlan,
+  idMap?: Record<string, string>,
+): Promise<MotionResult> {
+  return request<MotionResult>(
+    (reqId) => ({ t: "apply-motion", reqId, plan, idMap }),
+    120_000,
+    "motion",
+  );
+}
+
+/**
+ * Stage bytes for the plugin to pull via GET /asset/:key.:ext. Returns the
+ * key. TTL 10 min, lazy-expired on read. The asset engine's inbound.registerAsset
+ * delegates here — server.ts is the single home for the HTTP route + the map.
+ */
+export function stageInboundAsset(bytes: Buffer | Uint8Array, ext: string): string {
+  const key = `a${++inboundCounter}${Date.now().toString(36)}`;
+  const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+  const e = ext.toLowerCase().replace(/^\./, "");
+  inbound.set(key, {
+    bytes: buf,
+    contentType: EXT_CONTENT_TYPE[e] ?? "application/octet-stream",
+    expires: Date.now() + INBOUND_TTL_MS,
+  });
+  return key;
+}
+
+/** HTTP request handler for the bridge's loopback server. Serves CORS preflight,
+ *  the `/upload/:reqId.:ext` POST that the plugin UI uses to ship raw screenshot
+ *  bytes, and the `/asset/:key.:ext` GET the plugin pulls inbound bytes from —
+ *  no base64 anywhere in the hot path. */
 function handleHttp(req: IncomingMessage, res: ServerResponse): void {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") {
     res.writeHead(204);
     res.end();
     return;
   }
-  // GET (anything but the plugin's upload POST) → the Plumb Studio SPA.
   if (req.method === "GET") {
+    // Inbound asset pull: the plugin UI eager-hydrates plan.assets from here.
+    const am = req.url && /^\/asset\/([A-Za-z0-9_-]+)\.([a-z0-9]+)$/.exec(req.url);
+    if (am) {
+      const key = am[1]!;
+      const staged = inbound.get(key);
+      if (!staged || staged.expires < Date.now()) {
+        if (staged) inbound.delete(key); // lazy-expire on read
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": staged.contentType,
+        "Content-Length": staged.bytes.length,
+      });
+      res.end(staged.bytes);
+      return;
+    }
+    // Anything else → the Plumb Studio SPA.
     serveStudio(req, res);
     return;
   }
@@ -414,6 +539,54 @@ export async function startBridge(): Promise<void> {
             instances: msg.instances,
             error: msg.error,
           });
+          break;
+        case "apply-progress": {
+          // NON-TERMINAL heartbeat: reset the 600s watchdog in place, notify the
+          // listener (drives Studio), and DO NOT resolve the pending request.
+          const p = pending.get(msg.reqId);
+          if (p) {
+            clearTimeout(p.timer);
+            p.timer = setTimeout(() => {
+              pending.delete(msg.reqId);
+              progressListeners.delete(msg.reqId);
+              p.reject(
+                new PlumbError(
+                  `The Plumb plugin did not answer the ${p.label} request in time.`,
+                  "Make sure the plugin is still running and paired in Figma, then retry.",
+                ),
+              );
+            }, p.timeoutMs);
+          }
+          progressListeners.get(msg.reqId)?.(msg);
+          break;
+        }
+        case "applied":
+          // A write just changed the document — invalidate the read cache NOW so
+          // a follow-up plumb_review / plumb_node re-serializes the fresh nodes,
+          // instead of waiting for the plugin's debounced `inventory` push (which
+          // otherwise lets review read stale geometry/colours right after a build).
+          bridge.fileVersion += 1;
+          if (bridge.nodeCache.size > 0) bridge.nodeCache.clear();
+          progressListeners.delete(msg.reqId);
+          resolvePending(msg.reqId, { result: msg.result, error: msg.error });
+          break;
+        case "foundations":
+          resolvePending(
+            msg.reqId,
+            msg.result ?? {
+              collections: [],
+              textStyleIds: {},
+              effectStyleIds: {},
+              gridStyleIds: {},
+              warnings: [msg.error ?? "foundations failed"],
+            },
+          );
+          break;
+        case "motion":
+          resolvePending(
+            msg.reqId,
+            msg.result ?? { wired: 0, misses: [], error: msg.error },
+          );
           break;
         case "pong":
           break;

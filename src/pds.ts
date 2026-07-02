@@ -174,6 +174,62 @@ export interface MotionSpec {
     /** Backdrop colour (CSS hex) — empty/absent means transparent. */
     background?: string;
   };
+
+  // ---- Write-direction authoring extension (blueprint §9.9) ----------------
+  // Additive, all optional. The read side leaves these undefined; the DSL
+  // compiler / motion authoring set them so a write→read→write round-trip can
+  // carry the prototype action verb, timing, and destination presentation.
+  /** Prototype action verb — read side infers it from `target`; write sets it. */
+  navigation?: string;
+  /** Directional transition slide direction (LEFT/RIGHT/TOP/BOTTOM). */
+  direction?: string;
+  /** Smart-animate layer matching. */
+  matchLayers?: boolean;
+  /** `AFTER_TIMEOUT` delay, ms. */
+  timeout?: number;
+  /** `ON_KEY_DOWN` JS key codes. */
+  keys?: number[];
+  /** `URL` action destination. */
+  url?: string;
+  /** `SET_VAR` action — Figma variable id → value. */
+  setVars?: Record<string, string | number | boolean>;
+  /** Keep the destination's scroll position on navigate. */
+  preserveScroll?: boolean;
+  /** Reset interactive-component / variant state on navigate. */
+  resetState?: boolean;
+  /** Custom spring easing params (what the CSS `easing` string can't hold). */
+  spring?: { mass: number; stiffness: number; damping: number };
+}
+
+/** Destination-frame overlay presentation (additive `PdsNode.overlayCfg`). */
+export interface PdsOverlayCfg {
+  position?:
+    | "center"
+    | "top"
+    | "bottom"
+    | "left"
+    | "right"
+    | "top-left"
+    | "top-right"
+    | "bottom-left"
+    | "bottom-right"
+    | "manual";
+  at?: { x: number; y: number };
+  backdrop?: string;
+  closeOnClickOutside?: boolean;
+}
+
+/** File-level flow config (additive `PdsDocument.prototype`). */
+export interface PdsPrototype {
+  /** Flow starting frames (authored el → display name). */
+  starts?: { el: string; name: string }[];
+  device?: {
+    kind: "none" | "preset" | "custom";
+    preset?: string;
+    size?: { w: number; h: number };
+    rotation?: "portrait" | "landscape";
+  };
+  background?: string;
 }
 
 export interface PdsNode {
@@ -364,7 +420,7 @@ export interface PdsNode {
    */
   grow?: number;
   selfAlign?: "stretch" | "min" | "center" | "max";
-  sizing?: { w?: "fill" | "hug"; h?: "fill" | "hug" };
+  sizing?: { w?: "fill" | "hug" | "fixed"; h?: "fill" | "hug" | "fixed" };
   /** Child `el` handles — present when this node's children are included. */
   children?: string[];
   /**
@@ -471,6 +527,14 @@ export interface PdsNode {
    */
   sizingMin?: { w?: number; h?: number };
   sizingMax?: { w?: number; h?: number };
+
+  // ---- Write-direction authoring extension (blueprint §9.9, additive) ------
+  /** Text horizontal alignment (TEXT nodes). Read side omits; write sets it. */
+  textAlign?: "left" | "center" | "right" | "justified";
+  /** Frame scroll overflow — drives the destination frame's `overflowDirection`. */
+  overflow?: "none" | "horizontal" | "vertical" | "both";
+  /** Overlay presentation config when this frame is opened as an overlay. */
+  overlayCfg?: PdsOverlayCfg;
 }
 
 export interface TokenTable {
@@ -531,6 +595,8 @@ export interface PdsDocument {
   };
   /** Suggested next step for the agent (plan §6.1). */
   next: string;
+  /** File-level prototype flow config (additive, write direction). */
+  prototype?: PdsPrototype;
 }
 
 export interface SuspiciousText {

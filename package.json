@@ -2,7 +2,7 @@
   "name": "plumb-mcp",
   "version": "0.12.0",
   "mcpName": "io.github.tathagat22/plumb-mcp",
-  "description": "Local Figma MCP server with no REST rate limits, no metered tool-call quotas, and a built-in verification loop. Works on every Figma plan including Free. Drop-in alternative to Figma's Dev Mode MCP and Framelink for Claude Code, Cursor, Windsurf, and any MCP-compatible AI coding agent.",
+  "description": "The two-way Figma MCP server: extract designs as compact specs and verify your code with a built-in loop (design → code), OR turn a prompt into a full, on-brand Figma design directed by an AI design director that researches references, extracts a brand, and critiques its own render (prompt → design). No REST rate limits, no metered tool-call quotas, no extra API key. Works on every Figma plan including Free. Drop-in alternative to Figma's Dev Mode MCP and Framelink for Claude Code, Cursor, Windsurf, and any MCP-compatible AI coding agent.",
   "type": "module",
   "license": "MIT",
   "author": "Tathagat Maitray",
@@ -28,8 +28,20 @@
     "cursor-mcp",
     "windsurf",
     "design-to-code",
+    "figma-to-code",
     "design-tokens",
     "design-system",
+    "prompt-to-design",
+    "prompt-to-figma",
+    "text-to-design",
+    "text-to-figma",
+    "ai-design",
+    "ai-design-generator",
+    "ai-ui-designer",
+    "ai-design-agent",
+    "design-generator",
+    "figma-generator",
+    "ui-generator",
     "ai-agent",
     "ai-coding-agent",
     "dev-mode",
@@ -59,7 +71,8 @@
   "scripts": {
     "build": "tsup && tsx scripts/build-plugin.ts && npm --prefix studio ci && npm --prefix studio run build",
     "build:plugin": "tsx scripts/build-plugin.ts",
-    "dev": "tsup --watch",
+    "dev": "tsx scripts/dev.ts",
+    "dev:server": "tsup --watch",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit && tsc -p figma-plugin/tsconfig.json",
     "prove": "tsx scripts/prove.ts",
@@ -72,7 +85,8 @@
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
-    "build:studio": "npm --prefix studio ci && npm --prefix studio run build"
+    "build:studio": "npm --prefix studio ci && npm --prefix studio run build",
+    "test": "vitest run"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.0",
@@ -88,6 +102,7 @@
     "tsup": "^8.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "vitepress": "^1.6.4"
+    "vitepress": "^1.6.4",
+    "vitest": "^4.1.9"
   }
 }

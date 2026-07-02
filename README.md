@@ -1,10 +1,10 @@
 
 
 <p align="center">
-  <img src="./docs/public/banner.png" alt="Plumb — Figma ↔ AI coding, plumbed." width="100%">
+  <img src="./docs/public/banner.png" alt="Plumb — Figma ↔ AI coding, plumbed both ways." width="100%">
 </p>
 
-# Plumb (`plumb-mcp`)
+# Plumb (`plumb-mcp`) — the two-way Figma MCP: design → code, and prompt → design
 
 <p align="center">
   <a href="https://github.com/tathagat22/plumb-mcp"><img alt="GitHub stars" src="https://img.shields.io/github/stars/tathagat22/plumb-mcp?style=social"></a>
@@ -14,9 +14,11 @@
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue">
 </p>
 
-<p align="center"><b>⭐ If Plumb saves you tokens, <a href="https://github.com/tathagat22/plumb-mcp">star it on GitHub</a> — it helps others find it.</b></p>
+<p align="center"><b>⭐ If Plumb saves you tokens — or designs you a page — <a href="https://github.com/tathagat22/plumb-mcp">star it on GitHub</a> so others can find it.</b></p>
 
-**The Figma → code MCP with a verification loop.** Designs go in, normalised specs come out, and `plumb-mcp verify` drives headless Chrome to prove your rendered code actually matches what's in Figma.
+**Plumb is the Figma MCP server that goes both ways.** Point it at a design and it returns a compact, normalised spec your coding agent can build from — then proves the code matches with a verification loop. Point it at a *prompt* and it turns into an **AI design director**: it researches real best-in-class reference websites, extracts a brand, and **generates a full, on-brand Figma design on your canvas** — then critiques its own render and iterates until it's good.
+
+> **Figma → code** (extract, verify, self-heal) &nbsp;•&nbsp; **prompt → design** (research → brand → generate → critique). One MCP server, both directions.
 
 📖 Full docs: **<https://tathagat22.github.io/plumb-mcp/>** &nbsp;·&nbsp; 📦 npm: [`plumb-mcp`](https://www.npmjs.com/package/plumb-mcp) &nbsp;·&nbsp; 🇨🇳 [简体中文](./README.zh-cn.md) &nbsp;·&nbsp; 🇯🇵 [日本語](./README.ja.md) &nbsp;·&nbsp; 🇰🇷 [한국어](./README.ko.md)
 
@@ -26,25 +28,36 @@
   <a href="https://insiders.vscode.dev/redirect/mcp/install?name=plumb&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22plumb-mcp%22%5D%7D"><img src="https://img.shields.io/badge/Install_in_VS_Code-0098FF?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="Install in VS Code" height="32"></a>
 </p>
 
-Built for coding agents — Claude Code, Cursor, Windsurf, anything MCP-compatible. Reads Figma through a desktop-app plugin (no REST rate limits, works on every plan including Free), returns a compact normalised spec instead of the multi-hundred-thousand-token JSON the Figma API emits, and exports SVG icons + PNG images straight to disk.
+Built for coding agents — Claude Code, Cursor, Windsurf, anything MCP-compatible. It reads Figma through a desktop-app plugin (no REST rate limits, works on every plan including Free), *writes* new designs back through the same plugin, and returns compact normalised specs instead of the multi-hundred-thousand-token JSON the Figma API emits.
 
 ---
 
-## How plumb is different
+## Two directions, one server
 
-Three other Figma MCP servers worth knowing:
+### ← Figma → code (read direction)
+Your agent extracts a screen as a compact **Plumb Design Spec (PDS)** — auto-layout pre-resolved to flexbox, design tokens deduped — builds the UI, then calls `plumb_verify` / `plumb_fit` to diff the rendered result against the design and self-correct to pixel-perfect. The only Figma MCP that **closes the loop on code**.
+
+### → prompt → design (write direction — the design director)
+Give Plumb a one-line brief — *"a premium fintech dashboard"* — and it acts like a senior designer working live in your Figma:
+
+1. **Researches references** — finds best-in-class sites for your brief (Linear, Stripe, Mercury…) and **screenshots them live** onto a References page.
+2. **Extracts a brand** — reads their computed CSS into a coherent palette + type scale, laid down as a Brand board.
+3. **Generates the design** — composes a full, on-brand page (nav, hero, features, gallery, CTA, footer) from a high-level design DSL, built as real Figma nodes.
+4. **Critiques its own render** — the calling agent (Claude Code / any MCP client with vision — **no extra API key**) grades the screenshot; Plumb blends that with a deterministic design rubric and a structural diff, then hands back a ranked fix list and iterates until it clears the bar.
+
+That's **prompt-to-Figma design generation with a self-improving director loop** — not a one-shot mockup.
+
+---
+
+## How Plumb is different
+
+Other Figma MCP servers you may know:
 
 - **Figma's official Dev Mode MCP** — bidirectional, but plan-gated and metered.
 - **Framelink** — thin REST wrapper. Two tools. No verification, inherits rate limits.
 - **cursor-talk-to-figma** — bidirectional automation for designers working *in* Figma.
 
-Plumb is the only one that **closes the loop on code.** `plumb_verify` tells you whether the code your agent shipped actually matches the design — colour-coded deltas, no pixel diff, runs in CI. And `plumb_fit` turns that into a **self-healing loop**: it scores the build 0–100, hands back the exact deltas to fix, and the agent iterates until it's pixel-perfect.
-
-Run the loop three ways:
-
-- **In your editor** — `plumb_fit` (MCP). Claude Code / Cursor build, call it, and self-correct. Free; the agent is the generator.
-- **From the terminal** — `plumb-mcp fit <figma-url>` generates a build, renders it headless in your Chrome, diffs, and corrects it pass-by-pass until it matches. (Needs `ANTHROPIC_API_KEY`.)
-- **In the browser** — the [Playground](https://tathagat22.github.io/plumb-mcp/play/): paste a Figma URL or pick a demo and watch it converge, with your own key. No install, no backend.
+Plumb is the only one that both **closes the loop on code** *and* **directs new design generation.** `plumb_verify` tells you whether shipped code actually matches the design; `plumb_fit` turns that into a self-healing loop. And on the write side, `plumb_studio` / `plumb_brand` / `plumb_design` / `plumb_review` turn a prompt into a designed, critiqued Figma file — no design skills, no separate design tool, no extra model key.
 
 ---
 
@@ -58,8 +71,8 @@ If your agent landed here from an error, Plumb probably solves it.
 | `Dev Mode MCP: 6 tool calls per month limit` · `Starter plan tool-call limit reached` | Plumb's plugin path has no per-call quota on any plan, including Free. |
 | `Framelink figma-developer-mcp HTTP 429` · `Figma REST API rate limit exceeded` | The plugin path doesn't touch REST. Zero rate limits. |
 | `Variables API requires Enterprise plan` · `403 Forbidden on variables` | Plumb reads Variables through the Figma Plugin API — works on every plan. |
-| `Figma MCP returned 85% wrong layout` · hallucinated structure | Plumb returns structured PDS (not parsed prose) and ships `plumb_verify` + a `plumb-mcp verify` CLI that diff your rendered DOM against the design. |
-| `Dev Mode MCP requires selection` · "Open desktop app with the right selection" | Plumb streams the whole file inventory the moment the plugin pairs. No per-call selection dance. |
+| `Figma MCP returned 85% wrong layout` · hallucinated structure | Plumb returns structured PDS (not parsed prose) and ships `plumb_verify` + a `plumb-mcp verify` CLI that diffs your rendered DOM against the design. |
+| *"How do I generate a Figma design from a prompt?"* · *"AI that designs UI in Figma"* | `plumb_studio` — brief → researched references → extracted brand → a full composed Figma page, critiqued and refined. |
 
 Install: `npm install -g plumb-mcp` → `plumb-mcp init`.
 
@@ -78,19 +91,26 @@ plumb-mcp init
 echo "$(npm root -g)/plumb-mcp/figma-plugin/manifest.json"
 #    Figma desktop → Plugins → Development → Import plugin from manifest…
 #    Run Plumb → click "Pair with Plumb" → done. Future runs collapse to a dot.
+```
 
-# 4. Optional — verify rendered code against Figma from the terminal
-plumb-mcp verify http://localhost:5173/dashboard --url <figma-url>
+**Then, in your agent:**
 
-# …or let it build + self-correct to pixel-perfect on its own (BYO Anthropic key)
-plumb-mcp fit <figma-url>
+```txt
+# Figma → code
+"Extract the Settings screen with Plumb and build it, then plumb_fit until it matches."
+
+# prompt → design
+"Use plumb_studio to design a premium fintech dashboard, then screenshot it and
+ run plumb_review as the director until the score clears 90."
 ```
 
 Other install paths: `npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/plumb-mcp:latest` · [build from source](https://github.com/tathagat22/plumb-mcp).
 
 ---
 
-## The fifteen MCP tools
+## The twenty MCP tools
+
+### Read — Figma → code
 
 | Tool | What it does |
 |---|---|
@@ -98,32 +118,34 @@ Other install paths: `npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/p
 | `plumb_outline` | Every screen in the file (id, name, size). |
 | `plumb_node` | Extract a screen as compact PDS — by id or by name. |
 | `plumb_query` | Pull a slice (`skeleton` / `buttons` / `text` / `components`) when a full screen would blow the token budget. |
-| `plumb_describe` | Text-only visual description — per-region narrative + child summary, for image-blind harnesses. |
+| `plumb_describe` | Text-only visual description — for image-blind harnesses. |
 | `plumb_tokens` | Design-token table (colours, type, radii, shadows). |
 | `plumb_selection` | The user's live Figma selection. |
-| `plumb_assets` | Export icons (SVG) + images (PNG) — three modes: recursive, list (manifest only), or surgical by ids. |
+| `plumb_assets` | Export icons (SVG) + images (PNG) — recursive, list, or surgical by ids. |
 | `plumb_screenshot` | Render any node to PNG/JPG. |
 | `plumb_search` | Find nodes by name and/or type. |
 | `plumb_components` | List components + instance usages. |
-| `plumb_verify` | Diff your rendered layout against the design — structured deltas with ΔE2000 perceptual colour distance, shadow/rotation/flex-child/fill-stack checks, no pixel diff. |
-| `plumb_fit` | The self-healing loop: `plumb_verify` plus a 0–100 convergence score and prioritised fixes, so the agent iterates to pixel-perfect instead of one-shot checking. |
-| `plumb_fig_outline` | Headless: read a saved `.fig` file from disk and list every screen. No Figma desktop, no token. |
-| `plumb_fig_node` | Headless: fetch one node from a saved `.fig` file by id. |
+| `plumb_verify` | Diff rendered layout against the design — ΔE2000 colour, shadow/rotation/flex checks. |
+| `plumb_fit` | The self-healing loop: verify + a 0–100 convergence score + prioritised fixes. |
+| `plumb_fig_outline` / `plumb_fig_node` | Headless: read a saved `.fig` file from disk. No Figma desktop, no token. |
+
+### Write — prompt → design (the director)
+
+| Tool | What it does |
+|---|---|
+| `plumb_studio` | **The design director.** One brief → researched references → extracted brand → a full composed Figma page. Returns the node ids + authored spec so you can critique and refine. |
+| `plumb_brand` | Brief → live-screenshots best-in-class reference sites + a synthesized brand palette/type board on the canvas. |
+| `plumb_design` | Author a design from Plumb's high-level Design DSL and build it into Figma (full control: pages, sections, components, motion). |
+| `plumb_review` | The critique loop: blends a structural diff, a deterministic design rubric, and the calling agent's own vision verdict into one score + ranked fixes. **No API key** — the agent that drives the MCP server *is* the creative director. |
+| `plumb_source` | Resolve on-brief assets (icons, photos, illustrations, patterns) for a design. |
 
 ---
 
-## The agent's flow
+## Why it wins on tokens and quality
 
-```js
-plumb_outline()                                  // 1. list screens
-plumb_node({ name: "Settings" })                 // 2. extract PDS
-plumb_assets({ name: "Settings", ids: [...] })   // 3. pull only the icons you need
-// 4. Build the UI — tag each element data-plumb-id="<el>" using the el from PDS
-plumb_fit({ name: "Settings", rendered })        // 5. score it, fix the deltas, repeat
-// 6. ...until plumb_fit returns done:true — pixel-perfect
-```
-
-`plumb_fit` is `plumb_verify` plus a convergence target — use it to iterate to a match. For a one-shot check, call `plumb_verify` instead. For the `rendered` payload shape, see [the verify docs](https://tathagat22.github.io/plumb-mcp/tools/plumb_verify.html) — or skip the in-browser capture entirely and use the `plumb-mcp verify` / `plumb-mcp fit` CLIs to drive headless Chrome end-to-end.
+- **Compact specs.** A 178-node dialog that is 351k tokens of Figma REST JSON comes back as ~2.6k tokens of PDS — deduped tokens, flexbox-resolved layout, depth-stable handles.
+- **Verified, not vibes.** `plumb_verify` / `plumb_fit` diff the *rendered* result against the design (ΔE2000 perceptual colour, shadow, rotation, flex-child, fill-stack) — no pixel diff, runs in CI.
+- **Designed, not defaulted.** The write direction bakes real design craft in: size-aware letter-spacing, generous section rhythm, extracted brand palettes from real references, gradient text, full-bleed and asymmetric layouts, and a vision-based director that grades the render and pushes it up.
 
 ---
 
@@ -131,129 +153,49 @@ plumb_fit({ name: "Settings", rendered })        // 5. score it, fix the deltas,
 
 | | Plugin (primary) | REST (secondary, headless) |
 |---|---|---|
-| Rate-limited | **No.** Reads the in-memory document. | Yes. Free/Starter workspaces get very low budgets. |
-| Token required | No. | Yes — `FIGMA_TOKEN` (figma.com → Settings → Security). |
-| Variables | **Yes**, even on Free plans. | No — Variables REST API is Enterprise-only. |
+| Rate-limited | **No.** Reads the in-memory document. | Yes. Free/Starter get very low budgets. |
+| Token required | No. | Yes — `FIGMA_TOKEN`. |
+| Variables | **Yes**, every plan. | No — Variables REST is Enterprise-only. |
+| Write (generate designs) | **Yes.** | No. |
 | Headless / CI | No (needs Figma open). | Yes. |
 
-Tools auto-pick the path. With the plugin paired, omit `fileKey` and pass
-`id` or `name`. For the REST path, pass `fileKey` + `id`.
-
----
-
-## Architecture
-
-```
-Figma (desktop or browser, any plan)
-  │
-  │  Plumb plugin
-  │    • reads document + variables (Figma Plugin API, no rate limits)
-  │    • one-time "Pair with Plumb" click; collapses to a dot
-  ▼
-  ws://127.0.0.1:31337    JSON control channel (paired, Origin-aware)
-   +   /upload/:key.:ext  loopback HTTP for binary blobs — screenshots,
-                          assets — POSTed straight to disk, no base64,
-                          per-item ack for array uploads to keep Figma's
-                          IPC from buffering and redelivering
-  ▼
-Plumb MCP server  —  `npx plumb-mcp` / `node dist/index.js`
-  │  • REST + plugin ingest
-  │  • Normalizer → Plumb Design Spec (PDS):
-  │      auto-layout → flexbox, tokens deduped, depth-stable `el` handles
-  │      (mints handles in a full pre-walk so the same node gets the same
-  │       el regardless of the requested depth — `plumb_verify` needs this)
-  │  • Version-keyed cache, fit-to-budget (maxTokens → auto-depth)
-  │  • Fifteen MCP tools (status / outline / node / query / describe /
-  │    tokens / selection / assets / screenshot / search / components /
-  │    verify / fit / fig_outline / fig_node)
-  ▼
-  stdio MCP
-  ▼
-Claude Code · Cursor · VS Code · Windsurf
-```
+Tools auto-pick the path. With the plugin paired, omit `fileKey` and pass `id` or `name`.
 
 ---
 
 ## Configuration
 
-`.env` (gitignored — never commit secrets):
+`.env` (gitignored — never commit secrets; Plumb loads it on startup):
 
 ```bash
 FIGMA_TOKEN=figd_your_read_only_token   # REST path only
-PLUMB_FILE_KEY=…                        # for `npm run outline` etc.
-PLUMB_NODE_ID=131:6950                  # demo target
+# prompt→design photo providers (all free — for on-brief imagery)
+UNSPLASH_ACCESS_KEY=…
+PEXELS_API_KEY=…
+PIXABAY_API_KEY=…
 ```
 
-Cache and outputs:
-
-- **Cache** — `~/.cache/plumb/v1/` (TTL'd; override with `PLUMB_CACHE_DIR`).
-- **Assets** — `./plumb-assets/<screen>/` (override with `PLUMB_ASSETS_DIR`).
-- **Screenshots** — `./plumb-screenshots/` (override with `PLUMB_SCREENSHOTS_DIR`).
-
----
-
-## Testing
-
-```bash
-npm run typecheck   # strict TS (server + plugin)
-npm run build       # bundle server + plugin
-npm run smoke       # MCP handshake; expects 15 tools
-npm run check       # offline fit-to-budget + cache verification
-npm run bridge      # simulated plugin + every tool offline
-npm run prove       # normalizer depth/token curve (fixture or live)
-npm run outline     # live: list every screen in your file (needs .env)
-npm run connect     # live end-to-end against a paired plugin
-```
-
----
-
-## Layout
-
-```
-plumb-mcp/
-├── src/
-│   ├── index.ts          # bin entry: stdio MCP server + bridge
-│   ├── server.ts         # registers the fifteen tools
-│   ├── verify.ts         # the plumb_verify comparison engine
-│   ├── fit.ts            # the convergence score + self-healing coaching
-│   ├── cache.ts          # on-disk version-keyed result cache
-│   ├── assets.ts         # writes exported assets to disk
-│   ├── pds.ts            # Plumb Design Spec types
-│   ├── keylegend.ts      # the compact-key legend (self-description)
-│   ├── meta.ts           # server name + version
-│   ├── errors.ts         # instruction-shaped error payloads
-│   ├── figma/            # REST ingest + raw Figma types
-│   ├── bridge/           # localhost WebSocket bridge to the plugin
-│   ├── normalize/        # raw Figma → PDS (handles, layout, paint, …)
-│   ├── tools/            # the fifteen MCP tools (one file each)
-│   ├── fit/              # autonomous `plumb fit` loop — generate + serve
-│   ├── render/           # shared headless / browser DOM capture
-│   ├── cli/init.ts       # `plumb init` — write editor MCP configs
-│   ├── cli/fit.ts        # `plumb fit` — self-healing build loop
-│   └── util/             # round, estimateTokens, …
-├── figma-plugin/
-│   ├── manifest.json
-│   ├── code.ts           # main thread — reads, serializes, exports
-│   └── ui.html           # the panel (dot + pair button)
-├── playground/           # the browser self-healing loop (Vite SPA, BYO-key)
-├── scripts/              # smoke · check · bridge · connect · prove · outline
-└── README.md             # you are here
-```
+- **Cache** — `~/.cache/plumb/v1/` (override with `PLUMB_CACHE_DIR`).
+- **Assets** — `./plumb-assets/<screen>/` · **Screenshots** — `./plumb-screenshots/`.
 
 ---
 
 ## Security
 
-- Loopback-only WebSocket bridge.
-- Single paired plugin at a time; pairing is a deliberate click in the plugin
-  panel (one-time, then remembered via `figma.clientStorage`).
-- Zero telemetry.
-- No personal-access token needed for the plugin path; the REST path's token
-  is consumed only by the server's own outbound `fetch` calls.
+- Loopback-only WebSocket bridge; a single paired plugin at a time (one deliberate click).
+- Zero telemetry. No personal-access token needed for the plugin path.
+- The write direction never calls an external model — the AI agent already driving the MCP server does the design judgment.
+
+---
+
+## Contributing
+
+Contributions welcome — from typo fixes to new verify checks to design-director upgrades. See [`CONTRIBUTING.md`](./CONTRIBUTING.md). New here? Browse the [`good first issue`](https://github.com/tathagat22/plumb-mcp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) label.
 
 ---
 [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/tathagat22-plumb-mcp-badge.png)](https://mseep.ai/app/tathagat22-plumb-mcp)
 [![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/a9f8a315-d08c-48df-a817-c65ed22c2730)
+
 ## License
 
 MIT © Tathagat Maitray. See [`LICENSE`](./LICENSE).

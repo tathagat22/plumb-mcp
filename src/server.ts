@@ -1,17 +1,27 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SERVER_NAME, SERVER_VERSION } from "./meta";
 import { registerPlumbAssets } from "./tools/assets";
+import { registerBrandTool } from "./tools/brand";
 import { registerPlumbComponents } from "./tools/components";
 import { registerPlumbDescribe } from "./tools/describe";
+import { registerPlumbDesign } from "./tools/design";
 import { registerPlumbFigNode, registerPlumbFigOutline } from "./tools/fig";
 import { registerPlumbFit } from "./tools/fit";
 import { registerPlumbNode } from "./tools/node";
 import { registerPlumbOutline } from "./tools/outline";
 import { registerPlumbQuery } from "./tools/query";
+import { registerPlumbReview } from "./tools/review";
 import { registerPlumbScreenshot } from "./tools/screenshot";
 import { registerPlumbSearch } from "./tools/search";
 import { registerPlumbSelection } from "./tools/selection";
+import { registerPlumbSource } from "./tools/source";
 import { registerPlumbStatus } from "./tools/status";
+import { registerPlumbStudio } from "./tools/studio";
+import {
+  registerPlumbStudioKit,
+  registerPlumbStudioPage,
+  registerPlumbStudioStart,
+} from "./tools/studioFlow";
 import { registerPlumbTokens } from "./tools/tokens";
 import { registerPlumbVerify } from "./tools/verify";
 
@@ -59,6 +69,16 @@ export function createServer(): McpServer {
   registerPlumbQuery(server);
   registerPlumbFigOutline(server);
   registerPlumbFigNode(server);
+  // Write direction: author + build from the Design DSL, source assets, review.
+  registerPlumbDesign(server);
+  registerBrandTool(server);
+  registerPlumbStudio(server);
+  registerPlumbSource(server);
+  registerPlumbReview(server);
+  // The transparent step-by-step studio flow: references+brand → kit → pages.
+  registerPlumbStudioStart(server);
+  registerPlumbStudioKit(server);
+  registerPlumbStudioPage(server);
 
   return server;
 }

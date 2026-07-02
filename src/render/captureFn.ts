@@ -28,6 +28,8 @@ export const CAPTURED_STYLE_KEYS = [
   "borderWidth",
   "opacity",
   "textDecorationLine",
+  "boxShadow",
+  "backdropFilter",
 ] as const;
 
 /**
@@ -87,6 +89,11 @@ export const captureFn = function (selector: string): unknown {
       borderWidth: cs.borderWidth,
       opacity: cs.opacity,
       textDecorationLine: cs.textDecorationLine ?? cs.textDecoration ?? "",
+      boxShadow: cs.boxShadow ?? "",
+      // backdrop-filter is still vendor-prefixed in some engines (Safari/older
+      // Chrome). Read the standard prop first, fall back to the -webkit- alias
+      // so a real glass effect isn't reported as "(unset)".
+      backdropFilter: cs.backdropFilter || cs.webkitBackdropFilter || "",
     };
     // Asset fidelity: did this element render the real exported asset, or is it
     // an empty/redrawn box? Capture the data-plumb-asset tag + whether any
