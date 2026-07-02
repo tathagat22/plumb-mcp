@@ -1,6 +1,6 @@
 ---
-title: MCP tool reference — Plumb Figma MCP server (design→code + prompt→design)
-description: Twenty Model Context Protocol tools that make Figma two-way for AI coding agents. Read direction — figma to code: outline, node, query, describe, assets, screenshot, verify, and the self-healing fit loop. Write direction — prompt to design: studio, brand, design, review, source. The AI design director, no extra API key.
+title: "MCP tool reference — Plumb Figma MCP server (design→code + prompt→design)"
+description: "Twenty Model Context Protocol tools that make Figma two-way for AI coding agents. Read direction — figma to code: outline, node, query, describe, assets, screenshot, verify, and the self-healing fit loop. Write direction — prompt to design: studio, brand, design, review, source. The AI design director, no extra API key."
 ---
 
 # Tools
