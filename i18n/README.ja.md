@@ -1,7 +1,7 @@
 
 
 <p align="center">
-  <img src="./docs/public/banner.png" alt="Plumb — Figma ↔ AI コーディング、双方向に配管完了。" width="100%">
+  <img src="../docs/public/banner.png" alt="Plumb — Figma ↔ AI コーディング、双方向に配管完了。" width="100%">
 </p>
 
 # Plumb (`plumb-mcp`) — 双方向の Figma MCP：デザイン → コード、そしてプロンプト → デザイン
@@ -10,6 +10,8 @@
   <a href="https://github.com/tathagat22/plumb-mcp"><img alt="GitHub stars" src="https://img.shields.io/github/stars/tathagat22/plumb-mcp?style=social"></a>
   &nbsp;
   <a href="https://www.npmjs.com/package/plumb-mcp"><img alt="npm version" src="https://img.shields.io/npm/v/plumb-mcp?color=cb3837&logo=npm&logoColor=white"></a>
+  &nbsp;
+  <a href="https://www.npmjs.com/package/plumb-mcp"><img alt="npm weekly downloads" src="https://img.shields.io/npm/dw/plumb-mcp?color=cb3837&logo=npm&logoColor=white"></a>
   &nbsp;
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue">
 </p>
@@ -20,7 +22,7 @@
 
 > **Figma → コード**（抽出・検証・自己修復） &nbsp;•&nbsp; **プロンプト → デザイン**（リサーチ → ブランド → 生成 → 批評）。1 つの MCP サーバーで、両方向。
 
-📖 ドキュメント：**<https://tathagat22.github.io/plumb-mcp/>** &nbsp;·&nbsp; 📦 npm：[`plumb-mcp`](https://www.npmjs.com/package/plumb-mcp) &nbsp;·&nbsp; 🇬🇧 [English README](./README.md) &nbsp;·&nbsp; 🇨🇳 [简体中文](./README.zh-cn.md) &nbsp;·&nbsp; 🇰🇷 [한국어](./README.ko.md)
+📖 ドキュメント：**<https://tathagat22.github.io/plumb-mcp/>** &nbsp;·&nbsp; 📦 npm：[`plumb-mcp`](https://www.npmjs.com/package/plumb-mcp) &nbsp;·&nbsp; 🇬🇧 [English README](../README.md) &nbsp;·&nbsp; 🇨🇳 [简体中文](./README.zh-cn.md) &nbsp;·&nbsp; 🇰🇷 [한국어](./README.ko.md)
 
 <p align="center">
   <a href="cursor://anysphere.cursor-deeplink/mcp/install?name=plumb&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsInBsdW1iLW1jcCJdfQ=="><img src="https://cursor.com/deeplink/mcp-install-dark.svg" alt="Add to Cursor" height="32"></a>
@@ -200,4 +202,4 @@ PIXABAY_API_KEY=…
 
 ## ライセンス
 
-MIT © Tathagat Maitray. [`LICENSE`](./LICENSE) を参照。
+MIT © Tathagat Maitray. [`LICENSE`](../LICENSE) を参照。

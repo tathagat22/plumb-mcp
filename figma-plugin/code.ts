@@ -12,7 +12,7 @@ import { applyDesign } from "./emit";
 import { applyFoundations } from "./foundations";
 import { wireMotion } from "./motion-emit";
 
-const PLUGIN_VERSION = "0.13.1";
+const PLUGIN_VERSION = "0.13.2";
 const PANEL = { w: 240, h: 144 };
 const DOT = { w: 60, h: 60 };
 

@@ -1,7 +1,7 @@
 
 
 <p align="center">
-  <img src="./docs/public/banner.png" alt="Plumb — Figma ↔ AI 코딩, 양방향으로 연결." width="100%">
+  <img src="../docs/public/banner.png" alt="Plumb — Figma ↔ AI 코딩, 양방향으로 연결." width="100%">
 </p>
 
 # Plumb (`plumb-mcp`) — 양방향 Figma MCP: design → code, 그리고 prompt → design
@@ -10,6 +10,8 @@
   <a href="https://github.com/tathagat22/plumb-mcp"><img alt="GitHub stars" src="https://img.shields.io/github/stars/tathagat22/plumb-mcp?style=social"></a>
   &nbsp;
   <a href="https://www.npmjs.com/package/plumb-mcp"><img alt="npm version" src="https://img.shields.io/npm/v/plumb-mcp?color=cb3837&logo=npm&logoColor=white"></a>
+  &nbsp;
+  <a href="https://www.npmjs.com/package/plumb-mcp"><img alt="npm weekly downloads" src="https://img.shields.io/npm/dw/plumb-mcp?color=cb3837&logo=npm&logoColor=white"></a>
   &nbsp;
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue">
 </p>
@@ -20,7 +22,7 @@
 
 > **Figma → code** (추출, 검증, 자가 치유) &nbsp;•&nbsp; **prompt → design** (리서치 → 브랜드 → 생성 → 비평). 하나의 MCP 서버, 양방향.
 
-📖 전체 문서: **<https://tathagat22.github.io/plumb-mcp/>** &nbsp;·&nbsp; 📦 npm: [`plumb-mcp`](https://www.npmjs.com/package/plumb-mcp) &nbsp;·&nbsp; 🇬🇧 [English README](./README.md) &nbsp;·&nbsp; 🇨🇳 [简体中文](./README.zh-cn.md) &nbsp;·&nbsp; 🇯🇵 [日本語](./README.ja.md)
+📖 전체 문서: **<https://tathagat22.github.io/plumb-mcp/>** &nbsp;·&nbsp; 📦 npm: [`plumb-mcp`](https://www.npmjs.com/package/plumb-mcp) &nbsp;·&nbsp; 🇬🇧 [English README](../README.md) &nbsp;·&nbsp; 🇨🇳 [简体中文](./README.zh-cn.md) &nbsp;·&nbsp; 🇯🇵 [日本語](./README.ja.md)
 
 > 이 번역은 AI의 도움으로 생성되었습니다. 원어민의 검토를 환영하며, PR로 개선해 주시면 감사하겠습니다.
 
@@ -200,6 +202,6 @@ PIXABAY_API_KEY=…
 
 ## 라이선스
 
-MIT © Tathagat Maitray. [`LICENSE`](./LICENSE) 참조.
+MIT © Tathagat Maitray. [`LICENSE`](../LICENSE) 참조.
 </content>
 </invoke>
