@@ -1,18 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.tathagat22/plumb-mcp",
-  "description": "The two-way Figma MCP. Design → code: extract compact specs + verify your build with a loop. Prompt → design: an AI design director researches references, extracts a brand, and generates a full on-brand Figma page — no extra API key. No rate limits, no metered quotas. Every Figma plan.",
+  "description": "Two-way Figma MCP: extract + verify design-to-code, or generate on-brand Figma pages from a prompt.",
   "repository": {
     "url": "https://github.com/tathagat22/plumb-mcp",
     "source": "github"
   },
   "websiteUrl": "https://tathagat22.github.io/plumb-mcp/",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "plumb-mcp",
-      "version": "0.13.0",
+      "version": "0.13.1",
       "transport": {
         "type": "stdio"
       },
