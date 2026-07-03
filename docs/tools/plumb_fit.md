@@ -75,7 +75,7 @@ It's monotonic: fixing any delta or building any missing key node always raises 
 
 - **In your editor (free).** This MCP tool — Claude Code / Cursor / Windsurf generate, call `plumb_fit`, and self-correct. No API key beyond your editor's; the agent is the generator.
 - **Autonomously, from the CLI.** `plumb-mcp fit <figma-url>` extracts the design, generates a self-contained HTML build, renders it headless in your installed Chrome, diffs, and corrects it pass-by-pass until it matches. Needs `FIGMA_TOKEN` + `ANTHROPIC_API_KEY`. See [Get started](/getting-started).
-- **In the browser.** The [Playground](/play/) runs the same loop client-side with your own Anthropic key — paste a Figma URL or pick a demo and watch it converge.
+- **In the browser.** The <a href="/play/" target="_self">Playground</a> runs the same loop client-side with your own Anthropic key — paste a Figma URL or pick a demo and watch it converge.
 
 ## When the agent should use it
 

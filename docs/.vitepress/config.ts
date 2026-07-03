@@ -31,6 +31,15 @@ export default defineConfig({
   sitemap: { hostname: SITE_URL },
   head: [
     ["link", { rel: "icon", type: "image/png", href: "/plumb-mcp/favicon.png" }],
+    ["link", { rel: "preconnect", href: "https://fonts.googleapis.com" }],
+    ["link", { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "" }],
+    [
+      "link",
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
+      },
+    ],
     ["meta", { name: "theme-color", content: "#0c8ce9" }],
     ["meta", { name: "author", content: "Tathagat Maitray" }],
     ["meta", { name: "keywords", content: "figma mcp, figma mcp server, figma to code, design to code, figma dev mode mcp alternative, framelink alternative, figma mcp rate limit, figma dev mode mcp, figma dev mode mcp token limit, 25k token cap, framelink figma-developer-mcp, framelink 429, figma rest rate limit, figma free plan mcp, figma variables enterprise, verification loop, design tokens, prompt to design, prompt to figma, text to figma, ai design generator, generate figma designs, ai ui/ux designer, ai design director, ai design agent, mcp design generation, claude code figma, cursor figma mcp, windsurf figma, model context protocol, ai coding agent, figma plugin mcp, plumb mcp" }],
@@ -66,7 +75,9 @@ export default defineConfig({
       { text: "Get started", link: "/getting-started" },
       { text: "Prompt → design", link: "/prompt-to-design" },
       { text: "Tools", link: "/tools/" },
-      { text: "Playground", link: "/play/" },
+      // target forces a real page load — /play/ is a static build outside
+      // VitePress's routes, so the client router's soft-navigation 404s on it.
+      { text: "Playground", link: "/play/", target: "_self" },
       { text: "Architecture", link: "/architecture" },
       { text: "GitHub", link: "https://github.com/tathagat22/plumb-mcp" },
       { text: "npm", link: "https://www.npmjs.com/package/plumb-mcp" },
