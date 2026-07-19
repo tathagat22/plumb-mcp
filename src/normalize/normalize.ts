@@ -1,6 +1,7 @@
 import { HandleMinter } from "./handles";
 import { toLayout } from "./layout";
 import { backdropFilterCss, effectsToStack, paintsToFillStack } from "./paint";
+import { classifySemantics } from "./semantics";
 import { TokenInterner } from "./tokens";
 import { detectSuspiciousText } from "./typo";
 import { estimateTokens } from "../util/estimate";
@@ -415,6 +416,10 @@ export function normalize(
   }
 
   const tokens = interner.table();
+  // Container-level semantic labels (nav/hero/footer/sidebar/card) — a
+  // second pass over the finished tree, on top of the leaf-level "button"
+  // detection `inferPattern` already did during the walk. See semantics.ts.
+  classifySemantics(root, nodes, tokens);
   const estTokens = estimateTokens(JSON.stringify({ tokens, nodes }));
 
   // Count top-level image asset nodes so the `next` hint can tell the agent

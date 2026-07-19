@@ -394,10 +394,16 @@ export interface PdsNode {
    */
   iconHint?: string;
   /**
-   * Detected semantic UI pattern. Currently `"button"` for row-layout clusters
+   * Detected semantic UI role. Leaf-level: `"button"` for row-layout clusters
    * sized like a button (≤480×80), with stroke or fill, radius, and at least
-   * one TEXT child. Saves the renderer from re-discovering "this is a button"
-   * by geometric inspection — map directly to the codebase's Button component.
+   * one TEXT child. Container-level (v0.14+, `src/normalize/semantics.ts`):
+   * `"nav"` / `"hero"` / `"footer"` / `"sidebar"` among the requested root's
+   * direct children, and `"card"` on a repeat-group template that's both a
+   * styled surface (radius/shadow/effects, or fill+stroke) and carries its
+   * own text. Conservative by construction — a missing label just means the
+   * signals didn't line up, never trust it over what you can see in the
+   * screenshot. Saves the renderer from re-discovering "this is a button" /
+   * "this is the nav" by geometric inspection every call.
    */
   pattern?: string;
   /**
