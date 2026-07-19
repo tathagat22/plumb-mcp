@@ -16,11 +16,15 @@ const DESCRIPTION =
   "Query a Figma subtree by pattern instead of dumping the whole tree. " +
   "Use this on dense screens where plumb_node would be too big — pull a " +
   "skeleton (structure only, no text/fills/effects), every button, every " +
-  "TEXT node above a size, every instance of a component. Mirrors the same " +
-  "scope-resolution as plumb_node: pass `id` or `name` with the plugin " +
-  "paired, or `fileKey` + `id` (or a Figma URL) on the REST path.";
+  "TEXT node above a size, every instance of a component, or every node " +
+  "Plumb classified with a given semantic role (nav/hero/footer/sidebar/" +
+  "card — select: \"role\"). Mirrors the same scope-resolution as " +
+  "plumb_node: pass `id` or `name` with the plugin paired, or `fileKey` + " +
+  "`id` (or a Figma URL) on the REST path.";
 
-type Select = "skeleton" | "buttons" | "text" | "components";
+type Select = "skeleton" | "buttons" | "text" | "components" | "role";
+const ROLES = ["nav", "hero", "footer", "sidebar", "card", "button"] as const;
+type Role = (typeof ROLES)[number];
 
 interface QueryResult {
   scope: { id: string; name: string | null };
@@ -52,13 +56,15 @@ export function registerPlumbQuery(server: McpServer): void {
           .optional()
           .describe("Screen name — plugin path, resolved against the paired file."),
         select: z
-          .enum(["skeleton", "buttons", "text", "components"])
+          .enum(["skeleton", "buttons", "text", "components", "role"])
           .describe(
             'Query pattern. "skeleton" = structure-only (drops chars, fills, ' +
               'effects, vectorPath, text refs). "buttons" = nodes Plumb tagged ' +
-              'with pattern: button. "text" = TEXT nodes, optionally filtered by ' +
-              'font-size min/max. "components" = INSTANCE nodes, optionally ' +
-              "filtered to a specific componentId.",
+              'with pattern: button (equivalent to select:"role", role:"button"; ' +
+              'kept for backward compatibility). "text" = TEXT nodes, optionally ' +
+              'filtered by font-size min/max. "components" = INSTANCE nodes, ' +
+              'optionally filtered to a specific componentId. "role" = nodes ' +
+              "carrying a given semantic role — see the `role` param.",
           ),
         min: z
           .number()
@@ -72,6 +78,13 @@ export function registerPlumbQuery(server: McpServer): void {
           .string()
           .optional()
           .describe('Filter for select: "components" — return only instances of this component.'),
+        role: z
+          .enum(ROLES)
+          .optional()
+          .describe(
+            'Required for select: "role" — which semantic role to match against ' +
+              "the node's `pattern` field (the same field select:\"buttons\" reads).",
+          ),
       },
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     },
@@ -123,10 +136,18 @@ export function registerPlumbQuery(server: McpServer): void {
           pds = normalize(file, 12, {});
         }
 
+        if (args.select === "role" && !args.role) {
+          throw new PlumbError(
+            'select: "role" needs a `role` value.',
+            `Pass one of: ${ROLES.join(", ")}.`,
+          );
+        }
+
         const matches = applySelect(pds, args.select, {
           min: args.min,
           max: args.max,
           componentId: args.componentId,
+          role: args.role,
         });
 
         const result: QueryResult = {
@@ -154,7 +175,7 @@ export function registerPlumbQuery(server: McpServer): void {
 function applySelect(
   pds: PdsDocument,
   select: Select,
-  args: { min?: number; max?: number; componentId?: string },
+  args: { min?: number; max?: number; componentId?: string; role?: Role },
 ): PdsNode[] {
   const all = Object.values(pds.nodes);
   switch (select) {
@@ -182,6 +203,9 @@ function applySelect(
 
     case "buttons":
       return all.filter((n) => n.pattern === "button");
+
+    case "role":
+      return all.filter((n) => n.pattern === args.role);
 
     case "text": {
       const textNodes = all.filter((n) => n.type === "text");
