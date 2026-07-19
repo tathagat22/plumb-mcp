@@ -1,0 +1,18 @@
+{
+  "_comment": "Committed regression floors for bench/floors.test.ts. Values have real slack above the last measured run (see bench/run.ts output / bench/report.json) — the point is catching a real regression, not chasing a tight number. Update deliberately, with a reason, never just to make a failing test pass.",
+  "roleAccuracy": {
+    "precision": 0.95,
+    "recall": 0.95,
+    "f1": 0.95,
+    "_measured": { "precision": 1.0, "recall": 1.0, "f1": 1.0 }
+  },
+  "stress": {
+    "maxLatencyMs": 200,
+    "maxHeapDeltaBytes": 52428800,
+    "_measured": { "latencyMs": 1.9, "heapDeltaBytes": 104857 }
+  },
+  "compression": {
+    "minTokenDedupRatio": 0.8,
+    "_measured": { "dedupRatio": 0.95 }
+  }
+}

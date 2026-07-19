@@ -19,3 +19,6 @@ feedbackstowor.txt
 
 # Internal roadmap planning — design doc / phased plan, kept local.
 docs/ROADMAP-*.md
+
+# Generated benchmark report — regenerate with `npm run bench`, not tracked.
+bench/report.json
