@@ -1,12 +1,10 @@
 import { z } from "zod";
-import { PlumbError } from "../errors";
 import { buildSemanticGraph } from "../semantic/build";
 import { diffSemanticGraphs } from "../semantic/diff";
 import { runEnrichers } from "../semantic/enricher";
 import { RoleEnricher } from "../semantic/enrichers/role";
-import { fail, ok } from "./shared";
+import { asPdsDocument, fail, ok } from "./shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { PdsDocument } from "../pds";
 
 const DESCRIPTION =
   "Semantic diff between two PDS snapshots of the same screen — call " +
@@ -23,21 +21,6 @@ const DESCRIPTION =
 const PDS_DOC_DESCRIPTION =
   "A full PdsDocument object exactly as returned by plumb_node / " +
   "plumb_outline / plumb_query (the `nodes` + `root` fields are required).";
-
-function asPdsDocument(value: unknown, label: "before" | "after"): PdsDocument {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    typeof (value as Record<string, unknown>).root !== "string" ||
-    typeof (value as Record<string, unknown>).nodes !== "object"
-  ) {
-    throw new PlumbError(
-      `\`${label}\` doesn't look like a PdsDocument (missing \`root\`/\`nodes\`).`,
-      "Pass the raw JSON object returned by a prior plumb_node / plumb_outline / plumb_query call, unmodified.",
-    );
-  }
-  return value as PdsDocument;
-}
 
 /** Registers the `plumb_diff` MCP tool. */
 export function registerPlumbDiff(server: McpServer): void {

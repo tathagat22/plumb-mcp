@@ -23,7 +23,17 @@ export interface Enricher {
   kind: "heuristic" | "llm-assisted";
   /** Namespaces of other enrichers that must run first. */
   requires?: string[];
-  run(graph: SemanticGraph): CirAnnotation[];
+  /** Every annotation produced so far this run, in dependency order — an
+   *  enricher that declares `requires: ["role"]` reads its input by
+   *  filtering this list for `namespace === "role"`, not by re-deriving
+   *  it. Optional so enrichers with no `requires` (and direct callers in
+   *  tests/tools that only care about one enricher) aren't forced to pass
+   *  an empty array. (This parameter didn't exist in the first cut of this
+   *  interface — `requires` ordered enrichers correctly but never actually
+   *  handed a dependency's output to the enricher that declared it, a gap
+   *  only surfaced once a second enricher genuinely needed one. See
+   *  docs/ROADMAP-v0.14-design-intelligence.md §10 M4.) */
+  run(graph: SemanticGraph, priorAnnotations?: CirAnnotation[]): CirAnnotation[];
 }
 
 /** Kahn's-algorithm topological sort over `requires`. Throws on a cycle or
@@ -62,7 +72,7 @@ export function runEnrichers(graph: SemanticGraph, enrichers: Enricher[]): CirAn
   const out: CirAnnotation[] = [];
   for (const enricher of orderEnrichers(enrichers)) {
     try {
-      out.push(...enricher.run(graph));
+      out.push(...enricher.run(graph, out.slice()));
     } catch {
       // Swallow — a broken enricher must not take down the whole response.
       // (No logging channel here; stdout is the JSON-RPC channel and stderr

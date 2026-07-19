@@ -158,6 +158,7 @@ export const RoleEnricher: Enricher = {
   namespace: "role",
   version: VERSION,
   kind: "heuristic",
+  // No dependencies — doesn't read prior annotations.
   run(graph: SemanticGraph): CirAnnotation[] {
     const labels = new Map<string, string>();
     classifySections(graph, labels);

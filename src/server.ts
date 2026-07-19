@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SERVER_NAME, SERVER_VERSION } from "./meta";
 import { registerPlumbAssets } from "./tools/assets";
+import { registerPlumbAudit } from "./tools/audit";
 import { registerBrandTool } from "./tools/brand";
 import { registerPlumbComponents } from "./tools/components";
 import { registerPlumbDescribe } from "./tools/describe";
@@ -73,6 +74,7 @@ export function createServer(): McpServer {
   // Semantic layer (docs/ROADMAP-v0.14-design-intelligence.md): diffs two PDS
   // snapshots and narrates using role labels, not raw JSON deltas.
   registerPlumbDiff(server);
+  registerPlumbAudit(server);
   // Write direction: author + build from the Design DSL, source assets, review.
   registerPlumbDesign(server);
   registerBrandTool(server);

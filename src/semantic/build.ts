@@ -7,7 +7,7 @@
  * §2, §7): neither does. This file is the seam between them.
  */
 import type { PdsDocument, PdsNode } from "../pds";
-import { resolveLayout } from "../normalize/resolve";
+import { resolveFills, resolveLayout } from "../normalize/resolve";
 import type { CirEdge, CirNode, CirNodeStyle, NodeKind, SemanticGraph } from "./graph";
 
 const CIR_VERSION = "1.0.0";
@@ -43,6 +43,29 @@ function isSurface(node: PdsNode): boolean {
   );
 }
 
+function resolveColorRef(ref: string | undefined, doc: PdsDocument): string | undefined {
+  if (!ref) return undefined;
+  return ref.startsWith("$c") ? doc.tokens.color[ref] : ref;
+}
+
+/** The node's own resolved solid color, own fill only (no ancestor walk —
+ *  see CirNodeStyle.fillColor's docstring for why). Undefined for
+ *  multi-layer stacks, gradients, and images — a "the" color doesn't exist
+ *  for those, and guessing one would be exactly the kind of false-precision
+ *  this codebase's classifiers otherwise avoid. */
+function fillColorOf(node: PdsNode, doc: PdsDocument): string | undefined {
+  const fills = resolveFills(node.fills, doc.tokens);
+  if (fills) {
+    if (fills.length === 1 && fills[0]?.type === "color") return fills[0].color;
+    return undefined; // 0 or ≥2 layers, or a non-solid single layer — ambiguous
+  }
+  if (typeof node.fill === "string" && node.fill !== "gradient" && node.fill !== "image") {
+    return resolveColorRef(node.fill, doc);
+  }
+  if (typeof node.inheritedFill === "string") return resolveColorRef(node.inheritedFill, doc);
+  return undefined;
+}
+
 function styleOf(node: PdsNode, doc: PdsDocument): CirNodeStyle {
   const style: CirNodeStyle = {};
   const layout = resolveLayout(node.layout, doc.tokens);
@@ -50,6 +73,8 @@ function styleOf(node: PdsNode, doc: PdsDocument): CirNodeStyle {
   const textPx = textPxOf(node, doc);
   if (textPx !== undefined) style.textPx = textPx;
   if (isSurface(node)) style.isSurface = true;
+  const fillColor = fillColorOf(node, doc);
+  if (fillColor) style.fillColor = fillColor;
   return style;
 }
 

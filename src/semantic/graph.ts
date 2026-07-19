@@ -28,6 +28,14 @@ export interface CirNodeStyle {
   /** Has a radius, a shadow/blur effect, or a fill+stroke pair — reads as a
    *  bounded, styled "surface" rather than a bare layout container. */
   isSurface?: boolean;
+  /** Resolved solid color (`#rrggbb` or `#rrggbbaa`), own fill only — no
+   *  ancestor-inheritance walk. Undefined for multi-layer fill stacks,
+   *  gradients, images, or nodes with no fill at all; a consumer that needs
+   *  "what's behind this node" (e.g. AccessibilityEnricher's contrast
+   *  check) walks the graph itself via `children`, exactly like
+   *  RoleEnricher's own tree walks — that's a derived, check-specific
+   *  concern, not a general CIR fact worth carrying on every node. */
+  fillColor?: string;
 }
 
 export interface CirNode {
