@@ -66,6 +66,7 @@ export function registerPlumbStatus(server: McpServer): void {
           "plumb_query",
           "plumb_fig_outline",
           "plumb_fig_node",
+          "plumb_diff",
           "plumb_design",
           "plumb_brand",
           "plumb_studio",

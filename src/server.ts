@@ -5,6 +5,7 @@ import { registerBrandTool } from "./tools/brand";
 import { registerPlumbComponents } from "./tools/components";
 import { registerPlumbDescribe } from "./tools/describe";
 import { registerPlumbDesign } from "./tools/design";
+import { registerPlumbDiff } from "./tools/diff";
 import { registerPlumbFigNode, registerPlumbFigOutline } from "./tools/fig";
 import { registerPlumbFit } from "./tools/fit";
 import { registerPlumbNode } from "./tools/node";
@@ -69,6 +70,9 @@ export function createServer(): McpServer {
   registerPlumbQuery(server);
   registerPlumbFigOutline(server);
   registerPlumbFigNode(server);
+  // Semantic layer (docs/ROADMAP-v0.14-design-intelligence.md): diffs two PDS
+  // snapshots and narrates using role labels, not raw JSON deltas.
+  registerPlumbDiff(server);
   // Write direction: author + build from the Design DSL, source assets, review.
   registerPlumbDesign(server);
   registerBrandTool(server);
