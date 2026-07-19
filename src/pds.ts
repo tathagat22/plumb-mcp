@@ -396,7 +396,9 @@ export interface PdsNode {
   /**
    * Detected semantic UI role. Leaf-level: `"button"` for row-layout clusters
    * sized like a button (≤480×80), with stroke or fill, radius, and at least
-   * one TEXT child. Container-level (v0.14+, `src/normalize/semantics.ts`):
+   * one TEXT child (still inferred inline during normalize()'s walk). Container-
+   * level (v0.14+, projected from `src/semantic/enrichers/role.ts` via the
+   * Semantic Graph — see `docs/ROADMAP-v0.14-design-intelligence.md` §10 M2):
    * `"nav"` / `"hero"` / `"footer"` / `"sidebar"` among the requested root's
    * direct children, and `"card"` on a repeat-group template that's both a
    * styled surface (radius/shadow/effects, or fill+stroke) and carries its
