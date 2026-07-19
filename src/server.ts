@@ -9,6 +9,7 @@ import { registerPlumbDesign } from "./tools/design";
 import { registerPlumbDiff } from "./tools/diff";
 import { registerPlumbFigNode, registerPlumbFigOutline } from "./tools/fig";
 import { registerPlumbFit } from "./tools/fit";
+import { registerPlumbImportWeb } from "./tools/importHtml";
 import { registerPlumbNode } from "./tools/node";
 import { registerPlumbOutline } from "./tools/outline";
 import { registerPlumbQuery } from "./tools/query";
@@ -80,6 +81,7 @@ export function createServer(): McpServer {
   // snapshots and narrates using role labels, not raw JSON deltas.
   registerPlumbDiff(server);
   registerPlumbAudit(server);
+  registerPlumbImportWeb(server);
   // Write direction: author + build from the Design DSL, source assets, review.
   registerPlumbDesign(server);
   registerBrandTool(server);

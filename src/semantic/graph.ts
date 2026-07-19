@@ -50,8 +50,11 @@ export interface CirNode {
   style: CirNodeStyle;
   /** The only adapter-leaking field. Nothing except "open in the source
    *  tool" tooling should ever read this — enrichers and projections must
-   *  not branch on `sourceRef.adapter`. */
-  sourceRef: { adapter: "figma"; nativeId: string };
+   *  not branch on `sourceRef.adapter`. `"html"` added in v0.14 M9
+   *  (`src/semantic/buildFromHtml.ts`) — the first real second value here,
+   *  proving this was a union from day one and not just a `"figma"` literal
+   *  with delusions of extensibility. */
+  sourceRef: { adapter: "figma" | "html"; nativeId: string };
 }
 
 export type CirEdgeKind =
