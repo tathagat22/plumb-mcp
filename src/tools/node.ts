@@ -7,6 +7,7 @@ import { PlumbError } from "../errors";
 import { fetchNodeViaRest } from "../figma/rest";
 import { resolveFigmaTarget } from "../figma/url";
 import { normalizeToBudget } from "../normalize/budget";
+import { collapseByRole } from "../semantic/project/collapse";
 import { emitStudio } from "../studio/events";
 import { fail, ok, requireToken } from "./shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -19,6 +20,8 @@ const DESCRIPTION =
   "auto-layout pre-resolved to flexbox. With the Plumb plugin paired, pass a " +
   "screen `id` or `name` (no file key) — duplicate names come back as a match " +
   "list to disambiguate. On the REST path, pass `fileKey` + `id`.";
+
+const ROLES = ["nav", "hero", "footer", "sidebar", "card", "button"] as const;
 
 /** Registers the `plumb_node` MCP tool (plan §8). */
 export function registerPlumbNode(server: McpServer): void {
@@ -69,6 +72,18 @@ export function registerPlumbNode(server: McpServer): void {
           .positive()
           .optional()
           .describe("Soft token budget; fit-to-budget reduces depth to fit."),
+        collapseRoles: z
+          .array(z.enum(ROLES))
+          .optional()
+          .describe(
+            "Semantic-aware compression: collapse every node whose detected " +
+              "role (nav/hero/footer/sidebar/card/button) is in this list to a " +
+              "one-line `summary` instead of its full subtree — same `more` " +
+              "contract as depth truncation (call plumb_node on that node's " +
+              "`id` to expand it later). Opt-in and explicit on purpose: e.g. " +
+              "['nav','footer'] to skip boilerplate chrome while keeping the " +
+              "hero and body in full.",
+          ),
       },
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     },
@@ -80,6 +95,9 @@ export function registerPlumbNode(server: McpServer): void {
         // pulling a 47-node screen at depth 12 otherwise.
         const maxTokens =
           args.maxTokens ?? (expandAll ? 60_000 : undefined);
+        const collapseRoles = args.collapseRoles?.length ? new Set<string>(args.collapseRoles) : undefined;
+        const applyCollapse = (doc: PdsDocument): PdsDocument =>
+          collapseRoles ? collapseByRole(doc, collapseRoles) : doc;
         const { fileKey, id } = resolveFigmaTarget({
           url: args.url,
           fileKey: args.fileKey,
@@ -118,7 +136,7 @@ export function registerPlumbNode(server: McpServer): void {
             fileName: bridge.inventory?.fileName ?? "",
             version: `plugin-${Date.now()}`,
           };
-          const pds = normalizeToBudget(file, depth, maxTokens, { notes: args.notes });
+          const pds = applyCollapse(normalizeToBudget(file, depth, maxTokens, { notes: args.notes }));
           emitStudio({ kind: "screen", tool: "plumb_node", screen: nodeName, summary: `extracted ${nodeName}` });
           return ok({ ...pds, source: "plugin", node: nodeName });
         }
@@ -134,7 +152,11 @@ export function registerPlumbNode(server: McpServer): void {
           `node:${fileKey}:${id}:${depth}:` +
           `${args.notes ? 1 : 0}:${maxTokens ?? 0}:${expandAll ? 1 : 0}`;
         const hit = cacheGet<PdsDocument>(cacheKey, DEFAULT_TTL_MS);
-        if (hit) return ok({ ...hit.payload, source: "rest", cached: true });
+        // Cache key doesn't include collapseRoles — cached payloads are always
+        // the uncollapsed doc, and collapse is applied fresh on every response
+        // (cheap, deterministic) so the cache doesn't need one entry per
+        // collapseRoles combination.
+        if (hit) return ok({ ...applyCollapse(hit.payload), source: "rest", cached: true });
 
         const token = requireToken();
         const file = await fetchNodeViaRest({
@@ -146,7 +168,7 @@ export function registerPlumbNode(server: McpServer): void {
         const pds = normalizeToBudget(file, depth, maxTokens, { notes: args.notes });
         cacheSet(cacheKey, file.version, pds);
         emitStudio({ kind: "screen", tool: "plumb_node", screen: file.document.name, summary: `extracted ${file.document.name}` });
-        return ok({ ...pds, source: "rest", cached: false });
+        return ok({ ...applyCollapse(pds), source: "rest", cached: false });
       } catch (e) {
         return fail(e);
       }

@@ -467,6 +467,19 @@ export interface PdsNode {
    * to expand them (progressive disclosure, plan §5/§7).
    */
   more?: number;
+  /**
+   * Set instead of `children` when this subtree was semantically collapsed
+   * (v0.14+, `plumb_node`'s `collapseRoles` param — see
+   * `src/semantic/project/collapse.ts`) rather than truncated by depth: a
+   * one-line, deterministically-generated structural description (box size,
+   * child count, up to 3 child descriptors) standing in for the full
+   * subtree. `more` is still set alongside it to the hidden descendant
+   * count, so the disclosure contract ("call plumb_node on this node's `id`
+   * to expand") is identical either way — this is depth-based truncation's
+   * sibling, triggered by a confident semantic role instead of a depth
+   * boundary, not a different mechanism the agent has to learn.
+   */
+  summary?: string;
   /** Opt-in human-readable hints (plan §7). */
   notes?: string[];
   /**
