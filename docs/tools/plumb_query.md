@@ -6,20 +6,22 @@ Query a Figma subtree by pattern instead of dumping the whole tree. The escape h
 
 | Field | Type | Notes |
 |---|---|---|
-| `select` | enum · required | `"skeleton"`, `"buttons"`, `"text"`, or `"components"`. |
+| `select` | enum · required | `"skeleton"`, `"buttons"`, `"text"`, `"components"`, or `"role"`. |
 | `id` | string · optional | Node/screen id to query within. |
 | `name` | string · optional | Screen name (plugin path). |
 | `fileKey` | string · optional | File key (REST path). |
 | `url` | string · optional | Paste a Figma URL — `fileKey` and `id` auto-extracted. |
 | `min`, `max` | number · optional | Font-size filter for `select: "text"`. |
 | `componentId` | string · optional | Filter `select: "components"` to one component. |
+| `role` | enum · required for `select: "role"` | One of `nav`, `hero`, `footer`, `sidebar`, `card`, `button`. |
 
-## The four patterns
+## The five patterns
 
 - **`skeleton`** — structure only. Drops `chars`, fills, effects, text refs, vector paths. The agent gets the shape of the screen for roughly 10× fewer tokens, then drills into branches that matter with `plumb_node`.
-- **`buttons`** — every node Plumb's normalizer tagged with `pattern: "button"`. Useful for "wire up every CTA on this screen".
+- **`buttons`** — every node Plumb's normalizer tagged with `pattern: "button"`. Equivalent to `select: "role", role: "button"`; kept for backward compatibility.
 - **`text`** — every `TEXT` node, optionally filtered by font-size range. Use `min: 24` to find headings, `max: 14` to find body copy / captions.
 - **`components`** — every `INSTANCE` node, optionally filtered to a specific `componentId`. Useful for "find every place this button component is used".
+- **`role`** — every node carrying a given semantic role. `nav` / `hero` / `footer` / `sidebar` / `card` are container-level (detected among a screen's top-level sections and repeat-group templates); `button` is the same leaf-level tag `select: "buttons"` reads. Useful for "find the hero" or "find every pricing card" without walking the tree yourself.
 
 ## Returns
 

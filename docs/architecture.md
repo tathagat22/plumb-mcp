@@ -26,8 +26,12 @@ Plumb MCP server  (`npx plumb-mcp` / `node dist/index.js`)
   │    • depth-stable `el` handles minted in a full pre-walk
   │      (so the same node gets the same el regardless of requested depth —
   │       plumb_verify depends on this)
+  │  Semantic Graph pass → container-level role labels (nav/hero/footer/
+  │    sidebar/card) on top of PDS, consumed by plumb_diff / plumb_audit /
+  │    plumb_query's select:"role" / plumb_node's collapseRoles — see
+  │    "Semantic layer" below
   │  Version-keyed cache with fit-to-budget normalisation
-  │  Ten MCP tools exposed over stdio
+  │  Twenty-two MCP tools exposed over stdio
   ▼
   stdio MCP
   ▼
@@ -75,7 +79,39 @@ Each node carries:
 - `layout` — flexbox-shaped if the Figma node uses auto-layout (`flow`, `gap`, `pad`, `justify`, `align`)
 - `fill` / `stroke` / `radius` / `shadow` — token references (`$cBrand`, `$r0`, `$s1`) into the tokens table
 - `text` — `$t` reference and `chars` for TEXT nodes
-- `children` (recursive) or `more: N` if the node was clipped at the depth boundary
+- `pattern` — detected semantic role: `"button"` (leaf-level) or, since v0.14,
+  `"nav"` / `"hero"` / `"footer"` / `"sidebar"` / `"card"` (container-level —
+  see "Semantic layer" below)
+- `children` (recursive), `more: N` if the node was clipped at the depth
+  boundary, or `summary` + `more: N` if it was semantically collapsed
+  (`plumb_node`'s `collapseRoles`)
+
+## Semantic layer
+
+A second pass, on top of the PDS the normalizer already built, adds
+container-level role labels without changing the PDS wire shape: `nav` /
+`hero` / `footer` / `sidebar` (direct children of the requested root, by
+position + size) and `card` (repeat-group templates that are both a styled
+surface and carry their own text). The classifier is deterministic and
+conservative by design — every rule requires several structural signals to
+line up, and a missing label costs nothing (the agent falls back to raw
+geometry) while a wrong one would actively mislead, so silence is always
+preferred over a guess.
+
+Internally this runs as a small pipeline — `src/semantic/build.ts` turns the
+finished PDS into a platform-agnostic graph (nodes + containment/repeat
+edges), `src/semantic/enrichers/role.ts` classifies it, and the result is
+projected back onto `pattern`. Three tools consume it directly:
+
+- **`plumb_diff`** — semantic diff between two PDS snapshots ("the hero moved
+  from (0, 0) to (0, 120)" instead of a JSON diff).
+- **`plumb_audit`** — heuristic accessibility checks (text contrast, button
+  touch-target size) that read role labels to know what to check.
+- **`plumb_query`**'s `select: "role"` and **`plumb_node`**'s
+  `collapseRoles` filter and compress by the same labels.
+
+See the (gitignored, local) `docs/ROADMAP-v0.14-design-intelligence.md` for
+the full design rationale if you're working on this layer.
 
 ### Stable element handles
 

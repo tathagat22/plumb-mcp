@@ -12,6 +12,7 @@ Extract one screen as a compact Plumb Design Spec (PDS). The workhorse tool.
 | `depth` | number · optional | How deep to recurse. Default: auto-fit to a token budget. |
 | `maxTokens` | number · optional | Soft cap; depth is reduced to fit. |
 | `notes` | boolean · optional | Include human-readable notes per node (auto-layout hints, etc.). |
+| `collapseRoles` | string[] · optional | Semantic-aware compression — collapse every node whose detected role is in this list (`nav`/`hero`/`footer`/`sidebar`/`card`/`button`) to a one-line `summary` instead of its full subtree. See below. |
 
 ## Returns
 
@@ -52,3 +53,18 @@ A PDS:
 Nodes truncated at the depth boundary carry a `more: N` field — the agent can drill in with another `plumb_node` call.
 
 `maxTokens` defaults to a comfortable budget for AI agent context windows. Override only if you've measured.
+
+### `collapseRoles` — semantic-aware compression
+
+Pass `collapseRoles: ["nav", "footer"]` to skip boilerplate chrome while keeping the rest of the screen in full:
+
+```jsonc
+"footer": {
+  "el": "footer", "type": "frame", "box": { "w": 1200, "h": 120 },
+  "pattern": "footer",
+  "more": 6,
+  "summary": "footer — 1200×120px, 6 children (text \"© 2026\", text \"Privacy\", text \"Terms\", …)"
+}
+```
+
+Same contract as depth truncation — call `plumb_node({ id: "footer-node-id" })` to expand it if you decide you need it after all. `summary` is generated deterministically from box size, child count, and up to 3 child descriptors; nothing is fabricated. This is opt-in on purpose — Plumb never silently decides you don't need a section's actual content.

@@ -110,7 +110,7 @@ Other install paths: `npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/p
 
 ---
 
-## The twenty MCP tools
+## The twenty-two MCP tools
 
 ### Read — Figma → code
 
@@ -119,17 +119,19 @@ Other install paths: `npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/p
 | `plumb_status` | Self-description, key legend, connection state. Call first. |
 | `plumb_outline` | Every screen in the file (id, name, size). |
 | `plumb_node` | Extract a screen as compact PDS — by id or by name. |
-| `plumb_query` | Pull a slice (`skeleton` / `buttons` / `text` / `components`) when a full screen would blow the token budget. |
+| `plumb_query` | Pull a slice (`skeleton` / `buttons` / `text` / `components` / `role`) when a full screen would blow the token budget. |
 | `plumb_describe` | Text-only visual description — for image-blind harnesses. |
 | `plumb_tokens` | Design-token table (colours, type, radii, shadows). |
 | `plumb_selection` | The user's live Figma selection. |
 | `plumb_assets` | Export icons (SVG) + images (PNG) — recursive, list, or surgical by ids. |
 | `plumb_screenshot` | Render any node to PNG/JPG. |
 | `plumb_search` | Find nodes by name and/or type. |
-| `plumb_components` | List components + instance usages. |
+| `plumb_components` | List components + instance usages, plus an opt-in design-system health report (unused components, near-duplicate names, variant outliers). |
 | `plumb_verify` | Diff rendered layout against the design — ΔE2000 colour, shadow/rotation/flex checks. |
 | `plumb_fit` | The self-healing loop: verify + a 0–100 convergence score + prioritised fixes. |
 | `plumb_fig_outline` / `plumb_fig_node` | Headless: read a saved `.fig` file from disk. No Figma desktop, no token. |
+| `plumb_diff` | Semantic diff between two PDS snapshots — "the hero moved from (0, 0) to (0, 120)", not a JSON diff. |
+| `plumb_audit` | Heuristic accessibility checks — text contrast, button touch-target size. |
 
 ### Write — prompt → design (the director)
 
@@ -148,6 +150,7 @@ Other install paths: `npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/p
 - **Compact specs.** A 178-node dialog that is 351k tokens of Figma REST JSON comes back as ~2.6k tokens of PDS — deduped tokens, flexbox-resolved layout, depth-stable handles.
 - **Verified, not vibes.** `plumb_verify` / `plumb_fit` diff the *rendered* result against the design (ΔE2000 perceptual colour, shadow, rotation, flex-child, fill-stack) — no pixel diff, runs in CI.
 - **Designed, not defaulted.** The write direction bakes real design craft in: size-aware letter-spacing, generous section rhythm, extracted brand palettes from real references, gradient text, full-bleed and asymmetric layouts, and a vision-based director that grades the render and pushes it up.
+- **Understands structure, not just geometry.** Plumb tags nav/hero/footer/sidebar/card conservatively on top of the raw tree (`node.pattern` — silence over a guess when the signals don't line up) and builds on it: `plumb_diff` narrates changes by role, `plumb_audit` flags contrast and touch-target issues, `plumb_query`'s `select: "role"` and `plumb_node`'s `collapseRoles` filter and compress by the same labels.
 
 ---
 

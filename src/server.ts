@@ -50,9 +50,14 @@ export function createServer(): McpServer {
         "convergence score + prioritised fixes so you can iterate to a " +
         "pixel-perfect match (build → plumb_fit → fix → repeat until done); " +
         "plumb_query pulls a slice by pattern " +
-        "(skeleton / buttons / text / components) when the full tree would be " +
-        "too big. Otherwise use the REST path (fileKey + id). Auto-layout is " +
-        "pre-resolved to flexbox.",
+        "(skeleton / buttons / text / components / role) when the full tree " +
+        "would be too big. Otherwise use the REST path (fileKey + id). " +
+        "Auto-layout is pre-resolved to flexbox. Nodes also carry a detected " +
+        "semantic `pattern` (nav/hero/footer/sidebar/card/button) — " +
+        "plumb_diff compares two PDS snapshots and narrates changes by role " +
+        "instead of a JSON diff; plumb_audit runs heuristic accessibility " +
+        "checks (contrast, touch-target size); plumb_node's collapseRoles " +
+        "semantically compresses matched sections instead of expanding them.",
     },
   );
 

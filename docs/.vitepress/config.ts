@@ -114,6 +114,8 @@ export default defineConfig({
           { text: "plumb_fit", link: "/tools/plumb_fit" },
           { text: "plumb_fig_outline", link: "/tools/plumb_fig_outline" },
           { text: "plumb_fig_node", link: "/tools/plumb_fig_node" },
+          { text: "plumb_diff", link: "/tools/plumb_diff" },
+          { text: "plumb_audit", link: "/tools/plumb_audit" },
         ],
       },
       {

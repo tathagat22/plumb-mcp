@@ -1,11 +1,11 @@
 ---
 title: "MCP tool reference — Plumb Figma MCP server (design→code + prompt→design)"
-description: "Twenty Model Context Protocol tools that make Figma two-way for AI coding agents. Read direction — figma to code: outline, node, query, describe, assets, screenshot, verify, and the self-healing fit loop. Write direction — prompt to design: studio, brand, design, review, source. The AI design director, no extra API key."
+description: "Twenty-two Model Context Protocol tools that make Figma two-way for AI coding agents. Read direction — figma to code: outline, node, query, describe, assets, screenshot, verify, the self-healing fit loop, semantic diff, and accessibility audit. Write direction — prompt to design: studio, brand, design, review, source. The AI design director, no extra API key."
 ---
 
 # Tools
 
-Plumb exposes **twenty** MCP tools, split across the two directions it plumbs — **Figma → code** (read) and **prompt → design** (write). Each one has a focused, single responsibility; the agent composes them.
+Plumb exposes **twenty-two** MCP tools, split across the two directions it plumbs — **Figma → code** (read) and **prompt → design** (write). Each one has a focused, single responsibility; the agent composes them.
 
 ## Read — Figma → code
 
@@ -15,19 +15,21 @@ Extract a design as a compact spec, build it, then diff the render against the d
 |---|---|
 | [`plumb_status`](/tools/plumb_status) | Self-description, key legend, connection state. Call first. |
 | [`plumb_outline`](/tools/plumb_outline) | Every screen in the file (id, name, size). |
-| [`plumb_node`](/tools/plumb_node) | Extract a screen as compact PDS — by id or by name. |
-| [`plumb_query`](/tools/plumb_query) | Pull a slice of a screen by pattern (`skeleton` / `buttons` / `text` / `components`) when the full tree would blow the token budget. |
+| [`plumb_node`](/tools/plumb_node) | Extract a screen as compact PDS — by id or by name. `collapseRoles` semantically compresses matched sections (nav/hero/footer/sidebar/card/button) to a one-line summary. |
+| [`plumb_query`](/tools/plumb_query) | Pull a slice of a screen by pattern (`skeleton` / `buttons` / `text` / `components` / `role`) when the full tree would blow the token budget. |
 | [`plumb_describe`](/tools/plumb_describe) | Text-only visual description — per-region narrative + child summary, for image-blind harnesses or token-conscious flows. |
 | [`plumb_tokens`](/tools/plumb_tokens) | Design-token table (colours, type, radii, shadows). |
 | [`plumb_selection`](/tools/plumb_selection) | The user's live Figma selection. |
 | [`plumb_assets`](/tools/plumb_assets) | Export icons (SVG) + images (PNG) — three modes. |
 | [`plumb_screenshot`](/tools/plumb_screenshot) | Render any node to PNG/JPG. |
 | [`plumb_search`](/tools/plumb_search) | Find nodes by name and/or type. |
-| [`plumb_components`](/tools/plumb_components) | List components + instance usages. |
+| [`plumb_components`](/tools/plumb_components) | List components + instance usages. `health: true` adds a design-system health report (unused components, near-duplicate names, variant outliers). |
 | [`plumb_verify`](/tools/plumb_verify) | Diff your rendered layout against the design — ΔE2000 colour distance, shadow/rotation/flex-child/fill-stack checks. |
 | [`plumb_fit`](/tools/plumb_fit) | The self-healing loop: `plumb_verify` plus a 0–100 convergence score and prioritised fixes, so the agent iterates to pixel-perfect instead of one-shot checking. |
 | [`plumb_fig_outline`](/tools/plumb_fig_outline) | Headless: list every screen in a saved `.fig` file from disk. |
 | [`plumb_fig_node`](/tools/plumb_fig_node) | Headless: fetch one node from a saved `.fig` file by id. |
+| [`plumb_diff`](/tools/plumb_diff) | Semantic diff between two PDS snapshots — narrated deltas ("the hero moved from (0, 0) to (0, 120)"), not a JSON diff. |
+| [`plumb_audit`](/tools/plumb_audit) | Heuristic accessibility checks — text contrast against its resolved background, button touch-target size. |
 
 ## Write — prompt → design (the director)
 
@@ -65,6 +67,6 @@ Most read tools accept either `id` (canonical) or `name` (looked up against the 
 
 Read tools that need design data auto-pick between the **plugin path** (instant, no rate limits, requires Figma open) and the **REST path** (headless, rate-limited, requires `FIGMA_TOKEN`). With the plugin paired, omit `fileKey`. For REST, pass `fileKey` + `id`.
 
-The plugin-path tools — `plumb_outline`, `plumb_selection`, `plumb_assets`, `plumb_screenshot`, `plumb_search`, `plumb_components` — require the plugin paired and won't fall back to REST. The other read tools (`plumb_node`, `plumb_query`, `plumb_describe`, `plumb_tokens`, `plumb_verify`, `plumb_fit`) work on both paths.
+The plugin-path tools — `plumb_outline`, `plumb_selection`, `plumb_assets`, `plumb_screenshot`, `plumb_search`, `plumb_components` — require the plugin paired and won't fall back to REST. The other read tools (`plumb_node`, `plumb_query`, `plumb_describe`, `plumb_tokens`, `plumb_verify`, `plumb_fit`) work on both paths. `plumb_diff` and `plumb_audit` are a third category — they touch neither Figma path at all, operating only on PDS documents you already have (pass the raw JSON from a prior `plumb_node`/`plumb_outline`/`plumb_query` call).
 
 **Every write tool builds through the plugin path** — `plumb_studio`, `plumb_brand`, and `plumb_design` all require the Plumb plugin paired to write to Figma (`plumb_design` can `dryRun` to compile + validate without it). `plumb_review` is read-only — it grades the emitted result — and `plumb_source` needs no Figma connection at all.
