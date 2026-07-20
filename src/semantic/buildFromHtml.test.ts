@@ -204,3 +204,88 @@ describe("RoleEnricher runs UNCHANGED on an HTML-sourced graph — the adapter-a
     expect(labels.get("footer")).toBe("footer");
   });
 });
+
+describe("buildSemanticGraphFromHtml — extended style fidelity (M9.1)", () => {
+  it("wires opacity through (was captured but silently dropped before this pass)", () => {
+    const node = html({ tag: "div", style: { opacity: "0.5" } });
+
+    expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.style.opacity).toBe(0.5);
+  });
+
+  it("omits opacity at the CSS default (1)", () => {
+    const node = html({ tag: "div", style: { opacity: "1" } });
+
+    expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.style.opacity).toBeUndefined();
+  });
+
+  it("parses a gradient background into style.fills, and does not also set fillColor for it", () => {
+    const node = html({
+      tag: "div",
+      style: { backgroundImage: "linear-gradient(90deg, rgb(12, 140, 233) 0%, rgb(255, 0, 102) 100%)" },
+    });
+
+    const style = buildSemanticGraphFromHtml(node).nodes[node.id]?.style;
+    expect(style?.fills).toEqual([
+      { type: "linear-gradient", angle: 90, stops: [{ at: 0, color: "#0c8ce9" }, { at: 1, color: "#ff0066" }] },
+    ]);
+    expect(style?.fillColor).toBeUndefined();
+  });
+
+  it("falls back to solid fillColor when backgroundImage isn't a parseable gradient", () => {
+    const node = html({ tag: "div", style: { backgroundColor: "rgb(255, 255, 255)", backgroundImage: "none" } });
+
+    const style = buildSemanticGraphFromHtml(node).nodes[node.id]?.style;
+    expect(style?.fillColor).toBe("#ffffff");
+    expect(style?.fills).toBeUndefined();
+  });
+
+  it("parses box-shadow into style.effects", () => {
+    const node = html({ tag: "div", style: { boxShadow: "rgba(0, 0, 0, 0.1) 0px 4px 6px -1px" } });
+
+    expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.style.effects).toEqual([
+      { type: "drop-shadow", x: 0, y: 4, blur: 6, spread: -1, color: "#0000001a" },
+    ]);
+  });
+
+  it("passes through backdrop-filter, preferring the standard prop", () => {
+    const node = html({ tag: "div", style: { backdropFilter: "blur(24px)" } });
+
+    expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.style.backdropFilter).toBe("blur(24px)");
+  });
+
+  it("captures textAlign/textDecoration/letterSpacing/lineHeightPx on text nodes only", () => {
+    const text = html({
+      tag: "p",
+      text: "hi",
+      style: { textAlign: "center", textDecorationLine: "underline", letterSpacing: "0.5px", lineHeight: "24px" },
+    });
+    const container = html({
+      tag: "div",
+      children: [text],
+      style: { textAlign: "center" }, // should be ignored — not a text node
+    });
+
+    const graph = buildSemanticGraphFromHtml(container);
+    expect(graph.nodes[text.id]?.style).toMatchObject({
+      textAlign: "center",
+      textDecoration: "underline",
+      letterSpacing: 0.5,
+      lineHeightPx: 24,
+    });
+    expect(graph.nodes[container.id]?.style.textAlign).toBeUndefined();
+  });
+
+  it("omits textAlign at the CSS default (left/start)", () => {
+    const node = html({ tag: "p", text: "hi", style: { textAlign: "left" } });
+
+    expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.style.textAlign).toBeUndefined();
+  });
+
+  it("captures position, but never 'static' (the CSS default)", () => {
+    const fixed = html({ id: "fixed", tag: "div", style: { position: "fixed" } });
+    const staticEl = html({ id: "static", tag: "div", style: { position: "static" } });
+
+    expect(buildSemanticGraphFromHtml(fixed).nodes.fixed?.style.position).toBe("fixed");
+    expect(buildSemanticGraphFromHtml(staticEl).nodes.static?.style.position).toBeUndefined();
+  });
+});

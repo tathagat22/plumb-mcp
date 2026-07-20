@@ -16,7 +16,7 @@
  * them yet — no enricher needs token-reference or prototype-flow edges
  * until diff/flow work lands.
  */
-import type { PdsLayout } from "../pds";
+import type { Effect, Fill, PdsLayout } from "../pds";
 
 export type NodeKind = "container" | "text" | "vector" | "image" | "componentInstance";
 
@@ -34,8 +34,49 @@ export interface CirNodeStyle {
    *  "what's behind this node" (e.g. AccessibilityEnricher's contrast
    *  check) walks the graph itself via `children`, exactly like
    *  RoleEnricher's own tree walks — that's a derived, check-specific
-   *  concern, not a general CIR fact worth carrying on every node. */
+   *  concern, not a general CIR fact worth carrying on every node.
+   *  `fillColor` stays the "compact single dominant color" convenience
+   *  field, mirroring `PdsNode.fill`/`.fills`'s own compact/full split —
+   *  `fills` below is the lossless form (gradients, multi-layer stacks). */
   fillColor?: string;
+  /** Full fill stack — set whenever the compact `fillColor` would be lossy
+   *  (a gradient, more than one layer). Reuses `PdsNode`'s own `Fill` type
+   *  (`SolidFill | GradientFill | ImageFill`) rather than inventing a
+   *  parallel shape — it was already CSS-value-shaped (hex colors, stop
+   *  positions), not Figma-specific. v0.14 M9.1: populated by the HTML
+   *  adapter; the Figma adapter still surfaces fills via `PdsNode.fills`
+   *  directly rather than through this facet — noted as a real, not yet
+   *  closed, parity gap, not silently glossed over. */
+  fills?: Fill[];
+  /** Full effect stack (shadows, blur) — same reuse of `PdsNode`'s `Effect`
+   *  type, same HTML-adapter-only parity note as `fills` above. */
+  effects?: Effect[];
+  /** CSS `backdrop-filter` shorthand (e.g. `"blur(24px)"`) — mirrors
+   *  `PdsNode.backdropFilter`. */
+  backdropFilter?: string;
+  /** 0..1, omitted at 1 (mirrors `PdsNode.opacity`'s own "omit at default"
+   *  convention). */
+  opacity?: number;
+  /** `text-align` — text nodes only. */
+  textAlign?: string;
+  /** `underline` or `line-through` — text nodes only, mirrors
+   *  `PdsNode.textDecoration`. */
+  textDecoration?: "underline" | "line-through";
+  /** CSS px. */
+  letterSpacing?: number;
+  /** CSS px (already resolved from a possibly-unitless/percentage
+   *  `line-height` by the capture step — see `buildFromHtml.ts`). */
+  lineHeightPx?: number;
+  /** CSS `position` — `static` (the default, never emitted) /
+   *  `relative` / `absolute` / `fixed` / `sticky`. A `fixed`/`sticky` node
+   *  is viewport-pinned, not part of normal document flow — a consumer
+   *  reasoning about "what's the next section down the page" (the way
+   *  `RoleEnricher`'s free-canvas ordering fallback does) should treat one
+   *  differently, though no enricher does yet; this facet exists so that's
+   *  possible without another adapter round-trip. Not wired into
+   *  `RoleEnricher` itself — that would leak an HTML-specific concept into
+   *  Figma-shared code. */
+  position?: "relative" | "absolute" | "fixed" | "sticky";
 }
 
 export interface CirNode {

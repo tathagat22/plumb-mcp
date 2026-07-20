@@ -90,6 +90,15 @@ export const htmlCaptureFn = function (rootSelector: string | null, maxNodes: nu
       borderWidth: cs.borderWidth,
       boxShadow: cs.boxShadow,
       opacity: cs.opacity,
+      textAlign: cs.textAlign,
+      textDecorationLine: cs.textDecorationLine || cs.textDecoration,
+      letterSpacing: cs.letterSpacing,
+      lineHeight: cs.lineHeight,
+      position: cs.position,
+      // Standard prop first, -webkit- fallback — same reasoning as
+      // render/captureFn.ts's own backdropFilter capture: still
+      // vendor-prefixed in some engines.
+      backdropFilter: cs.backdropFilter || cs.webkitBackdropFilter,
     };
 
     const children: unknown[] = [];

@@ -36,6 +36,12 @@ export interface HtmlStyle {
   borderWidth?: string;
   boxShadow?: string;
   opacity?: string;
+  textAlign?: string;
+  textDecorationLine?: string;
+  letterSpacing?: string;
+  lineHeight?: string;
+  position?: string;
+  backdropFilter?: string;
 }
 
 export interface HtmlSourceNode {

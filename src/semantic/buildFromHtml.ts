@@ -21,9 +21,12 @@
  * deferred rather than faked here.
  */
 import { parseColor } from "../verify";
+import { parseBoxShadow, parseGradient } from "../sources/html/cssParse";
 import type { CirEdge, CirNode, CirNodeStyle, NodeKind, SemanticGraph } from "./graph";
 import type { HtmlSourceNode, HtmlStyle } from "../sources/html/sourceGraph";
 import type { PdsLayout } from "../pds";
+
+const POSITIONS = new Set(["relative", "absolute", "fixed", "sticky"]);
 
 const CIR_VERSION = "1.0.0";
 const FLEX_JUSTIFY_DEFAULT = new Set(["normal", "flex-start", "start"]);
@@ -88,17 +91,54 @@ function isSurface(node: HtmlSourceNode): boolean {
   return hasRadius || hasShadow || hasBorderedFill;
 }
 
+const TEXT_DECORATIONS = new Set(["underline", "line-through"]);
+
 function styleOf(node: HtmlSourceNode, kind: NodeKind): CirNodeStyle {
+  const s = node.style;
   const style: CirNodeStyle = {};
-  const layout = layoutOf(node.style);
+  const layout = layoutOf(s);
   if (layout) style.layout = layout;
   if (kind === "text") {
-    const size = px(node.style.fontSize);
+    const size = px(s.fontSize);
     if (size) style.textPx = size;
   }
   if (isSurface(node)) style.isSurface = true;
-  const fillColor = resolveColor(kind === "text" ? node.style.color : node.style.backgroundColor);
-  if (fillColor) style.fillColor = fillColor;
+
+  // Fill: a gradient background wins over the compact solid `fillColor` —
+  // same "compact form only when it isn't lossy" rule PDS's own fill/fills
+  // split already follows. Text nodes never check backgroundImage (a
+  // gradient text fill via background-clip:text is real CSS but a
+  // sufficiently rare case not worth detecting here).
+  if (kind !== "text" && s.backgroundImage) {
+    const gradient = parseGradient(s.backgroundImage);
+    if (gradient) style.fills = [gradient];
+  }
+  if (!style.fills) {
+    const fillColor = resolveColor(kind === "text" ? s.color : s.backgroundColor);
+    if (fillColor) style.fillColor = fillColor;
+  }
+
+  if (s.boxShadow) {
+    const effects = parseBoxShadow(s.boxShadow);
+    if (effects.length) style.effects = effects;
+  }
+  if (s.backdropFilter && s.backdropFilter !== "none") style.backdropFilter = s.backdropFilter;
+
+  const opacity = s.opacity !== undefined ? parseFloat(s.opacity) : NaN;
+  if (!Number.isNaN(opacity) && opacity < 1) style.opacity = Math.round(opacity * 100) / 100;
+
+  if (kind === "text") {
+    if (s.textAlign && s.textAlign !== "start" && s.textAlign !== "left") style.textAlign = s.textAlign;
+    const decoration = (s.textDecorationLine ?? "").split(/\s+/).find((d) => TEXT_DECORATIONS.has(d));
+    if (decoration) style.textDecoration = decoration as "underline" | "line-through";
+    const letterSpacing = px(s.letterSpacing);
+    if (letterSpacing) style.letterSpacing = letterSpacing;
+    const lineHeightPx = px(s.lineHeight);
+    if (lineHeightPx) style.lineHeightPx = lineHeightPx;
+  }
+
+  if (s.position && POSITIONS.has(s.position)) style.position = s.position as CirNodeStyle["position"];
+
   return style;
 }
 

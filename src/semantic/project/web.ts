@@ -6,8 +6,8 @@
  * what this data actually is. A new source gets an honestly-shaped new
  * projection (§4's own "projections are purpose-built views" principle).
  */
-import type { CirAnnotation, NodeKind, SemanticGraph } from "../graph";
-import type { PdsLayout } from "../../pds";
+import type { CirAnnotation, CirNodeStyle, NodeKind, SemanticGraph } from "../graph";
+import type { Effect, Fill, PdsLayout } from "../../pds";
 
 export interface WebNode {
   id: string;
@@ -23,6 +23,17 @@ export interface WebNode {
   textPx?: number;
   isSurface?: boolean;
   fillColor?: string;
+  /** Full fill stack — gradients, or a compact-would-be-lossy multi-layer
+   *  case. Undefined for plain solid colors; use `fillColor` for those. */
+  fills?: Fill[];
+  effects?: Effect[];
+  backdropFilter?: string;
+  opacity?: number;
+  textAlign?: string;
+  textDecoration?: CirNodeStyle["textDecoration"];
+  letterSpacing?: number;
+  lineHeightPx?: number;
+  position?: CirNodeStyle["position"];
   children?: string[];
 }
 
@@ -52,6 +63,15 @@ export function projectWebSpec(url: string, graph: SemanticGraph, annotations: C
       textPx: n.style.textPx,
       isSurface: n.style.isSurface,
       fillColor: n.style.fillColor,
+      fills: n.style.fills,
+      effects: n.style.effects,
+      backdropFilter: n.style.backdropFilter,
+      opacity: n.style.opacity,
+      textAlign: n.style.textAlign,
+      textDecoration: n.style.textDecoration,
+      letterSpacing: n.style.letterSpacing,
+      lineHeightPx: n.style.lineHeightPx,
+      position: n.style.position,
       children: n.children.length ? n.children : undefined,
     };
   }
