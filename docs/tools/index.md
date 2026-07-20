@@ -1,11 +1,11 @@
 ---
 title: "MCP tool reference — Plumb Figma MCP server (design→code + prompt→design)"
-description: "Twenty-two Model Context Protocol tools that make Figma two-way for AI coding agents. Read direction — figma to code: outline, node, query, describe, assets, screenshot, verify, the self-healing fit loop, semantic diff, and accessibility audit. Write direction — prompt to design: studio, brand, design, review, source. The AI design director, no extra API key."
+description: "Twenty-four Model Context Protocol tools that make Figma two-way for AI coding agents. Read direction — figma to code: outline, node, query, describe, assets, screenshot, verify, the self-healing fit loop, semantic diff, accessibility audit, live webpage import, and a deterministic React generator. Write direction — prompt to design: studio, brand, design, review, source. The AI design director, no extra API key."
 ---
 
 # Tools
 
-Plumb exposes **twenty-two** MCP tools, split across the two directions it plumbs — **Figma → code** (read) and **prompt → design** (write). Each one has a focused, single responsibility; the agent composes them.
+Plumb exposes **twenty-four** MCP tools, split across the two directions it plumbs — **Figma → code** (read) and **prompt → design** (write). Each one has a focused, single responsibility; the agent composes them.
 
 ## Read — Figma → code
 
@@ -30,6 +30,8 @@ Extract a design as a compact spec, build it, then diff the render against the d
 | [`plumb_fig_node`](/tools/plumb_fig_node) | Headless: fetch one node from a saved `.fig` file by id. |
 | [`plumb_diff`](/tools/plumb_diff) | Semantic diff between two PDS snapshots — narrated deltas ("the hero moved from (0, 0) to (0, 120)"), not a JSON diff. |
 | [`plumb_audit`](/tools/plumb_audit) | Heuristic accessibility checks — text contrast against its resolved background, button touch-target size. |
+| [`plumb_import_web`](/tools/plumb_import_web) | Import a live webpage's structure and semantics via headless Chrome — no Figma connection needed. |
+| [`plumb_emit_react`](/tools/plumb_emit_react) | Deterministic React/JSX generator — works on a PDS or a `plumb_import_web` result, same emitter either way. |
 
 ## Write — prompt → design (the director)
 
@@ -67,6 +69,6 @@ Most read tools accept either `id` (canonical) or `name` (looked up against the 
 
 Read tools that need design data auto-pick between the **plugin path** (instant, no rate limits, requires Figma open) and the **REST path** (headless, rate-limited, requires `FIGMA_TOKEN`). With the plugin paired, omit `fileKey`. For REST, pass `fileKey` + `id`.
 
-The plugin-path tools — `plumb_outline`, `plumb_selection`, `plumb_assets`, `plumb_screenshot`, `plumb_search`, `plumb_components` — require the plugin paired and won't fall back to REST. The other read tools (`plumb_node`, `plumb_query`, `plumb_describe`, `plumb_tokens`, `plumb_verify`, `plumb_fit`) work on both paths. `plumb_diff` and `plumb_audit` are a third category — they touch neither Figma path at all, operating only on PDS documents you already have (pass the raw JSON from a prior `plumb_node`/`plumb_outline`/`plumb_query` call).
+The plugin-path tools — `plumb_outline`, `plumb_selection`, `plumb_assets`, `plumb_screenshot`, `plumb_search`, `plumb_components` — require the plugin paired and won't fall back to REST. The other read tools (`plumb_node`, `plumb_query`, `plumb_describe`, `plumb_tokens`, `plumb_verify`, `plumb_fit`) work on both paths. `plumb_diff`, `plumb_audit`, and `plumb_emit_react` are a third category — they touch neither Figma path at all, operating only on documents you already have (pass the raw JSON from a prior `plumb_node`/`plumb_outline`/`plumb_query`/`plumb_import_web` call). `plumb_import_web` is a fourth category on its own — it needs no Figma connection whatsoever, driving its own headless Chrome against any URL instead.
 
 **Every write tool builds through the plugin path** — `plumb_studio`, `plumb_brand`, and `plumb_design` all require the Plumb plugin paired to write to Figma (`plumb_design` can `dryRun` to compile + validate without it). `plumb_review` is read-only — it grades the emitted result — and `plumb_source` needs no Figma connection at all.

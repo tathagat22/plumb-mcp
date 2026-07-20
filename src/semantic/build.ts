@@ -66,6 +66,18 @@ function fillColorOf(node: PdsNode, doc: PdsDocument): string | undefined {
   return undefined;
 }
 
+/** First corner when `radius` is a per-corner `[tl,tr,br,bl]` tuple — a
+ *  documented approximation, not full per-corner fidelity (added for
+ *  `src/emit/react.ts`, which needs a real value; a consumer that later
+ *  needs exact per-corner radii should extend this, not assume it already
+ *  has them). */
+function borderRadiusOf(node: PdsNode, doc: PdsDocument): number | "full" | undefined {
+  const r = node.radius;
+  if (r === undefined) return undefined;
+  if (Array.isArray(r)) return r[0];
+  return doc.tokens.radius[r]; // radius refs are always $rN — see internRadius
+}
+
 function styleOf(node: PdsNode, doc: PdsDocument): CirNodeStyle {
   const style: CirNodeStyle = {};
   const layout = resolveLayout(node.layout, doc.tokens);
@@ -75,6 +87,11 @@ function styleOf(node: PdsNode, doc: PdsDocument): CirNodeStyle {
   if (isSurface(node)) style.isSurface = true;
   const fillColor = fillColorOf(node, doc);
   if (fillColor) style.fillColor = fillColor;
+  const borderRadius = borderRadiusOf(node, doc);
+  if (borderRadius !== undefined) style.borderRadius = borderRadius;
+  const borderColor = resolveColorRef(node.stroke, doc);
+  if (borderColor) style.borderColor = borderColor;
+  if (node.strokeW) style.borderWidth = node.strokeW;
   return style;
 }
 
@@ -83,6 +100,15 @@ function charsOf(node: PdsNode): string | undefined {
   if (typeof node.chars === "string") return node.chars;
   if (Array.isArray(node.chars)) return node.chars.map((r) => r.t).join("");
   return undefined;
+}
+
+/** Best-effort — `plumb_assets`' own export convention
+ *  (`./plumb-assets/<screen>/<name>.<ext>`), not a guarantee the file
+ *  exists at this exact path: exporting it is a separate `plumb_assets`
+ *  call this adapter doesn't make itself. A code-gen consumer should treat
+ *  this as "where the real asset probably lands," not a verified URL. */
+function imageSrcOf(node: PdsNode): string | undefined {
+  return node.assetId ? `./assets/${node.assetId}.png` : undefined;
 }
 
 export function buildSemanticGraph(doc: PdsDocument): SemanticGraph {
@@ -98,6 +124,7 @@ export function buildSemanticGraph(doc: PdsDocument): SemanticGraph {
       pos: node.pos,
       children,
       chars: charsOf(node),
+      imageSrc: imageSrcOf(node),
       style: styleOf(node, doc),
       sourceRef: { adapter: "figma", nativeId: node.id },
     };

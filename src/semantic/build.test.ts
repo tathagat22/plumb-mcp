@@ -128,4 +128,43 @@ describe("buildSemanticGraph — resolved style", () => {
     expect(graph.nodes.radius?.style.isSurface).toBe(true);
     expect(graph.nodes.bare?.style.isSurface).toBeUndefined();
   });
+
+  it("resolves the actual border radius/color/width values, not just the isSurface boolean", () => {
+    const nodes: Record<string, PdsNode> = {
+      styled: {
+        id: "0",
+        el: "styled",
+        type: "rect",
+        box: { w: 1, h: 1 },
+        radius: "$r1",
+        stroke: "$c1",
+        strokeW: 2,
+      },
+    };
+    const tokens: Partial<TokenTable> = { radius: { $r1: 8 }, color: { $c1: "#e5e5e5" } };
+    const graph = buildSemanticGraph(doc(nodes, "styled", tokens));
+
+    expect(graph.nodes.styled?.style.borderRadius).toBe(8);
+    expect(graph.nodes.styled?.style.borderColor).toBe("#e5e5e5");
+    expect(graph.nodes.styled?.style.borderWidth).toBe(2);
+  });
+
+  it("resolves a 'full' (pill/circle) radius through the token table", () => {
+    const nodes: Record<string, PdsNode> = {
+      pill: { id: "0", el: "pill", type: "rect", box: { w: 1, h: 1 }, radius: "$r1" },
+    };
+    const tokens: Partial<TokenTable> = { radius: { $r1: "full" } };
+
+    expect(buildSemanticGraph(doc(nodes, "pill", tokens)).nodes.pill?.style.borderRadius).toBe("full");
+  });
+
+  it("populates imageSrc with the plumb_assets export convention when assetId is present", () => {
+    const nodes: Record<string, PdsNode> = {
+      photo: { id: "0", el: "photo", type: "rect", box: { w: 1, h: 1 }, assetId: "abc123" },
+      plain: { id: "1", el: "plain", type: "rect", box: { w: 1, h: 1 } },
+    };
+
+    expect(buildSemanticGraph(doc(nodes, "photo")).nodes.photo?.imageSrc).toBe("./assets/abc123.png");
+    expect(buildSemanticGraph(doc(nodes, "plain")).nodes.plain?.imageSrc).toBeUndefined();
+  });
 });

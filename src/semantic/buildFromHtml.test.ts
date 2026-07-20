@@ -21,7 +21,12 @@ function html(partial: Partial<HtmlSourceNode> & { tag: string }): HtmlSourceNod
 describe("buildSemanticGraphFromHtml — node kind mapping", () => {
   it("maps image/vector/text/container correctly", () => {
     const img = html({ id: "img", tag: "img", isImage: true });
-    const svg = html({ id: "svg", tag: "svg" });
+    // isImage: true here on purpose — matches what captureFn.ts's real
+    // walk actually sets for a bare <svg> (its own isImage check includes
+    // tag === "svg"). A fixture with isImage: false here would test a
+    // shape real capture never produces — see the dedicated regression
+    // test below for exactly why that distinction is load-bearing.
+    const svg = html({ id: "svg", tag: "svg", isImage: true });
     const text = html({ id: "text", tag: "span", text: "Hello" });
     const div = html({ id: "div", tag: "div", children: [img, svg, text] });
 
@@ -31,6 +36,18 @@ describe("buildSemanticGraphFromHtml — node kind mapping", () => {
     expect(graph.nodes.svg?.kind).toBe("vector");
     expect(graph.nodes.text?.kind).toBe("text");
     expect(graph.nodes.div?.kind).toBe("container");
+  });
+
+  it("regression: an <svg> stays 'vector' even though it also carries isImage:true, matching real capture data", () => {
+    // Found live against vercel.com: kindOf() checked `isImage` before
+    // `tag === "svg"`, so every real inline SVG (icons/logos — vector
+    // markup, never a `src` URL) was misclassified "image" and warned
+    // "no captured src" for every single one. The bug was invisible to the
+    // test above until ITS OWN fixture was corrected to set isImage:true —
+    // a fixture that doesn't mirror real captured data hides real bugs.
+    const svg = html({ tag: "svg", isImage: true, box: { w: 24, h: 24 } });
+
+    expect(buildSemanticGraphFromHtml(svg).nodes[svg.id]?.kind).toBe("vector");
   });
 
   it("prefers container over text when the node has element children even if it also has direct text", () => {
@@ -287,5 +304,44 @@ describe("buildSemanticGraphFromHtml — extended style fidelity (M9.1)", () => 
 
     expect(buildSemanticGraphFromHtml(fixed).nodes.fixed?.style.position).toBe("fixed");
     expect(buildSemanticGraphFromHtml(staticEl).nodes.static?.style.position).toBeUndefined();
+  });
+
+  it("resolves a px border-radius to a number and a %-based one to 'full'", () => {
+    const px = html({ id: "px", tag: "div", style: { borderRadius: "8px" } });
+    const pct = html({ id: "pct", tag: "div", style: { borderRadius: "50%" } });
+    const zero = html({ id: "zero", tag: "div", style: { borderRadius: "0px" } });
+
+    expect(buildSemanticGraphFromHtml(px).nodes.px?.style.borderRadius).toBe(8);
+    expect(buildSemanticGraphFromHtml(pct).nodes.pct?.style.borderRadius).toBe("full");
+    expect(buildSemanticGraphFromHtml(zero).nodes.zero?.style.borderRadius).toBeUndefined();
+  });
+
+  it("only surfaces borderColor alongside a non-zero borderWidth", () => {
+    const bordered = html({
+      id: "bordered",
+      tag: "div",
+      style: { borderWidth: "1px", borderColor: "rgb(229, 229, 229)" },
+    });
+    const noBorder = html({ id: "noBorder", tag: "div", style: { borderColor: "rgb(229, 229, 229)" } });
+
+    expect(buildSemanticGraphFromHtml(bordered).nodes.bordered?.style).toMatchObject({
+      borderWidth: 1,
+      borderColor: "#e5e5e5",
+    });
+    expect(buildSemanticGraphFromHtml(noBorder).nodes.noBorder?.style.borderColor).toBeUndefined();
+  });
+
+  it("captures a real <img> src (the .src DOM property, already absolute)", () => {
+    const img = html({ tag: "img", isImage: true, imageSrc: "https://example.com/photo.jpg" });
+
+    expect(buildSemanticGraphFromHtml(img).nodes[img.id]?.imageSrc).toBe("https://example.com/photo.jpg");
+  });
+
+  it("does not surface imageSrc on non-image nodes even if the field happens to be set", () => {
+    // Defensive — kindOf() decides image-ness from isImage; imageSrc set on
+    // a non-image node (shouldn't happen from a real capture) must not leak.
+    const node = html({ tag: "div", isImage: false, imageSrc: "https://example.com/x.jpg" });
+
+    expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.imageSrc).toBeUndefined();
   });
 });

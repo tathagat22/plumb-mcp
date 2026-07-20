@@ -59,5 +59,12 @@ export interface HtmlSourceNode {
   /** img/svg/picture/video/canvas, or a background-image that loads an
    *  actual url() — mirrors `captureFn.ts`'s existing `img` heuristic. */
   isImage: boolean;
+  /** The actual loadable URL, when `isImage` — `<img src>` (absolute, via
+   *  the `.src` DOM property, not the possibly-relative `src` attribute) or
+   *  the URL inside a `background-image: url(...)`. Without this every
+   *  imported image was a meaningless placeholder — added alongside M10's
+   *  React emitter, which is what first needed to actually USE this data
+   *  rather than just classify around it. */
+  imageSrc?: string;
   children: HtmlSourceNode[];
 }

@@ -53,8 +53,18 @@ function px(value: string | undefined): number {
 }
 
 function kindOf(node: HtmlSourceNode): NodeKind {
-  if (node.isImage) return "image";
+  // svg BEFORE isImage — a real bug found live against vercel.com, not
+  // caught by the unit test that covered this ordering: captureFn.ts's own
+  // `isImage` check includes `tag === "svg"` (a bare <svg> element sets
+  // `isImage: true`), so checking `isImage` first meant every real inline
+  // SVG (icons, logos — inline vector markup, never a `src` URL to begin
+  // with) got classified "image" and warned "no captured src" instead of
+  // correctly reading as "vector." The hand-built test fixture for this
+  // case set `isImage: false` on its svg node, which doesn't match what
+  // real captured data actually looks like — exactly the kind of gap a
+  // fixture that doesn't mirror the real capture shape hides.
   if (node.tag === "svg") return "vector";
+  if (node.isImage) return "image";
   if (node.children.length === 0 && node.text) return "text";
   return "container";
 }
@@ -89,6 +99,16 @@ function isSurface(node: HtmlSourceNode): boolean {
   const hasShadow = !!s.boxShadow && s.boxShadow !== "none";
   const hasBorderedFill = !!resolveColor(s.backgroundColor) && !!s.borderWidth && px(s.borderWidth) > 0;
   return hasRadius || hasShadow || hasBorderedFill;
+}
+
+/** A `%`-based radius (`border-radius: 50%` — the standard CSS way to make
+ *  a circle/pill) maps to Figma's `"full"` sentinel; a px value passes
+ *  through as a number. */
+function borderRadiusOf(css: string | undefined): number | "full" | undefined {
+  if (!css) return undefined;
+  if (css.includes("%")) return parseFloat(css) > 0 ? "full" : undefined;
+  const n = px(css);
+  return n > 0 ? n : undefined;
 }
 
 const TEXT_DECORATIONS = new Set(["underline", "line-through"]);
@@ -139,6 +159,15 @@ function styleOf(node: HtmlSourceNode, kind: NodeKind): CirNodeStyle {
 
   if (s.position && POSITIONS.has(s.position)) style.position = s.position as CirNodeStyle["position"];
 
+  const borderRadius = borderRadiusOf(s.borderRadius);
+  if (borderRadius !== undefined) style.borderRadius = borderRadius;
+  const borderWidth = px(s.borderWidth);
+  if (borderWidth > 0) {
+    style.borderWidth = borderWidth;
+    const borderColor = resolveColor(s.borderColor);
+    if (borderColor) style.borderColor = borderColor;
+  }
+
   return style;
 }
 
@@ -158,6 +187,7 @@ export function buildSemanticGraphFromHtml(root: HtmlSourceNode): SemanticGraph 
       pos,
       children,
       chars: kind === "text" ? node.text : undefined,
+      imageSrc: kind === "image" ? node.imageSrc : undefined,
       style: styleOf(node, kind),
       sourceRef: { adapter: "html", nativeId: node.id },
     };

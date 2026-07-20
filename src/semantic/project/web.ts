@@ -6,7 +6,7 @@
  * what this data actually is. A new source gets an honestly-shaped new
  * projection (§4's own "projections are purpose-built views" principle).
  */
-import type { CirAnnotation, CirNodeStyle, NodeKind, SemanticGraph } from "../graph";
+import type { CirAnnotation, CirNode, CirNodeStyle, NodeKind, SemanticGraph } from "../graph";
 import type { Effect, Fill, PdsLayout } from "../../pds";
 
 export interface WebNode {
@@ -34,6 +34,15 @@ export interface WebNode {
   letterSpacing?: number;
   lineHeightPx?: number;
   position?: CirNodeStyle["position"];
+  borderRadius?: CirNodeStyle["borderRadius"];
+  borderColor?: string;
+  borderWidth?: number;
+  /** `kind: "image"` nodes only — see `CirNode.imageSrc`'s own docstring.
+   *  Missing from this projection until M10 needed it to actually generate
+   *  an `<img>` tag from an imported page, not just classify around it —
+   *  a real gap, found and closed the same way the `opacity`-captured-but-
+   *  dropped bug in M9.1 was: by trying to build the next real consumer. */
+  imageSrc?: string;
   children?: string[];
 }
 
@@ -72,6 +81,10 @@ export function projectWebSpec(url: string, graph: SemanticGraph, annotations: C
       letterSpacing: n.style.letterSpacing,
       lineHeightPx: n.style.lineHeightPx,
       position: n.style.position,
+      borderRadius: n.style.borderRadius,
+      borderColor: n.style.borderColor,
+      borderWidth: n.style.borderWidth,
+      imageSrc: n.imageSrc,
       children: n.children.length ? n.children : undefined,
     };
   }
@@ -88,4 +101,54 @@ export function projectWebSpec(url: string, graph: SemanticGraph, annotations: C
       "doesn't build. Use plumb_diff to compare two imports of the same page " +
       "over time.",
   };
+}
+
+/**
+ * The reverse of `projectWebSpec` — rebuilds a `SemanticGraph` (plus a
+ * `role` map) from an already-produced `WebSpecDocument`, so a caller that
+ * only has a prior `plumb_import_web` result (not a live URL) can still
+ * feed it to a graph-consuming tool like `src/emit/react.ts` without a
+ * second capture. `edges` comes back empty — nothing that's been built so
+ * far needs edges reconstructed from a flattened `WebNode` map (repeat/
+ * instanceOf detection isn't run on HTML-sourced graphs regardless — see
+ * `buildFromHtml.ts`'s own scope note), so this stays honest rather than
+ * fabricating edges nothing asked for.
+ */
+export function graphFromWebSpec(doc: WebSpecDocument): { graph: SemanticGraph; roleByNode: Map<string, string> } {
+  const nodes: Record<string, CirNode> = {};
+  const roleByNode = new Map<string, string>();
+
+  for (const [id, n] of Object.entries(doc.nodes)) {
+    if (n.role) roleByNode.set(id, n.role);
+    nodes[id] = {
+      id: n.id,
+      kind: n.kind,
+      box: n.box,
+      pos: n.pos,
+      children: n.children ?? [],
+      chars: n.chars,
+      imageSrc: n.imageSrc,
+      style: {
+        layout: n.layout,
+        textPx: n.textPx,
+        isSurface: n.isSurface,
+        fillColor: n.fillColor,
+        fills: n.fills,
+        effects: n.effects,
+        backdropFilter: n.backdropFilter,
+        opacity: n.opacity,
+        textAlign: n.textAlign,
+        textDecoration: n.textDecoration,
+        letterSpacing: n.letterSpacing,
+        lineHeightPx: n.lineHeightPx,
+        position: n.position,
+        borderRadius: n.borderRadius,
+        borderColor: n.borderColor,
+        borderWidth: n.borderWidth,
+      },
+      sourceRef: { adapter: "html", nativeId: id },
+    };
+  }
+
+  return { graph: { cirVersion: "1.0.0", root: doc.root, nodes, edges: [] }, roleByNode };
 }

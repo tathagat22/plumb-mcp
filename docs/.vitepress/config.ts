@@ -116,6 +116,8 @@ export default defineConfig({
           { text: "plumb_fig_node", link: "/tools/plumb_fig_node" },
           { text: "plumb_diff", link: "/tools/plumb_diff" },
           { text: "plumb_audit", link: "/tools/plumb_audit" },
+          { text: "plumb_import_web", link: "/tools/plumb_import_web" },
+          { text: "plumb_emit_react", link: "/tools/plumb_emit_react" },
         ],
       },
       {

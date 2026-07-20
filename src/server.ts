@@ -7,6 +7,7 @@ import { registerPlumbComponents } from "./tools/components";
 import { registerPlumbDescribe } from "./tools/describe";
 import { registerPlumbDesign } from "./tools/design";
 import { registerPlumbDiff } from "./tools/diff";
+import { registerPlumbEmitReact } from "./tools/emitReact";
 import { registerPlumbFigNode, registerPlumbFigOutline } from "./tools/fig";
 import { registerPlumbFit } from "./tools/fit";
 import { registerPlumbImportWeb } from "./tools/importHtml";
@@ -58,7 +59,10 @@ export function createServer(): McpServer {
         "plumb_diff compares two PDS snapshots and narrates changes by role " +
         "instead of a JSON diff; plumb_audit runs heuristic accessibility " +
         "checks (contrast, touch-target size); plumb_node's collapseRoles " +
-        "semantically compresses matched sections instead of expanding them.",
+        "semantically compresses matched sections instead of expanding them. " +
+        "plumb_import_web extracts the same structure and roles from a live " +
+        "URL, no Figma involved; plumb_emit_react deterministically generates " +
+        "React/JSX from either a PDS or a plumb_import_web result.",
     },
   );
 
@@ -82,6 +86,7 @@ export function createServer(): McpServer {
   registerPlumbDiff(server);
   registerPlumbAudit(server);
   registerPlumbImportWeb(server);
+  registerPlumbEmitReact(server);
   // Write direction: author + build from the Design DSL, source assets, review.
   registerPlumbDesign(server);
   registerBrandTool(server);

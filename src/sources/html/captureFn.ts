@@ -108,8 +108,37 @@ export const htmlCaptureFn = function (rootSelector: string | null, maxNodes: nu
       if (childResult) children.push(childResult);
     }
 
-    let isImage = tag === "img" || tag === "svg" || tag === "picture" || tag === "video" || tag === "canvas";
-    if (!isImage && style.backgroundImage && style.backgroundImage.indexOf("url(") !== -1) isImage = true;
+    // NOT "picture" — a <picture> tag is a wrapper with no `.src` of its
+    // own; the real image is a nested <img> child. Treating picture itself
+    // as the leaf image (as an earlier version of this did) meant the JSX
+    // renderer stopped there and never recursed into that real, properly-
+    // sourced child at all — found live against vercel.com's actual
+    // markup, not a hypothetical: several images silently had NO src
+    // because their real <img> was being discarded one level up.
+    let isImage = tag === "img" || tag === "svg" || tag === "video" || tag === "canvas";
+    // `.src` (the DOM property, not the possibly-relative `src` ATTRIBUTE)
+    // is already browser-resolved to an absolute URL — same for a
+    // computed-style url(...), per the CSSOM spec. Neither needs manual
+    // resolution against the page's base URL.
+    let imageSrc: string | undefined;
+    if (tag === "img" || tag === "video") imageSrc = el.src || undefined;
+    // JS-library lazy-loading (as opposed to native `loading="lazy"`, which
+    // still populates `.src` correctly): common libraries never set `src`
+    // at all until the element scrolls into view, real URL sitting in a
+    // `data-*` attribute instead. Found live against vercel.com — a real,
+    // common pattern, not a hypothetical edge case.
+    if (!imageSrc && (tag === "img" || tag === "video")) {
+      imageSrc =
+        el.getAttribute("data-src") ||
+        el.getAttribute("data-lazy-src") ||
+        el.getAttribute("data-original") ||
+        undefined;
+    }
+    if (!imageSrc && style.backgroundImage) {
+      const urlMatch = /url\((['"]?)(.*?)\1\)/.exec(style.backgroundImage);
+      if (urlMatch?.[2]) imageSrc = urlMatch[2];
+    }
+    if (!isImage && imageSrc) isImage = true;
 
     // Own text only when this element has no element children — matches
     // how a design tool's TEXT leaf works, rather than decomposing every
@@ -128,6 +157,7 @@ export const htmlCaptureFn = function (rootSelector: string | null, maxNodes: nu
       text,
       style,
       isImage,
+      imageSrc,
       children,
     };
   };

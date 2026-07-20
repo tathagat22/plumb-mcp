@@ -31,7 +31,7 @@ Plumb MCP server  (`npx plumb-mcp` / `node dist/index.js`)
   │    plumb_query's select:"role" / plumb_node's collapseRoles — see
   │    "Semantic layer" below
   │  Version-keyed cache with fit-to-budget normalisation
-  │  Twenty-two MCP tools exposed over stdio
+  │  Twenty-four MCP tools exposed over stdio
   ▼
   stdio MCP
   ▼
@@ -101,7 +101,12 @@ preferred over a guess.
 Internally this runs as a small pipeline — `src/semantic/build.ts` turns the
 finished PDS into a platform-agnostic graph (nodes + containment/repeat
 edges), `src/semantic/enrichers/role.ts` classifies it, and the result is
-projected back onto `pattern`. Three tools consume it directly:
+projected back onto `pattern`. The graph isn't Figma-only: `src/semantic/
+buildFromHtml.ts` builds the same shape from a live webpage's DOM
+(`plumb_import_web`, headless Chrome, no Figma involved), and every
+enricher/emitter below runs against either source unmodified — the concrete
+proof the graph is genuinely platform-agnostic, not just designed to look
+that way. Consumers:
 
 - **`plumb_diff`** — semantic diff between two PDS snapshots ("the hero moved
   from (0, 0) to (0, 120)" instead of a JSON diff).
@@ -109,6 +114,10 @@ projected back onto `pattern`. Three tools consume it directly:
   touch-target size) that read role labels to know what to check.
 - **`plumb_query`**'s `select: "role"` and **`plumb_node`**'s
   `collapseRoles` filter and compress by the same labels.
+- **`plumb_import_web`** — extracts structure and roles from a live URL.
+- **`plumb_emit_react`** (`src/emit/react.ts`) — deterministic, template-based
+  React/JSX generation from the graph, working on a Figma-sourced OR an
+  HTML-sourced graph with the same code.
 
 See the (gitignored, local) `docs/ROADMAP-v0.14-design-intelligence.md` for
 the full design rationale if you're working on this layer.

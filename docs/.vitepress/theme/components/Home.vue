@@ -161,7 +161,7 @@ onMounted(async () => {
           <pre><code><span class="ph-prompt">$</span> npx plumb-mcp init
 <span class="ph-dim">→ found Claude Code, Cursor</span>
 <span class="ph-dim">→ wrote .mcp.json (2 servers)</span>
-<span class="ph-ok">✓ plumb ready — 22 tools, 0 tokens spent</span></code></pre>
+<span class="ph-ok">✓ plumb ready — 24 tools, 0 tokens spent</span></code></pre>
         </div>
       </div>
       <div class="ph-hero-bob" aria-hidden="true">
@@ -336,7 +336,7 @@ onMounted(async () => {
         <div class="ph-trust-card">
           <h3>Open source</h3>
           <p>
-            MIT-licensed. Twenty-two focused tools, plus an offline
+            MIT-licensed. Twenty-four focused tools, plus an offline
             <code>.fig</code> parser. Issues and roadmap on GitHub.
           </p>
         </div>

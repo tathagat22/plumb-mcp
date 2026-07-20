@@ -77,6 +77,16 @@ export interface CirNodeStyle {
    *  `RoleEnricher` itself — that would leak an HTML-specific concept into
    *  Figma-shared code. */
   position?: "relative" | "absolute" | "fixed" | "sticky";
+  /** The actual radius value, px or `"full"` (pill/circle) — `isSurface`
+   *  above is a boolean CLASSIFICATION signal ("is this a styled surface");
+   *  a code-generation consumer needs the real number to reproduce it, not
+   *  just the yes/no. Added building `src/emit/react.ts` (M10) — a second
+   *  real consumer with different needs than the first (enrichers) is
+   *  exactly the situation `style`'s own docstring says to grow it for. */
+  borderRadius?: number | "full";
+  borderColor?: string;
+  /** CSS px. */
+  borderWidth?: number;
 }
 
 export interface CirNode {
@@ -88,6 +98,16 @@ export interface CirNode {
   /** Text content — text nodes only, dominant run only (no per-run detail;
    *  add if an enricher needs mixed-style runs). */
   chars?: string;
+  /** `kind: "image"` nodes only. An actual loadable URL for the HTML
+   *  adapter (`<img src>` or a `background-image: url(...)`); a best-effort
+   *  relative path for the Figma adapter (`plumb_assets`' own export
+   *  convention — `./assets/<assetId>.<ext>` — not a guarantee the file
+   *  exists, since exporting it is a separate `plumb_assets` call the
+   *  Figma adapter doesn't make itself). Added alongside `borderRadius` for
+   *  the same reason — `src/emit/react.ts` needs an actual value, and
+   *  before this every generated `<img>` would've been a meaningless
+   *  placeholder regardless of source. */
+  imageSrc?: string;
   style: CirNodeStyle;
   /** The only adapter-leaking field. Nothing except "open in the source
    *  tool" tooling should ever read this — enrichers and projections must
