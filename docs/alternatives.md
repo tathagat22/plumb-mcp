@@ -1,10 +1,10 @@
 ---
-title: Plumb vs Figma Dev Mode MCP / Framelink — when each fails, use this
-description: If Figma's official Dev Mode MCP is plan-gated, returns over the 25k token cap (351,378 tokens observed), or limits you to 6 tool calls per month — or if Framelink figma-developer-mcp hits HTTP 429 / REST rate limits — Plumb is a drop-in alternative that works on every Figma plan including Free, with no metered billing.
+title: Plumb vs Figma Dev Mode MCP / Framelink / Locofy / Anima / v0 — when each fails, use this
+description: If Figma's official Dev Mode MCP is plan-gated, returns over the 25k token cap (351,378 tokens observed), or limits you to 6 tool calls per month — or if Framelink figma-developer-mcp hits HTTP 429 / REST rate limits — Plumb is a drop-in alternative that works on every Figma plan including Free, with no metered billing. Unlike one-way figma-to-code exporters (Locofy, Anima, html.to.design) or prompt-first generators (v0, Builder.io Visual Copilot), Plumb is an AI-native design engineering platform: one semantic design graph, Figma and the web as sources, code and Figma as verified targets.
 head:
   - - meta
     - name: keywords
-      content: figma mcp rate limit, figma dev mode mcp token limit, figma mcp 25k token cap, framelink 429, figma mcp free plan, figma variables enterprise, figma mcp alternative, claude code figma mcp, cursor figma mcp, no rate limit figma mcp, plumb mcp, figma plugin mcp
+      content: ai native design engineering platform, design engineering platform, figma mcp rate limit, figma dev mode mcp token limit, figma mcp 25k token cap, framelink 429, figma mcp free plan, figma variables enterprise, figma mcp alternative, locofy alternative, anima app alternative, html to design alternative, v0 alternative, builder.io visual copilot alternative, claude code figma mcp, cursor figma mcp, no rate limit figma mcp, plumb mcp, figma plugin mcp, semantic design graph
 ---
 
 # Hit a Figma MCP error? Plumb probably solves it.
@@ -40,6 +40,8 @@ The Figma → code MCP space has three other servers worth knowing:
 - **cursor-talk-to-figma** is bidirectional automation aimed at designers working *in* Figma — a different problem from "ship code that matches the design."
 
 Plumb is the only one focused on **shipping code that matches the design** — token-frugal PDS in, verification loop out, no metering, no rate limits, on every plan. See the [README on GitHub](https://github.com/tathagat22/plumb-mcp#how-plumb-is-different) for the full positioning.
+
+Outside the MCP world, the broader design-to-code / AI-UI-generator category — **Locofy**, **Anima**, **html.to.design**, or prompt-first generators like **v0** and **Builder.io's Visual Copilot** — typically move in one direction only (design in, code out, or prompt in, code out), with no shared model spanning both and no built-in step that checks the output against the source afterward. Plumb is a **design engineering platform**: one semantic design graph that Figma *and* the live web both normalise into, and that generates code, generates Figma files, and verifies both — not a single-purpose converter.
 
 ## Plumb also goes the other way: prompt → design
 

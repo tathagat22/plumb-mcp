@@ -2,11 +2,13 @@ import { defineConfig } from "vitepress";
 
 const SITE_URL = "https://tathagat22.github.io/plumb-mcp/";
 const SITE_TITLE =
-  "Plumb — the two-way Figma MCP: design → code, and prompt → design";
+  "Plumb — the AI-native design engineering platform";
 const SITE_DESCRIPTION =
-  "Local two-way Figma MCP server for Claude Code, Cursor, Windsurf. Design → " +
-  "code: normalised specs out and a verification loop that diffs rendered code " +
-  "against the design. Prompt → design: an AI design director that researches " +
+  "Plumb is an AI-native design engineering platform shipped as one local MCP " +
+  "server for Claude Code, Cursor, Windsurf. It normalises Figma files and live " +
+  "websites into one shared semantic design graph, generates deterministic " +
+  "React/JSX code, and runs a verification loop that diffs rendered code against " +
+  "the source. Prompt → design: an AI design director that researches " +
   "references, extracts a brand, and generates a full on-brand Figma page — no " +
   "extra API key. No REST rate limits, no metered tool-call quotas, no 25k " +
   "token cap explosions. Drop-in alternative to Figma's Dev Mode MCP and " +
@@ -42,7 +44,7 @@ export default defineConfig({
     ],
     ["meta", { name: "theme-color", content: "#0c8ce9" }],
     ["meta", { name: "author", content: "Tathagat Maitray" }],
-    ["meta", { name: "keywords", content: "figma mcp, figma mcp server, figma to code, design to code, figma dev mode mcp alternative, framelink alternative, figma mcp rate limit, figma dev mode mcp, figma dev mode mcp token limit, 25k token cap, framelink figma-developer-mcp, framelink 429, figma rest rate limit, figma free plan mcp, figma variables enterprise, verification loop, design tokens, prompt to design, prompt to figma, text to figma, ai design generator, generate figma designs, ai ui/ux designer, ai design director, ai design agent, mcp design generation, claude code figma, cursor figma mcp, windsurf figma, model context protocol, ai coding agent, figma plugin mcp, plumb mcp" }],
+    ["meta", { name: "keywords", content: "ai native design engineering platform, design engineering, design engineering platform, ai design engineer, agentic design tools, semantic design graph, figma mcp, figma mcp server, figma to code, figma to react, design to code, html to react ai, web to design system, figma dev mode mcp alternative, framelink alternative, figma mcp rate limit, figma dev mode mcp, figma dev mode mcp token limit, 25k token cap, framelink figma-developer-mcp, framelink 429, figma rest rate limit, figma free plan mcp, figma variables enterprise, verification loop, design qa automation, accessibility audit mcp, design tokens, prompt to design, prompt to figma, text to figma, ai design generator, generate figma designs, ai ui/ux designer, ai design director, ai design agent, mcp design generation, claude code figma, cursor figma mcp, windsurf figma, model context protocol, vibe coding, ai coding agent, figma plugin mcp, plumb mcp" }],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:title", content: SITE_TITLE }],
     ["meta", { property: "og:description", content: SITE_DESCRIPTION }],

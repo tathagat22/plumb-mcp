@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.tathagat22/plumb-mcp",
-  "description": "Two-way Figma MCP: extract + verify design-to-code, or generate on-brand Figma pages from a prompt.",
+  "description": "The AI-native design engineering platform, as one MCP server: extract + verify Figma or live-web design-to-code on one semantic design graph, or generate on-brand Figma pages from a prompt.",
   "repository": {
     "url": "https://github.com/tathagat22/plumb-mcp",
     "source": "github"

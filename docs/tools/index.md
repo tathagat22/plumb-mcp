@@ -1,11 +1,11 @@
 ---
-title: "MCP tool reference — Plumb Figma MCP server (design→code + prompt→design)"
-description: "Twenty-four Model Context Protocol tools that make Figma two-way for AI coding agents. Read direction — figma to code: outline, node, query, describe, assets, screenshot, verify, the self-healing fit loop, semantic diff, accessibility audit, live webpage import, and a deterministic React generator. Write direction — prompt to design: studio, brand, design, review, source. The AI design director, no extra API key."
+title: "MCP tool reference — Plumb, the AI-native design engineering platform"
+description: "Twenty-four Model Context Protocol tools built on one shared semantic design graph. Read direction — Figma or the live web to code: outline, node, query, describe, assets, screenshot, verify, the self-healing fit loop, semantic diff, accessibility audit, live webpage import, and a deterministic React generator. Write direction — prompt to design: studio, brand, design, review, source. The AI design director, no extra API key."
 ---
 
 # Tools
 
-Plumb exposes **twenty-four** MCP tools, split across the two directions it plumbs — **Figma → code** (read) and **prompt → design** (write). Each one has a focused, single responsibility; the agent composes them.
+Plumb exposes **twenty-four** MCP tools, all reading from or writing to one shared **semantic design graph** — split across the two directions it plumbs — **design → code** (Figma or the live web, read) and **prompt → design** (write). Each tool has a focused, single responsibility; the agent composes them.
 
 ## Read — Figma → code
 

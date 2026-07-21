@@ -1,13 +1,13 @@
 <script setup>
-import { onMounted, onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, ref, computed } from "vue";
 import { withBase } from "vitepress";
-import PlumbBob from "./PlumbBob.vue";
+import PipelineGraph from "./PipelineGraph.vue";
 
 const iterations = [
-  { angle: -13, score: 61, note: "shadow offset wrong, radius drifted" },
-  { angle: 7, score: 78, note: "flex-child gap off by 4px" },
-  { angle: -3, score: 92, note: "one fill-stack z-order swap" },
-  { angle: 0, score: 100, note: "pixel-perfect" },
+  { score: 61, note: "shadow offset wrong, radius drifted" },
+  { score: 78, note: "flex-child gap off by 4px" },
+  { score: 92, note: "one fill-stack z-order swap" },
+  { score: 100, note: "pixel-perfect" },
 ];
 // The convergence demo is visitor-driven, not a passive carousel — clicking
 // "Run plumb_fit" is what actually mirrors the tool: you run it, it nudges
@@ -17,24 +17,13 @@ function runFit() {
   step.value = (step.value + 1) % iterations.length;
 }
 
+const RING_R = 54;
+const RING_C = 2 * Math.PI * RING_R;
+const ringOffset = computed(() => RING_C * (1 - iterations[step.value].score / 100));
+
 const prefersReducedMotion =
   typeof window !== "undefined" &&
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-
-// Hero bob: free-swings once on load, then — once settled — tracks the
-// cursor with a small live tilt, so "true" is something you can nudge off
-// and watch it hunt back for, same as the real verify/fit loop does.
-const heroSettled = ref(false);
-const heroAngle = ref(0);
-function onHeroPointerMove(e) {
-  if (!heroSettled.value) return;
-  const rect = e.currentTarget.getBoundingClientRect();
-  const nx = (e.clientX - rect.left) / rect.width;
-  heroAngle.value = (nx - 0.5) * 18;
-}
-function onHeroPointerLeave() {
-  heroAngle.value = 0;
-}
 
 const isMobile = ref(
   typeof window !== "undefined" ? window.matchMedia("(max-width: 900px)").matches : false,
@@ -43,7 +32,6 @@ const isMobile = ref(
 onMounted(() => {
   if (prefersReducedMotion) {
     step.value = iterations.length - 1;
-    heroSettled.value = true;
   }
 
   const mq = window.matchMedia("(max-width: 900px)");
@@ -131,20 +119,21 @@ onMounted(async () => {
       </div>
     </nav>
 
-    <header class="ph-hero" @pointermove="onHeroPointerMove" @pointerleave="onHeroPointerLeave">
+    <header class="ph-hero">
       <div class="ph-hero-copy">
-        <p class="ph-eyebrow">A two-way Figma MCP</p>
+        <p class="ph-eyebrow">The AI-native design engineering platform</p>
         <h1>
           Design&nbsp;→ code.<br />
           Prompt&nbsp;→ design.<br />
-          <span class="ph-accent">Either way, plumb tells you when it's true.</span>
+          <span class="ph-accent">One semantic graph. Verified true.</span>
         </h1>
         <p class="ph-lede">
-          One direction: Figma in, a normalised design spec out, and a
-          verification loop that drives headless Chrome to prove your code
-          matches the design. The other: a one-line brief in, a full,
-          on-brand Figma page out. No REST rate limits, no metered tool-call
-          quotas, no 25k-token cap explosions, no extra API key.
+          One MCP server normalises Figma files and live websites into a
+          shared semantic design graph, generates deterministic React code,
+          and runs a verification loop that proves your build actually
+          matches the source — or, from a one-line prompt, designs and
+          critiques a brand-new Figma page. No REST rate limits, no metered
+          tool-call quotas, no 25k-token cap explosions, no extra API key.
         </p>
         <div class="ph-cta-row">
           <a class="ph-btn ph-btn-brand" :href="withBase('/getting-started')"
@@ -161,21 +150,58 @@ onMounted(async () => {
           <pre><code><span class="ph-prompt">$</span> npx plumb-mcp init
 <span class="ph-dim">→ found Claude Code, Cursor</span>
 <span class="ph-dim">→ wrote .mcp.json (2 servers)</span>
-<span class="ph-ok">✓ plumb ready — 24 tools, 0 tokens spent</span></code></pre>
+<span class="ph-ok">✓ plumb ready — 24 tools, one semantic graph</span></code></pre>
         </div>
       </div>
-      <div class="ph-hero-bob" aria-hidden="true">
-        <PlumbBob
-          :size="isMobile ? 130 : 240"
-          :angle="heroSettled ? heroAngle : null"
-          @settled="heroSettled = true"
-        />
-        <p class="ph-hero-bob-hint">move your cursor →</p>
+      <div class="ph-hero-visual" aria-hidden="true">
+        <PipelineGraph :width="isMobile ? 300 : 460" />
+        <p class="ph-hero-visual-caption">Figma + web → one graph → code + design</p>
       </div>
     </header>
 
+    <section class="ph-section ph-platform" data-reveal>
+      <h2>One graph. Two sources in, two targets out.</h2>
+      <p class="ph-section-lede">
+        Most figma-to-code tools are one shape in, one shape out. Plumb's
+        architecture is a hub: two independent sources normalise into the
+        same graph, and every downstream tool runs against either one,
+        unmodified — that's what makes it a platform, not a converter.
+      </p>
+      <div class="ph-platform-grid">
+        <article class="ph-platform-card">
+          <p class="ph-platform-kicker">Sources</p>
+          <ul>
+            <li><code>plumb_node</code> — a Figma screen, via the plugin. No REST, no rate limit.</li>
+            <li><code>plumb_import_web</code> — any live URL, via headless Chrome. No Figma needed.</li>
+          </ul>
+        </article>
+        <article class="ph-platform-card ph-platform-card-hub">
+          <p class="ph-platform-kicker">The graph</p>
+          <p>
+            Deduped tokens, flexbox-resolved layout, and conservative role
+            labels (<code>nav</code> / <code>hero</code> /
+            <code>footer</code> / <code>sidebar</code> / <code>card</code>) —
+            the same shape regardless of source.
+          </p>
+        </article>
+        <article class="ph-platform-card">
+          <p class="ph-platform-kicker">Targets</p>
+          <ul>
+            <li><code>plumb_emit_react</code> — deterministic React/JSX, same emitter either source.</li>
+            <li><code>plumb_studio</code> — a brand-new, on-brand Figma file from a brief.</li>
+          </ul>
+        </article>
+      </div>
+      <p class="ph-platform-proof">
+        <code>plumb_diff</code>, <code>plumb_audit</code>, and
+        <code>plumb_query</code>'s role filters all run identically on both
+        sources — the concrete proof it's a platform, not a converter with a
+        second input bolted on.
+      </p>
+    </section>
+
     <section class="ph-section ph-directions" data-reveal>
-      <h2>Two directions, one loop</h2>
+      <h2>Two directions, same graph</h2>
       <div class="ph-diptych">
         <article class="ph-flow-card">
           <p class="ph-flow-kicker">Design → code</p>
@@ -188,7 +214,8 @@ onMounted(async () => {
                   <code>plumb_outline</code>, <code>plumb_node</code>, or
                   <code>plumb_query</code> pull a Plumb Design Spec — auto-layout
                   pre-resolved to flexbox, tokens deduped to <code>$c1</code>,
-                  <code>$t1</code> refs.
+                  <code>$t1</code> refs. <code>plumb_import_web</code> pulls the
+                  same shape from any live URL — no Figma needed.
                 </p>
               </div>
             </li>
@@ -196,7 +223,7 @@ onMounted(async () => {
               <span class="ph-step-n">02</span>
               <div>
                 <strong>Build</strong>
-                <p>Your agent writes the component from the PDS, same as it always does.</p>
+                <p>Your agent writes the component from the spec, same as it always does.</p>
               </div>
             </li>
             <li>
@@ -205,7 +232,7 @@ onMounted(async () => {
                 <strong>Verify</strong>
                 <p>
                   <code>plumb_verify</code> drives headless Chrome and diffs the
-                  rendered DOM against the design — layout, color, type, shadow,
+                  rendered DOM against the source — layout, color, type, shadow,
                   assets.
                 </p>
               </div>
@@ -304,9 +331,9 @@ onMounted(async () => {
         <h2>Pixel-perfect, or it keeps going</h2>
         <p>
           Every iteration of <code>plumb_verify</code> →
-          <code>plumb_fit</code> nudges the render closer to the design.
-          The bob only stops swinging when the score hits 100 — same idea,
-          same word: <em>plumb</em>, exactly vertical, exactly right.
+          <code>plumb_fit</code> nudges the render closer to the source. The
+          score only reads 100 when the build is pixel-identical — same
+          idea, same word as the name: <em>plumb</em>, exactly true.
         </p>
         <p class="ph-loop-note">
           {{ step === iterations.length - 1 ? "true. run it again from the top →" : iterations[step].note }}
@@ -316,11 +343,27 @@ onMounted(async () => {
         </button>
       </div>
       <div class="ph-loop-demo">
-        <PlumbBob :angle="iterations[step].angle" :size="150" :label="true" />
-        <div class="ph-loop-score">
-          <span class="ph-score-num">{{ iterations[step].score }}</span>
-          <span class="ph-score-max">/100</span>
-        </div>
+        <svg
+          class="ph-ring"
+          viewBox="0 0 140 140"
+          role="img"
+          :aria-label="`Convergence score ${iterations[step].score} out of 100`"
+        >
+          <circle class="ph-ring-track" cx="70" cy="70" r="54" />
+          <circle
+            class="ph-ring-fill"
+            :class="{ 'ph-ring-fill-done': iterations[step].score === 100 }"
+            cx="70"
+            cy="70"
+            r="54"
+            :style="{
+              strokeDasharray: `${RING_C}px`,
+              strokeDashoffset: `${ringOffset}px`,
+            }"
+          />
+          <text x="70" y="66" text-anchor="middle" class="ph-ring-num">{{ iterations[step].score }}</text>
+          <text x="70" y="86" text-anchor="middle" class="ph-ring-max">/ 100</text>
+        </svg>
       </div>
     </section>
 
@@ -336,8 +379,9 @@ onMounted(async () => {
         <div class="ph-trust-card">
           <h3>Open source</h3>
           <p>
-            MIT-licensed. Twenty-four focused tools, plus an offline
-            <code>.fig</code> parser. Issues and roadmap on GitHub.
+            MIT-licensed. Twenty-four focused tools on one semantic graph,
+            plus an offline <code>.fig</code> parser. Issues and roadmap on
+            GitHub.
           </p>
         </div>
         <div class="ph-trust-card">
@@ -355,7 +399,6 @@ onMounted(async () => {
     </section>
 
     <footer class="ph-footer" data-reveal>
-      <div class="ph-footer-bob"><PlumbBob :size="72" :autoplay="false" :angle="0" /></div>
       <h2>Give it a try, then give it a ⭐</h2>
       <p>Free and MIT-licensed. A star is how other devs find it.</p>
       <div class="ph-cta-row ph-cta-row-center">

@@ -1,10 +1,10 @@
 
 
 <p align="center">
-  <img src="./docs/public/banner.png" alt="Plumb — Figma ↔ AI coding, plumbed both ways." width="100%">
+  <img src="./docs/public/banner.png" alt="Plumb — the AI-native design engineering platform." width="100%">
 </p>
 
-# Plumb (`plumb-mcp`) — the two-way Figma MCP: design → code, and prompt → design
+# Plumb (`plumb-mcp`) — the AI-native design engineering platform
 
 <p align="center">
   <a href="https://github.com/tathagat22/plumb-mcp"><img alt="GitHub stars" src="https://img.shields.io/github/stars/tathagat22/plumb-mcp?style=social"></a>
@@ -18,9 +18,9 @@
 
 <p align="center"><b>⭐ If Plumb saves you tokens — or designs you a page — <a href="https://github.com/tathagat22/plumb-mcp">star it on GitHub</a> so others can find it.</b></p>
 
-**Plumb is the Figma MCP server that goes both ways.** Point it at a design and it returns a compact, normalised spec your coding agent can build from — then proves the code matches with a verification loop. Point it at a *prompt* and it turns into an **AI design director**: it researches real best-in-class reference websites, extracts a brand, and **generates a full, on-brand Figma design on your canvas** — then critiques its own render and iterates until it's good.
+**Plumb is an AI-native design engineering platform, shipped as a single MCP server.** Point it at a Figma file *or* a live website and it normalises either one into the same **semantic design graph** — deduped tokens, flexbox-resolved layout, conservative role labels (`nav` / `hero` / `card` …) — that your coding agent can build from and a verification loop can grade. Point it at a one-line prompt instead and it becomes an **AI design director**: it researches best-in-class references, extracts a brand, and generates a full, on-brand Figma file on your canvas, then critiques its own render until it clears the bar.
 
-> **Figma → code** (extract, verify, self-heal) &nbsp;•&nbsp; **prompt → design** (research → brand → generate → critique). One MCP server, both directions.
+> **Design → code** (Figma or the live web, verified, not vibes) &nbsp;•&nbsp; **prompt → design** (research → brand → generate → critique) &nbsp;•&nbsp; **one semantic design graph underneath both.** MCP-native — works with Claude Code, Cursor, Windsurf, or any agent that speaks Model Context Protocol.
 
 📖 Full docs: **<https://tathagat22.github.io/plumb-mcp/>** &nbsp;·&nbsp; 📦 npm: [`plumb-mcp`](https://www.npmjs.com/package/plumb-mcp) &nbsp;·&nbsp; 🇨🇳 [简体中文](./i18n/README.zh-cn.md) &nbsp;·&nbsp; 🇯🇵 [日本語](./i18n/README.ja.md) &nbsp;·&nbsp; 🇰🇷 [한국어](./i18n/README.ko.md)
 
@@ -30,14 +30,27 @@
   <a href="https://insiders.vscode.dev/redirect/mcp/install?name=plumb&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22plumb-mcp%22%5D%7D"><img src="https://img.shields.io/badge/Install_in_VS_Code-0098FF?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="Install in VS Code" height="32"></a>
 </p>
 
-Built for coding agents — Claude Code, Cursor, Windsurf, anything MCP-compatible. It reads Figma through a desktop-app plugin (no REST rate limits, works on every plan including Free), *writes* new designs back through the same plugin, and returns compact normalised specs instead of the multi-hundred-thousand-token JSON the Figma API emits.
+Built for coding agents — Claude Code, Cursor, Windsurf, anything MCP-compatible. Design engineering, agent-native: no dashboard, no separate app to babysit, no human shuttling pixels between Figma and an editor. It reads Figma through a desktop-app plugin (no REST rate limits, works on every plan including Free), reads any live website through headless Chrome, *writes* new designs back into Figma through the same plugin, and returns compact normalised specs instead of the multi-hundred-thousand-token JSON the Figma API emits.
+
+---
+
+## Why "design engineering platform," not "Figma converter"
+
+Most Figma MCP servers — and most figma-to-code tools generally — are one shape in, one shape out: Figma JSON in, one framework's code out, done. Plumb's architecture is a hub, not a pipe:
+
+- **Two independent sources feed the same graph.** `plumb_node` normalises a Figma screen; `plumb_import_web` normalises a live webpage's DOM. Both land as the same platform-agnostic **Semantic Graph** — containment, repeat-group, and role edges — regardless of where the pixels came from.
+- **Every consumer runs against either source, unmodified.** `plumb_emit_react` generates the same deterministic React/JSX whether the graph came from Figma or from a URL. `plumb_diff`, `plumb_audit`, and `plumb_query`'s role filters all work identically on both. That's the concrete proof it's a platform, not a converter with a second input bolted on.
+- **Verification closes the loop on the way out**, not just the way in. `plumb_verify` / `plumb_fit` diff your shipped code against the source of truth and hand back ranked fixes — "looks right" becomes measurably true.
+- **Generation runs the loop in reverse.** `plumb_studio` composes a brand-new Figma file from a brief, and `plumb_review` critiques the render the same way `plumb_verify` critiques code.
+
+One semantic model. Multiple sources in (Figma, the web), multiple targets out (React code, Figma files), verified at both ends. That's the platform.
 
 ---
 
 ## Two directions, one server
 
-### ← Figma → code (read direction)
-Your agent extracts a screen as a compact **Plumb Design Spec (PDS)** — auto-layout pre-resolved to flexbox, design tokens deduped — builds the UI, then calls `plumb_verify` / `plumb_fit` to diff the rendered result against the design and self-correct to pixel-perfect. The only Figma MCP that **closes the loop on code**.
+### ← Figma or the web → code (read direction)
+Your agent extracts a screen — or any live URL via `plumb_import_web` — as a compact **Plumb Design Spec (PDS)** riding on the same semantic graph: auto-layout pre-resolved to flexbox, design tokens deduped, roles labelled. It builds the UI, then calls `plumb_verify` / `plumb_fit` to diff the rendered result against the source and self-correct to pixel-perfect. The only Figma MCP that **closes the loop on code** — and the only one that runs the identical loop against a plain webpage, no Figma file required.
 
 ### → prompt → design (write direction — the design director)
 Give Plumb a one-line brief — *"a premium fintech dashboard"* — and it acts like a senior designer working live in your Figma:
@@ -59,7 +72,9 @@ Other Figma MCP servers you may know:
 - **Framelink** — thin REST wrapper. Two tools. No verification, inherits rate limits.
 - **cursor-talk-to-figma** — bidirectional automation for designers working *in* Figma.
 
-Plumb is the only one that both **closes the loop on code** *and* **directs new design generation.** `plumb_verify` tells you whether shipped code actually matches the design; `plumb_fit` turns that into a self-healing loop. And on the write side, `plumb_studio` / `plumb_brand` / `plumb_design` / `plumb_review` turn a prompt into a designed, critiqued Figma file — no design skills, no separate design tool, no extra model key.
+And beyond the MCP world, the broader design-to-code / AI-UI-generator category — tools like html.to.design, Anima, Locofy, or prompt-first generators like v0 and Builder.io's Visual Copilot — typically move in one direction only (design in, code out, or prompt in, code out) with no shared model spanning both, and no built-in step that checks the output against the source afterward.
+
+Plumb is the only one that both **closes the loop on code** *and* **directs new design generation**, on top of **one semantic graph that doesn't care whether the source was Figma or a URL**. `plumb_verify` tells you whether shipped code actually matches the design (or the reference page); `plumb_fit` turns that into a self-healing loop. `plumb_import_web` + `plumb_emit_react` prove the graph travels: the same role classifier and the same code generator run against a live website with zero Figma involved. And on the write side, `plumb_studio` / `plumb_brand` / `plumb_design` / `plumb_review` turn a prompt into a designed, critiqued Figma file — no design skills, no separate design tool, no extra model key.
 
 ---
 
@@ -75,6 +90,8 @@ If your agent landed here from an error, Plumb probably solves it.
 | `Variables API requires Enterprise plan` · `403 Forbidden on variables` | Plumb reads Variables through the Figma Plugin API — works on every plan. |
 | `Figma MCP returned 85% wrong layout` · hallucinated structure | Plumb returns structured PDS (not parsed prose) and ships `plumb_verify` + a `plumb-mcp verify` CLI that diffs your rendered DOM against the design. |
 | *"How do I generate a Figma design from a prompt?"* · *"AI that designs UI in Figma"* | `plumb_studio` — brief → researched references → extracted brand → a full composed Figma page, critiqued and refined. |
+| *"Is there an AI-native design engineering platform?"* · *"AI design engineer agent"* | Plumb — one MCP server, one semantic design graph, Figma and the web as sources, code and Figma as targets, verified on both ends. |
+| *"Convert a website to Figma"* · *"scrape a website into a design system"* · *"HTML to React with AI"* | `plumb_import_web` reads any live URL into the same semantic graph as a Figma screen — no browser extension, no manual redraw — and `plumb_emit_react` generates React/JSX straight off it. |
 
 Install: `npm install -g plumb-mcp` → `plumb-mcp init`.
 
@@ -101,6 +118,9 @@ echo "$(npm root -g)/plumb-mcp/figma-plugin/manifest.json"
 # Figma → code
 "Extract the Settings screen with Plumb and build it, then plumb_fit until it matches."
 
+# web → code, no Figma required
+"Use plumb_import_web on https://example.com, then plumb_emit_react to scaffold it."
+
 # prompt → design
 "Use plumb_studio to design a premium fintech dashboard, then screenshot it and
  run plumb_review as the director until the score clears 90."
@@ -110,9 +130,11 @@ Other install paths: `npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/p
 
 ---
 
-## The twenty-four MCP tools
+## Twenty-four tools, one semantic graph
 
-### Read — Figma → code
+Every tool below reads from or writes to the same semantic design graph described above — that's what makes adding a new source (the web) or a new target (React) additive, not a rewrite.
+
+### Read — Figma or the web → code
 
 | Tool | What it does |
 |---|---|
