@@ -1,5 +1,6 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { startBridge } from "./bridge/server";
+import { closeAllBrowsers } from "./cli/cdp";
 import { loadEnv } from "./env";
 import { runFitCli } from "./cli/fit";
 import { runInit } from "./cli/init";
@@ -68,6 +69,19 @@ function installProcessGuards(): void {
       `plumb-mcp: unhandled rejection (server stays up): ${e instanceof Error ? (e.stack ?? e.message) : String(e)}\n`,
     );
   });
+
+  // A killed/restarted MCP host (editor reload, host crash) must not leave a
+  // headless Chrome process running — plumb_verify/plumb_fit/plumb_import_web
+  // can each have one open at shutdown time.
+  let shuttingDown = false;
+  const shutdown = (signal: NodeJS.Signals) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    process.stderr.write(`plumb-mcp: received ${signal}, closing any open browsers…\n`);
+    closeAllBrowsers().finally(() => process.exit(0));
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }
 
 /**

@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, unlink } from "node:fs";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { WebSocketServer, type WebSocket } from "ws";
@@ -29,10 +29,48 @@ import type {
 let pairedSocket: WebSocket | null = null;
 let reqCounter = 0;
 
+/** How long an un-drained upload / in-flight asset request is allowed to
+ *  linger before the sweep reclaims it — covers the plugin crashing or
+ *  reloading mid-request, when nothing ever arrives to drain these maps
+ *  on their normal (successful) path. Mirrors `INBOUND_TTL_MS` below. */
+const PENDING_UPLOAD_TTL_MS = 10 * 60 * 1000;
+
 /** reqId → path the plugin's binary upload was written to. Drained when the
  *  matching `screenshot` WS reply arrives, so the resolved promise can carry
  *  the on-disk path instead of a base64 string. */
-const uploadMap = new Map<string, { path: string }>();
+const uploadMap = new Map<string, { path: string; expires: number }>();
+
+function deleteUpload(reqId: string): void {
+  const upload = uploadMap.get(reqId);
+  if (!upload) return;
+  uploadMap.delete(reqId);
+  unlink(upload.path, () => {}); // best-effort — a leftover temp file is a leak, not a correctness issue
+}
+
+/** Periodic backstop: reclaims uploads/asset-request markers whose matching
+ *  WS reply is simply never going to arrive (plugin crashed without a clean
+ *  disconnect event) — otherwise both maps, and their staged temp files,
+ *  grow without bound over a long-running multi-session process. */
+function sweepExpiredUploads(): void {
+  const now = Date.now();
+  for (const [reqId, upload] of uploadMap) {
+    if (upload.expires < now) deleteUpload(reqId);
+  }
+  for (const [reqId, startedAt] of assetRequestStart) {
+    if (now - startedAt > PENDING_UPLOAD_TTL_MS) assetRequestStart.delete(reqId);
+  }
+}
+
+/** Only one plugin is ever paired at a time — so when it disconnects, every
+ *  currently-pending upload/asset-request belongs to a request that plugin
+ *  will now never answer. Clear both maps immediately rather than waiting
+ *  out the TTL; a fresh pairing starts with fresh reqIds regardless. */
+function clearAllPendingUploads(): void {
+  for (const reqId of [...uploadMap.keys()]) deleteUpload(reqId);
+  assetRequestStart.clear();
+}
+
+let sweepTimer: ReturnType<typeof setInterval> | undefined;
 
 interface Pending {
   resolve: (value: unknown) => void;
@@ -365,7 +403,7 @@ function handleHttp(req: IncomingMessage, res: ServerResponse): void {
   const out = createWriteStream(path);
   req.pipe(out);
   out.on("finish", () => {
-    uploadMap.set(reqId, { path });
+    uploadMap.set(reqId, { path, expires: Date.now() + PENDING_UPLOAD_TTL_MS });
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true }));
   });
@@ -434,6 +472,11 @@ export async function startBridge(): Promise<void> {
   log(`listening on 127.0.0.1:${chosen} as "${sessionLabel}"`);
   if (studioAvailable()) {
     log(`Plumb Studio (live cockpit): http://127.0.0.1:${chosen}/  ·  run \`plumb-mcp studio\` to open it`);
+  }
+
+  if (!sweepTimer) {
+    sweepTimer = setInterval(sweepExpiredUploads, PENDING_UPLOAD_TTL_MS / 2);
+    sweepTimer.unref?.(); // never keep the process alive just for this
   }
 
   wss.on("connection", (ws, req) => {
@@ -631,6 +674,9 @@ export async function startBridge(): Promise<void> {
             "Re-run the Plumb plugin in Figma and pair again, then retry.",
           ),
         );
+        // Nothing will ever drain these now — reclaim the temp files and
+        // markers immediately rather than waiting out sweepExpiredUploads's TTL.
+        clearAllPendingUploads();
         log("plugin disconnected");
       }
     });

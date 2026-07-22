@@ -26,6 +26,17 @@ export interface BrowserOpts {
  *  caller asks for a different one. */
 const DEFAULT_SEND_TIMEOUT_MS = 30_000;
 
+/** Every currently-open browser's `close`, so a killed/restarted MCP host
+ *  (SIGINT/SIGTERM) can tear them down instead of leaking a headless Chrome
+ *  process — see `closeAllBrowsers`, called from `src/index.ts`. */
+const openBrowsers = new Set<() => Promise<void>>();
+
+/** Best-effort: closes every tracked browser. Called from process signal
+ *  handlers, so failures here must never throw or block shutdown. */
+export async function closeAllBrowsers(): Promise<void> {
+  await Promise.allSettled([...openBrowsers].map((close) => close()));
+}
+
 export interface Browser {
   /** Send a CDP command to the page target, await the response. Rejects if
    *  no reply arrives within `timeoutMs` (default 30s). */
@@ -64,44 +75,70 @@ export async function launchBrowser(opts: BrowserOpts): Promise<Browser> {
 
   const child = spawn(opts.chromePath, flags, { stdio: ["ignore", "pipe", "pipe"] });
 
+  // Every failure path below must kill `child` and remove `userDataDir` —
+  // otherwise a slow machine, a sandbox/library issue, or repeated launch
+  // failures each leak a zombie Chrome process plus its temp profile dir.
+  function cleanupFailedLaunch(): void {
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      /* already dead */
+    }
+    try {
+      rmSync(userDataDir, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
+  }
+
   let wsUrl: string | undefined;
   const stderrBuf: string[] = [];
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`Chrome failed to print a DevTools URL within 15s. stderr:\n${stderrBuf.join("")}`));
-    }, 15_000);
-    if (!child.stderr) {
-      clearTimeout(timer);
-      reject(new Error("Chrome stderr stream missing"));
-      return;
-    }
-    child.stderr.on("data", (chunk: Buffer) => {
-      const s = chunk.toString("utf8");
-      stderrBuf.push(s);
-      if (opts.verbose) process.stderr.write(`[chrome] ${s}`);
-      const m = /DevTools listening on (ws:\/\/\S+)/.exec(s);
-      if (m && m[1]) {
-        wsUrl = m[1];
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`Chrome failed to print a DevTools URL within 15s. stderr:\n${stderrBuf.join("")}`));
+      }, 15_000);
+      if (!child.stderr) {
         clearTimeout(timer);
-        resolve();
+        reject(new Error("Chrome stderr stream missing"));
+        return;
       }
+      child.stderr.on("data", (chunk: Buffer) => {
+        const s = chunk.toString("utf8");
+        stderrBuf.push(s);
+        if (opts.verbose) process.stderr.write(`[chrome] ${s}`);
+        const m = /DevTools listening on (ws:\/\/\S+)/.exec(s);
+        if (m && m[1]) {
+          wsUrl = m[1];
+          clearTimeout(timer);
+          resolve();
+        }
+      });
+      child.on("exit", (code) => {
+        clearTimeout(timer);
+        reject(new Error(`Chrome exited (code ${code}). stderr:\n${stderrBuf.join("")}`));
+      });
     });
-    child.on("exit", (code) => {
-      clearTimeout(timer);
-      reject(new Error(`Chrome exited (code ${code}). stderr:\n${stderrBuf.join("")}`));
-    });
-  });
 
-  if (!wsUrl) throw new Error("Chrome printed no DevTools URL");
+    if (!wsUrl) throw new Error("Chrome printed no DevTools URL");
+  } catch (e) {
+    cleanupFailedLaunch();
+    throw e;
+  }
 
   // The first WS endpoint is the browser-level target; we need a page target
   // so DOM / Runtime / Page calls work. Hop via the discovery endpoint.
   const httpJson = wsUrl
     .replace(/^ws:\/\//, "http://")
     .replace(/\/devtools\/.*$/, "/json/list");
-  const pageWs = await findPageTarget(httpJson);
-
-  const ws = await connect(pageWs);
+  let ws: WebSocket;
+  try {
+    const pageWs = await findPageTarget(httpJson);
+    ws = await connect(pageWs);
+  } catch (e) {
+    cleanupFailedLaunch();
+    throw e;
+  }
 
   let nextId = 1;
   type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void };
@@ -183,10 +220,12 @@ export async function launchBrowser(opts: BrowserOpts): Promise<Browser> {
   }
 
   async function close(): Promise<void> {
+    openBrowsers.delete(close);
     try { ws.close(); } catch { /* ignored */ }
     try { child.kill("SIGTERM"); } catch { /* ignored */ }
     try { rmSync(userDataDir, { recursive: true, force: true }); } catch { /* ignored */ }
   }
+  openBrowsers.add(close);
 
   return { send, on, waitFor, close };
 }

@@ -951,8 +951,38 @@ async function handleGetComponents(reqId: string): Promise<void> {
  *  get-search, get-components) skip the queue so a quick lookup from session
  *  B isn't stuck behind a 400ms export from session A. */
 let uploadOpQueue: Promise<unknown> = Promise.resolve();
+
+// Just under the server's own longest (apply-design) watchdog, 600s — see
+// src/bridge/server.ts. Without this, one session's slow op can hold the
+// shared queue past every OTHER session's own (shorter) watchdog: the
+// caller gives up, but the queued op still runs later and blocks everyone
+// behind it. A timed-out op is abandoned from the queue's point of view
+// (the underlying promise may still finish in the background) so the next
+// session's request is never stuck waiting on a peer's dead request.
+const UPLOAD_OP_TIMEOUT_MS = 590_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`queued op exceeded ${ms}ms — releasing the queue for other sessions`)),
+      ms,
+    );
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 function queueUploadOp<T>(fn: () => Promise<T>): Promise<T> {
-  const next = uploadOpQueue.then(fn, fn);
+  const run = () => withTimeout(fn(), UPLOAD_OP_TIMEOUT_MS);
+  const next = uploadOpQueue.then(run, run);
   uploadOpQueue = next.catch(() => undefined);
   return next;
 }
