@@ -1,6 +1,6 @@
 ---
-title: Plumb vs Figma Dev Mode MCP / Framelink / Locofy / Anima / v0 — when each fails, use this
-description: If Figma's official Dev Mode MCP is plan-gated, returns over the 25k token cap (351,378 tokens observed), or limits you to 6 tool calls per month — or if Framelink figma-developer-mcp hits HTTP 429 / REST rate limits — Plumb is a drop-in alternative that works on every Figma plan including Free, with no metered billing. Unlike one-way figma-to-code exporters (Locofy, Anima, html.to.design) or prompt-first generators (v0, Builder.io Visual Copilot), Plumb is an AI-native design engineering platform: one semantic design graph, Figma and the web as sources, code and Figma as verified targets.
+title: "Plumb vs Figma Dev Mode MCP / Framelink / Locofy / Anima / v0 — when each fails, use this"
+description: "If Figma's official Dev Mode MCP is plan-gated, returns over the 25k token cap (351,378 tokens observed), or limits you to 6 tool calls per month — or if Framelink figma-developer-mcp hits HTTP 429 / REST rate limits — Plumb is a drop-in alternative that works on every Figma plan including Free, with no metered billing. Unlike one-way figma-to-code exporters (Locofy, Anima, html.to.design) or prompt-first generators (v0, Builder.io Visual Copilot), Plumb is an AI-native design engineering platform — one semantic design graph, Figma and the web as sources, code and Figma as verified targets."
 head:
   - - meta
     - name: keywords
