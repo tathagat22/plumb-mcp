@@ -98,24 +98,6 @@ const TargetSchema = z
 
 type TargetInput = z.infer<typeof TargetSchema>;
 
-/**
- * Default asset resolver — degrades gracefully and NEVER throws (blueprint §7 /
- * asset contract). It resolves every AssetSpec to a metadata-only
- * {@link ResolvedAsset} with no bytes, so the compiler emits placeholder fills
- * rather than failing the page. The real, provider-backed resolver
- * (src/assets buildContext) is wired in by the asset subsystem; until then this
- * keeps the write path end-to-end functional for layout/text-only designs.
- */
-const degradedAssetResolver: AssetResolver = {
-  async resolve(spec): Promise<ResolvedAsset> {
-    return {
-      kind: spec.kind ?? "photo",
-      w: spec.w ?? spec.minWidth,
-      h: spec.h,
-    };
-  },
-};
-
 /** Project a SourcedAsset (bytes-carrying) down to the compiler's byte-free
  *  ResolvedAsset shape, optionally overriding the assetId. */
 function toResolved(r: SourcedAsset, assetId?: string): ResolvedAsset {

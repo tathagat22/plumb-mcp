@@ -57,13 +57,10 @@ export interface CapturedElement {
  * `RenderedElement`).
  */
 export const captureFn = function (selector: string): unknown {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const win = (globalThis as any).window ?? globalThis;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const doc = (globalThis as any).document ?? win.document;
   const out: unknown[] = [];
   const els = doc.querySelectorAll(selector);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   els.forEach((el: any) => {
     const id = el.getAttribute("data-plumb-id");
     if (!id) return;

@@ -451,7 +451,7 @@ function scoreAlignment(ctx: Ctx): RubricDimension {
   const absShare = ctx.absolute / ctx.placeable;
   // Auto-layout adoption is the alignment backbone; heavy absolute positioning
   // is where drift and misalignment creep in.
-  let score = Math.round((1 - absShare) * 100);
+  const score = Math.round((1 - absShare) * 100);
   if (absShare > 0.25) {
     issues.push({
       dimension: "alignment",

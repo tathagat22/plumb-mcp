@@ -41,22 +41,18 @@ const MAX_NODES = 3000;
  * wherever CDP evaluates it.
  */
 export const htmlCaptureFn = function (rootSelector: string | null, maxNodes: number): unknown {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const win = (globalThis as any).window ?? globalThis;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const doc = (globalThis as any).document ?? win.document;
 
   const skipTags = ["script", "style", "meta", "link", "head", "noscript", "template", "title", "iframe"];
   const maxTextChars = 500;
   let count = 0;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isVisible = (cs: any, rect: any): boolean => {
     if (cs.display === "none" || cs.visibility === "hidden") return false;
     return rect.width > 0 || rect.height > 0;
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const walk = (el: any, id: string): unknown => {
     if (count >= maxNodes) return null;
     const tag = (el.tagName || "").toLowerCase();

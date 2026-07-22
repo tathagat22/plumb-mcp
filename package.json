@@ -88,6 +88,7 @@
     "dev:server": "tsup --watch",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit && tsc -p figma-plugin/tsconfig.json",
+    "lint": "eslint .",
     "prove": "tsx scripts/prove.ts",
     "outline": "tsx scripts/outline.ts",
     "live": "tsx scripts/live.ts",
@@ -113,9 +114,11 @@
     "@types/node": "^20.14.0",
     "@types/ws": "^8.18.1",
     "esbuild": "^0.28.0",
+    "eslint": "^9.39.5",
     "tsup": "^8.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
+    "typescript-eslint": "^8.65.0",
     "vitepress": "^1.6.4",
     "vitest": "^4.1.9"
   }

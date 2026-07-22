@@ -7,7 +7,7 @@
  * fat API surface. We already ship `ws` for the plugin bridge, and CDP is a
  * simple JSON-RPC over WebSocket — under 200 lines does the job.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

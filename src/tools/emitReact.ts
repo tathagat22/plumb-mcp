@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { buildSemanticGraph } from "../semantic/build";
-import { buildSemanticGraphFromHtml } from "../semantic/buildFromHtml";
 import { runEnrichers } from "../semantic/enricher";
 import { RoleEnricher } from "../semantic/enrichers/role";
 import { graphFromWebSpec } from "../semantic/project/web";
