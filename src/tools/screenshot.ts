@@ -6,7 +6,7 @@ import {
   unlinkSync,
   existsSync,
 } from "node:fs";
-import { isAbsolute, join, parse } from "node:path";
+import { isAbsolute, join, parse, resolve, sep } from "node:path";
 import { z } from "zod";
 import { formatScreenMatches, resolveScreen, screenName } from "../bridge/inventory";
 import { requestScreenshot } from "../bridge/server";
@@ -53,6 +53,23 @@ function uniquePath(path: string): string {
  * `<slug(name)>-<slug(id)>.<ext>` and auto-suffix on collision so back-to-back
  * exports of two screens that share a name don't overwrite each other.
  */
+/** `out` may steer within cwd or the screenshots root, never outside both —
+ *  an agent induced to pass an arbitrary absolute path (e.g. into a startup
+ *  directory) must not get an unconfined filesystem write. */
+function assertConfined(path: string, root: string): void {
+  const resolved = resolve(path);
+  const allowedRoots = [resolve(root), resolve(process.cwd())];
+  const within = allowedRoots.some(
+    (allowed) => resolved === allowed || resolved.startsWith(allowed + sep),
+  );
+  if (!within) {
+    throw new PlumbError(
+      `\`out\` resolves outside the allowed directories: "${resolved}".`,
+      `Use a relative filename, or an absolute path under the current directory or the screenshots root ("${resolve(root)}").`,
+    );
+  }
+}
+
 function pickPath(
   root: string,
   ext: string,
@@ -62,6 +79,7 @@ function pickPath(
 ): string {
   if (out) {
     const explicit = isAbsolute(out) ? out : join(root, out);
+    assertConfined(explicit, root);
     const parsed = parse(explicit);
     const fixed = parsed.ext.toLowerCase() === `.${ext}` ? explicit : `${explicit}.${ext}`;
     return uniquePath(fixed);

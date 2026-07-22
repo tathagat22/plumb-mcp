@@ -13,7 +13,7 @@
 import type { AssetProvider, AssetProviderContext } from "./index";
 import type { AssetCandidate, FetchedAsset } from "../types";
 import { LICENSES } from "../types";
-import { fetchJson } from "../http";
+import { fetchJson, fetchText } from "../http";
 
 const KIND = "font" as const;
 
@@ -159,12 +159,13 @@ export function createFontsProvider(apiKey?: string): AssetProvider {
       const variants = raw?.variants ?? DEFAULT_VARIANTS;
       const url = css2Url(family, variants);
       // Keyless — the css2 endpoint needs a browser-like UA to serve woff2
-      // (vs. legacy woff/eot for old UAs); http.ts's default UA is fine here
-      // since we only need the @font-face declarations, not to render them.
+      // (vs. legacy woff/eot for old UAs). Routed through http.ts's
+      // fetchText so this gets the same timeout/abort handling as every
+      // other provider — a hung fonts.googleapis.com must not stall
+      // `apply-design` indefinitely.
       let css = "";
       try {
-        const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-        css = res.ok ? await res.text() : "";
+        css = await fetchText(url, ctx, { headers: { "User-Agent": "Mozilla/5.0" } });
       } catch {
         css = "";
       }

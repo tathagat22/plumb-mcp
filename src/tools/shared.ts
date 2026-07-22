@@ -1,4 +1,5 @@
 import { PlumbError, toErrorPayload } from "../errors";
+import { assertStructureBounds } from "../util/bounds";
 import type { PdsDocument } from "../pds";
 
 /** Standard success envelope for an MCP tool — the payload as JSON text. */
@@ -41,6 +42,14 @@ export function asPdsDocument(value: unknown, label: string): PdsDocument {
     throw new PlumbError(
       `\`${label}\` doesn't look like a PdsDocument (missing \`root\`/\`nodes\`).`,
       "Pass the raw JSON object returned by a prior plumb_node / plumb_outline / plumb_query call, unmodified.",
+    );
+  }
+  try {
+    assertStructureBounds(value);
+  } catch (e) {
+    throw new PlumbError(
+      `\`${label}\` is too large/deeply nested to process: ${e instanceof Error ? e.message : String(e)}.`,
+      "Pass a smaller PDS snapshot — e.g. from plumb_query with a narrower select, not a full-file dump.",
     );
   }
   return value as PdsDocument;

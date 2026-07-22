@@ -9,6 +9,7 @@ import { requestApplyDesign, stageInboundAsset } from "../bridge/server";
 import { resolveAsset } from "../assets/search";
 import { bridge } from "../bridge/store";
 import { PlumbError } from "../errors";
+import { assertStructureBounds } from "../util/bounds";
 import { emitStudio } from "../studio/events";
 import { fail, ok } from "./shared";
 import type { CompileContext, CompileResult } from "../dsl/compile";
@@ -278,7 +279,20 @@ export function registerPlumbDesign(server: McpServer): void {
         };
 
         // --- Validate the DSL document -------------------------------------
-        const parsed = DesignDocSchema.safeParse(asObject(args.doc));
+        // Bounds check BEFORE zod's recursive `z.lazy(() => BlockSchema)`
+        // touches this — a pathologically deep/huge object must fail fast
+        // with a clear message here, not risk zod's own recursive parser
+        // blowing the call stack on untrusted input.
+        const rawDoc = asObject(args.doc);
+        try {
+          assertStructureBounds(rawDoc);
+        } catch (e) {
+          throw new PlumbError(
+            `The design document is too large/deeply nested to validate: ${e instanceof Error ? e.message : String(e)}`,
+            "Simplify the DSL (flatter nesting, fewer blocks) and retry.",
+          );
+        }
+        const parsed = DesignDocSchema.safeParse(rawDoc);
         if (!parsed.success) {
           throw new PlumbError(
             `The design document failed validation: ${formatIssues(parsed.error)}`,

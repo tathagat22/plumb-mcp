@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 interface EditorTarget {
@@ -46,6 +47,36 @@ function targets(cwd: string): EditorTarget[] {
   ];
 }
 
+/** True if `file` is already tracked by git — i.e. a real token about to be
+ *  written into it risks landing in history on the next commit. False (not
+ *  just "unknown") whenever git isn't available/this isn't a repo, since
+ *  the warning is only actionable when we're confident it's tracked. */
+function isTrackedByGit(file: string): boolean {
+  try {
+    execFileSync("git", ["ls-files", "--error-unmatch", file], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Make sure `relPaths` (relative to `cwd`) are excluded from git — creates
+ *  `.gitignore` if absent, appends any missing entries otherwise. Best-effort:
+ *  a `.gitignore` that can't be written is a warning, not a fatal error. */
+function ensureGitignored(cwd: string, relPaths: string[]): void {
+  const gitignorePath = join(cwd, ".gitignore");
+  const existing = existsSync(gitignorePath) ? readFileSync(gitignorePath, "utf8") : "";
+  const lines = new Set(existing.split("\n").map((l) => l.trim()));
+  const missing = relPaths.filter((p) => !lines.has(p) && !lines.has(`/${p}`));
+  if (missing.length === 0) return;
+  try {
+    const prefix = existing.length > 0 && !existing.endsWith("\n") ? "\n" : "";
+    appendFileSync(gitignorePath, `${prefix}${missing.join("\n")}\n`);
+  } catch {
+    /* best-effort — init still succeeds if .gitignore can't be written */
+  }
+}
+
 /** Merge the Plumb server entry into an editor's config without clobbering it. */
 function mergeConfig(file: string, key: string, entry: unknown): void {
   let config: Record<string, unknown> = {};
@@ -77,15 +108,32 @@ export function runInit(): void {
 
   const out: string[] = ["", "Plumb · init", "─".repeat(58)];
   let wrote = 0;
+  const hasRealToken = !!process.env.FIGMA_TOKEN;
+  const projectScopedWritten: string[] = []; // relative to cwd, for .gitignore
+  const trackedWarnings: string[] = [];
 
   for (const t of targets(cwd)) {
     if (t.detect.some((p) => existsSync(p))) {
       mergeConfig(t.configFile, t.key, serverEntry);
       out.push(`  ✓ ${t.name.padEnd(13)}→ ${t.configFile}`);
       wrote += 1;
+
+      const rel = relative(cwd, t.configFile);
+      if (!rel.startsWith("..")) {
+        // Project-scoped (Claude Code / Cursor / VS Code) — Windsurf's config
+        // lives under $HOME, outside the repo, so it's not a leak risk here.
+        projectScopedWritten.push(rel);
+        if (hasRealToken && isTrackedByGit(t.configFile)) {
+          trackedWarnings.push(t.configFile);
+        }
+      }
     } else {
       out.push(`  · ${t.name.padEnd(13)}  not detected (skipped)`);
     }
+  }
+
+  if (projectScopedWritten.length > 0) {
+    ensureGitignored(cwd, projectScopedWritten);
   }
 
   out.push("─".repeat(58));
@@ -99,6 +147,16 @@ export function runInit(): void {
       "⚠ FIGMA_TOKEN was written as a placeholder. The REST tools need a real",
       "  read-only token (figma.com → Settings → Security). The plugin path",
       "  needs no token — see below.",
+    );
+  }
+  if (trackedWarnings.length > 0) {
+    out.push(
+      "",
+      "⚠ Your FIGMA_TOKEN was written into a file git already tracks:",
+      ...trackedWarnings.map((f) => `    ${f}`),
+      "  Committing now would put the token in your git history. Run",
+      "  `git rm --cached <file>` first if you didn't mean to track it —",
+      "  it's now covered by .gitignore for future commits.",
     );
   }
   out.push(

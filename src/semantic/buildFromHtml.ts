@@ -175,7 +175,17 @@ export function buildSemanticGraphFromHtml(root: HtmlSourceNode): SemanticGraph 
   const nodes: Record<string, CirNode> = {};
   const edges: CirEdge[] = [];
 
-  function walk(node: HtmlSourceNode, parentAbsPos: { x: number; y: number } | undefined): void {
+  // Iterative (explicit stack), not recursive — `maxNodes` at capture time
+  // (src/sources/html/capture.ts) bounds total node COUNT, not nesting
+  // DEPTH: a narrow, deeply-nested live page (framework wrapper-div soup)
+  // could still recurse arbitrarily deep. This is the least-trusted input
+  // source in the tool surface (`plumb_import_web` is `openWorldHint: true`),
+  // so it must degrade to "just runs a while," never a stack-overflow crash.
+  const stack: { node: HtmlSourceNode; parentAbsPos: { x: number; y: number } | undefined }[] = [
+    { node: root, parentAbsPos: undefined },
+  ];
+  while (stack.length > 0) {
+    const { node, parentAbsPos } = stack.pop()!;
     const kind = kindOf(node);
     const pos = parentAbsPos ? { x: node.pos.x - parentAbsPos.x, y: node.pos.y - parentAbsPos.y } : undefined;
     const children = node.children.map((c) => c.id);
@@ -193,10 +203,10 @@ export function buildSemanticGraphFromHtml(root: HtmlSourceNode): SemanticGraph 
     };
 
     for (const child of node.children) edges.push({ from: node.id, to: child.id, kind: "contains" });
-    for (const child of node.children) walk(child, node.pos);
+    for (let i = node.children.length - 1; i >= 0; i--) {
+      stack.push({ node: node.children[i]!, parentAbsPos: node.pos });
+    }
   }
-
-  walk(root, undefined);
 
   return { cirVersion: CIR_VERSION, root: resolveEffectiveRoot(root.id, nodes), nodes, edges };
 }

@@ -456,6 +456,24 @@ export async function startBridge(): Promise<void> {
         return;
       }
 
+      // Everything below assumes `msg` actually matches the `PluginMessage`
+      // shape the `t` cast promises — true for a well-behaved plugin build,
+      // not guaranteed for a stale/future/misbehaving one. A shape mismatch
+      // (e.g. an `inventory` message missing `pages`) must degrade to a
+      // dropped message, not a process-crashing throw inside a WS handler
+      // that nothing upstream catches.
+      try {
+        handlePluginMessage(msg);
+      } catch (e) {
+        log(
+          `dropped malformed message (t=${(msg as { t?: string })?.t ?? "?"}): ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        );
+      }
+    });
+
+    function handlePluginMessage(msg: PluginMessage): void {
       if (msg.t === "pair") {
         if (bridge.paired && !thisPaired) {
           send(ws, { t: "pair-rejected", reason: "Another Plumb plugin is already paired." });
@@ -486,7 +504,11 @@ export async function startBridge(): Promise<void> {
               }
             : null;
           break;
-        case "inventory":
+        case "inventory": {
+          if (!Array.isArray(msg.pages)) {
+            log("dropped inventory message: `pages` is not an array");
+            break;
+          }
           bridge.inventory = { fileName: msg.fileName, pages: msg.pages };
           // Plugin debounce-pushes inventory on every `documentchange`,
           // so this is our cheapest signal that something in the file may
@@ -494,12 +516,18 @@ export async function startBridge(): Promise<void> {
           // next request actually re-fetches.
           bridge.fileVersion += 1;
           if (bridge.nodeCache.size > 0) bridge.nodeCache.clear();
-          log(`inventory: ${msg.pages.reduce((n, p) => n + p.frames.length, 0)} screen(s)`);
+          log(`inventory: ${msg.pages.reduce((n, p) => n + (p.frames?.length ?? 0), 0)} screen(s)`);
           break;
+        }
         case "node":
           resolvePending(msg.reqId, { doc: msg.doc, nodeName: msg.nodeName });
           break;
         case "assets": {
+          if (!Array.isArray(msg.assets)) {
+            log("dropped assets message: `assets` is not an array");
+            resolvePending(msg.reqId, { assets: [], error: msg.error ?? "malformed assets reply" });
+            break;
+          }
           // Plugin streams bytes via HTTP /upload/${reqId}-${i}.${ext}, then
           // sends this manifest over WS with `path: null`. Pull the bridge's
           // on-disk temp path for each asset by index. `list: true` mode skips
@@ -591,7 +619,7 @@ export async function startBridge(): Promise<void> {
         case "pong":
           break;
       }
-    });
+    }
 
     ws.on("close", () => {
       if (thisPaired) {

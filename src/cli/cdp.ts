@@ -21,9 +21,15 @@ export interface BrowserOpts {
   verbose?: boolean;
 }
 
+/** A stuck page (hung hydration, an infinite-loop script) must not hang a
+ *  CDP round-trip forever — every `send()` gets this ceiling unless the
+ *  caller asks for a different one. */
+const DEFAULT_SEND_TIMEOUT_MS = 30_000;
+
 export interface Browser {
-  /** Send a CDP command to the page target, await the response. */
-  send<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>;
+  /** Send a CDP command to the page target, await the response. Rejects if
+   *  no reply arrives within `timeoutMs` (default 30s). */
+  send<T = unknown>(method: string, params?: Record<string, unknown>, timeoutMs?: number): Promise<T>;
   /** Subscribe to a CDP event; returns an unsubscribe function. */
   on(event: string, handler: (params: Record<string, unknown>) => void): () => void;
   /** Wait for an event to fire, optionally matching a predicate. */
@@ -126,10 +132,23 @@ export async function launchBrowser(opts: BrowserOpts): Promise<Browser> {
     }
   });
 
-  function send<T>(method: string, params?: Record<string, unknown>): Promise<T> {
+  function send<T>(method: string, params?: Record<string, unknown>, timeoutMs = DEFAULT_SEND_TIMEOUT_MS): Promise<T> {
     const id = nextId++;
     return new Promise<T>((resolve, reject) => {
-      pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error(`CDP ${method} timed out after ${timeoutMs}ms — the page may be stuck.`));
+      }, timeoutMs);
+      pending.set(id, {
+        resolve: (v: unknown) => {
+          clearTimeout(timer);
+          resolve(v as T);
+        },
+        reject: (e: Error) => {
+          clearTimeout(timer);
+          reject(e);
+        },
+      });
       ws.send(JSON.stringify({ id, method, params: params ?? {} }));
     });
   }

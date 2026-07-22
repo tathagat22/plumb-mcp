@@ -1,9 +1,21 @@
 import { z } from "zod";
 import { existsSync } from "node:fs";
+import { extname } from "node:path";
 import { figNodeById, loadFig } from "../fig/parser";
 import { PlumbError } from "../errors";
 import { fail, ok } from "./shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
+/** These tools are a generic "read any file the caller names" primitive
+ *  unless scoped to the one file type they're documented to read. */
+function assertFigPath(figPath: string): void {
+  if (extname(figPath).toLowerCase() !== ".fig") {
+    throw new PlumbError(
+      `"${figPath}" doesn't look like a .fig file.`,
+      "Pass the path to a .fig file exported from Figma desktop (File → Save local copy).",
+    );
+  }
+}
 
 const OUTLINE_DESCRIPTION =
   "Read a saved .fig file from disk and list every screen (top-level frame) " +
@@ -34,6 +46,7 @@ export function registerPlumbFigOutline(server: McpServer): void {
     },
     async ({ figPath }) => {
       try {
+        assertFigPath(figPath);
         if (!existsSync(figPath)) {
           throw new PlumbError(
             `No file at ${figPath}.`,
@@ -74,6 +87,7 @@ export function registerPlumbFigNode(server: McpServer): void {
     },
     async ({ figPath, id }) => {
       try {
+        assertFigPath(figPath);
         if (!existsSync(figPath)) {
           throw new PlumbError(
             `No file at ${figPath}.`,

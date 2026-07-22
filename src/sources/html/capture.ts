@@ -6,6 +6,7 @@
  */
 import { findChrome } from "../../cli/chrome";
 import { launchBrowser, navigate, evaluate } from "../../cli/cdp";
+import { assertNavigableUrl } from "../../util/url";
 import { htmlCaptureExpression } from "./captureFn";
 import type { HtmlSourceNode } from "./sourceGraph";
 
@@ -31,6 +32,7 @@ const DEFAULT_HEIGHT = 900;
  *  visible content) — never throws for "empty," only for real navigation/
  *  browser failures. */
 export async function captureHtmlSource(url: string, opts: CaptureHtmlOpts = {}): Promise<HtmlSourceNode | null> {
+  assertNavigableUrl(url);
   const chromePath = opts.chromePath ?? findChrome();
   if (!chromePath) throw new Error("No Chrome found — set PLUMB_CHROME=/path/to/chrome.");
 

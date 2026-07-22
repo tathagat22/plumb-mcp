@@ -1,6 +1,17 @@
 import { PlumbError } from "../errors";
 import type { FigmaFileResult, FigmaNode } from "./types";
 
+/** A stalled connection to api.figma.com (flaky network, captive portal,
+ *  Figma incident) must not hang a tool call forever — cap it. */
+const REST_TIMEOUT_MS = 15_000;
+
+function describeFetchError(e: unknown): string {
+  if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
+    return `timed out after ${REST_TIMEOUT_MS / 1000}s`;
+  }
+  return e instanceof Error ? e.message : String(e);
+}
+
 export interface RestRequest {
   fileKey: string;
   nodeId: string;
@@ -28,10 +39,13 @@ export async function fetchNodeViaRest(req: RestRequest): Promise<FigmaFileResul
 
   let res: Awaited<ReturnType<typeof fetch>>;
   try {
-    res = await fetch(url, { headers: { "X-Figma-Token": token } });
+    res = await fetch(url, {
+      headers: { "X-Figma-Token": token },
+      signal: AbortSignal.timeout(REST_TIMEOUT_MS),
+    });
   } catch (e) {
     throw new PlumbError(
-      `Could not reach api.figma.com: ${(e as Error).message}`,
+      `Could not reach api.figma.com: ${describeFetchError(e)}`,
       "Check your internet connection, then retry.",
     );
   }
@@ -74,10 +88,13 @@ export async function fetchFileOutline(
 
   let res: Awaited<ReturnType<typeof fetch>>;
   try {
-    res = await fetch(url, { headers: { "X-Figma-Token": token } });
+    res = await fetch(url, {
+      headers: { "X-Figma-Token": token },
+      signal: AbortSignal.timeout(REST_TIMEOUT_MS),
+    });
   } catch (e) {
     throw new PlumbError(
-      `Could not reach api.figma.com: ${(e as Error).message}`,
+      `Could not reach api.figma.com: ${describeFetchError(e)}`,
       "Check your internet connection, then retry.",
     );
   }

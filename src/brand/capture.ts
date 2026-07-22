@@ -6,6 +6,7 @@
  */
 import { findChrome } from "../cli/chrome";
 import { launchBrowser, navigate, evaluate, type Browser } from "../cli/cdp";
+import { assertNavigableUrl } from "../util/url";
 import { extractRawPalette, type RawPalette } from "./palette";
 
 export interface CaptureOpts {
@@ -124,6 +125,7 @@ async function waitForFonts(b: Browser): Promise<void> {
 
 /** Screenshot one URL in an already-open browser (full page, height-capped). */
 export async function captureInBrowser(b: Browser, url: string, opts: CaptureOpts = {}): Promise<Capture> {
+  assertNavigableUrl(url);
   const o = { ...DEFAULTS, ...opts };
   // A fixed desktop viewport so every reference is graded at the same size.
   await b.send("Emulation.setDeviceMetricsOverride", {

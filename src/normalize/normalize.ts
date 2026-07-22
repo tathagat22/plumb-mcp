@@ -67,13 +67,26 @@ export function buildPreWalk(file: FigmaFileResult): PrecomputedHandles {
   // Walk visible nodes only — invisible subtrees never appear in PDS, so
   // there's no value in claiming handles for them and risking collisions
   // with descendants of visible ones.
-  function preWalk(fn: FigmaNode, level: number): void {
-    if (level > 0 && fn.visible === false) return;
+  //
+  // This walks the ENTIRE tree regardless of the requested `depth` (that's
+  // the whole point — handle stability across depth-step retries, see the
+  // doc comment above), so unlike `walk()` below there's no depth parameter
+  // to bound recursion with. An explicit stack (not the call stack) is used
+  // instead, so a pathological/adversarial file (deeply nested `.fig`
+  // import, malformed REST payload) degrades to "just runs a while" rather
+  // than a `RangeError: Maximum call stack size exceeded` crash. Pushing
+  // children in reverse preserves the same left-to-right pre-order handle
+  // assignment sequence the recursive version produced.
+  const stack: { node: FigmaNode; level: number }[] = [{ node: file.document, level: 0 }];
+  while (stack.length > 0) {
+    const { node: fn, level } = stack.pop()!;
+    if (level > 0 && fn.visible === false) continue;
     elById.set(fn.id, minter.mint(fn.name ?? "", fn.type ?? ""));
     const kids = (fn.children ?? []).filter((k) => k.visible !== false);
-    for (const child of kids) preWalk(child, level + 1);
+    for (let i = kids.length - 1; i >= 0; i--) {
+      stack.push({ node: kids[i]!, level: level + 1 });
+    }
   }
-  preWalk(file.document, 0);
   return { elById, minter };
 }
 

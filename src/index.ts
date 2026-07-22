@@ -50,6 +50,27 @@ Source:  https://github.com/tathagat22/plumb-mcp
 `;
 
 /**
+ * The bridge is a shared process — potentially serving several concurrent
+ * MCP client sessions at once (multi-agent pairing, see docs/architecture.md).
+ * A single malformed message or a stray exception in any one tool call must
+ * not take the whole process down and orphan every other session. Node's
+ * default behavior for both events is to crash, so log-and-continue is a
+ * deliberate override, not an oversight.
+ */
+function installProcessGuards(): void {
+  process.on("uncaughtException", (e: unknown) => {
+    process.stderr.write(
+      `plumb-mcp: uncaught exception (server stays up): ${e instanceof Error ? (e.stack ?? e.message) : String(e)}\n`,
+    );
+  });
+  process.on("unhandledRejection", (e: unknown) => {
+    process.stderr.write(
+      `plumb-mcp: unhandled rejection (server stays up): ${e instanceof Error ? (e.stack ?? e.message) : String(e)}\n`,
+    );
+  });
+}
+
+/**
  * Bin entry for `plumb-mcp`.
  *   plumb-mcp init   → write editor MCP config, then exit
  *   plumb-mcp        → run the stdio MCP server (+ the plugin bridge)
@@ -58,6 +79,7 @@ Source:  https://github.com/tathagat22/plumb-mcp
  * logging once we're past arg-parsing goes to stderr.
  */
 async function main(): Promise<void> {
+  installProcessGuards();
   // Read .env before anything touches process.env (asset providers read keys
   // lazily at call time, so this only needs to run before the server starts).
   loadEnv();

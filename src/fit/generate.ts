@@ -102,46 +102,71 @@ export function extractHtml(raw: string): string {
  * Error on auth / network / empty-response failures so the CLI can report and
  * exit cleanly.
  */
+/** Generous — this is a real generation call, not a status check — but a
+ *  hung Anthropic connection must not block the fit loop forever when the
+ *  caller (`src/cli/fit.ts`) doesn't pass its own `signal`. */
+const DEFAULT_GENERATE_TIMEOUT_MS = 120_000;
+
+function timeoutSignal(userSignal: AbortSignal | undefined, ms: number): { signal: AbortSignal; cancel: () => void } {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  if (userSignal) {
+    if (userSignal.aborted) controller.abort();
+    else userSignal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+  return { signal: controller.signal, cancel: () => clearTimeout(timer) };
+}
+
 export async function generateHtml(input: GenerateInput): Promise<string> {
   const model = input.model ?? DEFAULT_FIT_MODEL;
-  const res = await fetch(ANTHROPIC_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": input.apiKey,
-      "anthropic-version": ANTHROPIC_VERSION,
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: MAX_TOKENS,
-      system: GENERATOR_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: buildUserMessage(input) }],
-    }),
-    signal: input.signal,
-  });
+  const { signal, cancel } = timeoutSignal(input.signal, DEFAULT_GENERATE_TIMEOUT_MS);
+  try {
+    const res = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": input.apiKey,
+        "anthropic-version": ANTHROPIC_VERSION,
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: MAX_TOKENS,
+        system: GENERATOR_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: buildUserMessage(input) }],
+      }),
+      signal,
+    });
 
-  if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
-    try {
-      const body = (await res.json()) as AnthropicResponse;
-      if (body.error) detail = `${body.error.type}: ${body.error.message}`;
-    } catch {
-      /* keep the status line */
+    if (!res.ok) {
+      let detail = `${res.status} ${res.statusText}`;
+      try {
+        const body = (await res.json()) as AnthropicResponse;
+        if (body.error) detail = `${body.error.type}: ${body.error.message}`;
+      } catch {
+        /* keep the status line */
+      }
+      if (res.status === 401) {
+        throw new Error(`Anthropic auth failed (${detail}). Check ANTHROPIC_API_KEY.`);
+      }
+      throw new Error(`Anthropic request failed — ${detail}.`);
     }
-    if (res.status === 401) {
-      throw new Error(`Anthropic auth failed (${detail}). Check ANTHROPIC_API_KEY.`);
-    }
-    throw new Error(`Anthropic request failed — ${detail}.`);
-  }
 
-  const body = (await res.json()) as AnthropicResponse;
-  const text = (body.content ?? [])
-    .filter((b) => b.type === "text" && typeof b.text === "string")
-    .map((b) => b.text as string)
-    .join("");
-  const html = extractHtml(text);
-  if (!html || !/<html|<!doctype/i.test(html)) {
-    throw new Error("Generator returned no usable HTML document.");
+    const body = (await res.json()) as AnthropicResponse;
+    const text = (body.content ?? [])
+      .filter((b) => b.type === "text" && typeof b.text === "string")
+      .map((b) => b.text as string)
+      .join("");
+    const html = extractHtml(text);
+    if (!html || !/<html|<!doctype/i.test(html)) {
+      throw new Error("Generator returned no usable HTML document.");
+    }
+    return html;
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError" && !input.signal?.aborted) {
+      throw new Error(`Anthropic request timed out after ${DEFAULT_GENERATE_TIMEOUT_MS / 1000}s.`);
+    }
+    throw e;
+  } finally {
+    cancel();
   }
-  return html;
 }
