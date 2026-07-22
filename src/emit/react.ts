@@ -15,13 +15,16 @@
  * `RoleEnricher` running unmodified on an HTML-sourced graph) that the CIR
  * actually is adapter-agnostic, not just designed to look that way.
  *
- * Honest scope note, matching this codebase's own "don't claim more than
- * you built" discipline: this produces PIXEL-FAITHFUL output (every box's
- * `width`/`height` is emitted explicitly, from the measured/designed size),
- * not a hand-tuned RESPONSIVE component — the CIR doesn't carry Figma's own
- * hug/fill/fixed sizing intent yet (`PdsNode.sizing` exists but nothing
- * maps it onto the CIR), so there's no signal to generate `flex: 1` /
- * `width: auto` from. A faithful snapshot, not idiomatic hand-written React.
+ * Every box's `width`/`height` is emitted as an explicit pixel value by
+ * default (a faithful snapshot) UNLESS the node carries Figma's own
+ * hug/fill/fixed sizing intent (`CirNodeStyle.sizing`/`.grow`/`.selfAlign`,
+ * mirroring `PdsNode`'s own fields) AND its parent is a flex container —
+ * then the matching axis gets `flexGrow`/`alignSelf`/an omitted pixel size
+ * instead, so a `sizing.w: "fill"` node reflows instead of clipping its
+ * parent's own resize. Figma-sourced graphs carry this signal (`build.ts`);
+ * the HTML adapter does not yet (buildFromHtml.ts has no CSS-inference pass
+ * for it) — those nodes fall back to the pixel-faithful default, honestly,
+ * not approximated.
  */
 import type { CirNode, SemanticGraph } from "../semantic/graph";
 import type { Effect, Fill } from "../pds";
@@ -88,6 +91,16 @@ function fillsToBackgroundImage(fills: Fill[]): string | undefined {
   return `linear-gradient(${gradient.angle ?? 180}deg, ${stops})`;
 }
 
+/** CSS `align-self` for PDS's `selfAlign` vocabulary. `"min"`/`"max"` are
+ *  PDS's flex-start/flex-end-relative terms (matching the plugin's own
+ *  authoring vocabulary), not literal CSS keywords. */
+const SELF_ALIGN_CSS: Record<"stretch" | "min" | "center" | "max", string> = {
+  stretch: "stretch",
+  min: "flex-start",
+  center: "center",
+  max: "flex-end",
+};
+
 /** Builds the React inline-style object for one node — a plain JS object
  *  literal source string, not a CSS string; camelCase keys throughout.
  *  `lineHeight` is deliberately always a `"<n>px"` STRING, never a bare
@@ -97,11 +110,44 @@ function fillsToBackgroundImage(fills: Fill[]): string | undefined {
  *  here is safe as a bare number; `opacity` is a 0..1 ratio, not a length,
  *  and must never get `px` appended (React already knows this — passing a
  *  number is correct as-is). */
-function styleEntriesFor(node: CirNode, isRoot: boolean, parentHasLayout: boolean): [string, string][] {
+function styleEntriesFor(
+  node: CirNode,
+  isRoot: boolean,
+  parentFlow: "row" | "col" | undefined,
+): [string, string][] {
   const entries: [string, string][] = [];
   const s = node.style;
+  const parentHasLayout = parentFlow !== undefined;
 
-  entries.push(["width", `${px(node.box.w)}`], ["height", `${px(node.box.h)}`]);
+  // Responsive sizing only applies to a flex CHILD (parent has layout) —
+  // the root and any absolutely-positioned node keep the pixel-faithful
+  // default, matching PDS's own "sizing only matters under auto-layout"
+  // contract. `mainIsWidth` is the parent's main axis: width under a row
+  // parent, height under a column parent.
+  let emitWidth = true;
+  let emitHeight = true;
+  if (!isRoot && parentHasLayout) {
+    const mainIsWidth = parentFlow === "row";
+    const mainSizing = mainIsWidth ? s.sizing?.w : s.sizing?.h;
+    const crossSizing = mainIsWidth ? s.sizing?.h : s.sizing?.w;
+
+    if (s.grow || mainSizing === "fill") {
+      entries.push(["flexGrow", px(s.grow ?? 1)]);
+      if (mainIsWidth) emitWidth = false;
+      else emitHeight = false;
+    } else if (mainSizing === "hug") {
+      if (mainIsWidth) emitWidth = false;
+      else emitHeight = false;
+    }
+
+    if (s.selfAlign || crossSizing === "fill") {
+      entries.push(["alignSelf", JSON.stringify(SELF_ALIGN_CSS[s.selfAlign ?? "stretch"])]);
+      if (mainIsWidth) emitHeight = false;
+      else emitWidth = false;
+    }
+  }
+  if (emitWidth) entries.push(["width", `${px(node.box.w)}`]);
+  if (emitHeight) entries.push(["height", `${px(node.box.h)}`]);
 
   if (!isRoot && s.position !== undefined) {
     entries.push(["position", JSON.stringify(s.position)]);
@@ -169,8 +215,8 @@ function styleEntriesFor(node: CirNode, isRoot: boolean, parentHasLayout: boolea
   return entries;
 }
 
-function styleAttr(node: CirNode, isRoot: boolean, parentHasLayout: boolean): string {
-  const entries = styleEntriesFor(node, isRoot, parentHasLayout);
+function styleAttr(node: CirNode, isRoot: boolean, parentFlow: "row" | "col" | undefined): string {
+  const entries = styleEntriesFor(node, isRoot, parentFlow);
   if (!entries.length) return "";
   return ` style={{ ${entries.map(([k, v]) => `${k}: ${v}`).join(", ")} }}`;
 }
@@ -186,7 +232,7 @@ function renderNode(
   warnings: string[],
   depth: number,
   isRoot: boolean,
-  parentHasLayout: boolean,
+  parentFlow: "row" | "col" | undefined,
 ): string {
   const node = graph.nodes[id];
   if (!node) {
@@ -196,7 +242,7 @@ function renderNode(
 
   const role = roleByNode.get(id);
   const tag = tagFor(node, role);
-  const style = styleAttr(node, isRoot, parentHasLayout);
+  const style = styleAttr(node, isRoot, parentFlow);
   const comment = role ? ` {/* ${role} */}` : "";
 
   if (node.kind === "image") {
@@ -219,7 +265,7 @@ function renderNode(
   if (!childIds.length) return `${indent(depth)}<${tag}${style} />${comment}`;
 
   const children = childIds
-    .map((childId) => renderNode(childId, graph, roleByNode, warnings, depth + 1, false, !!node.style.layout))
+    .map((childId) => renderNode(childId, graph, roleByNode, warnings, depth + 1, false, node.style.layout?.flow))
     .filter(Boolean)
     .join("\n");
   if (!children) return `${indent(depth)}<${tag}${style} />${comment}`;
@@ -232,7 +278,7 @@ export function lowerToReact(graph: SemanticGraph, opts: ReactEmitOptions = {}):
   const roleByNode = opts.roleByNode ?? new Map();
   const warnings: string[] = [];
 
-  const body = renderNode(graph.root, graph, roleByNode, warnings, 2, true, false);
+  const body = renderNode(graph.root, graph, roleByNode, warnings, 2, true, undefined);
   const code = `export default function ${componentName}() {\n  return (\n${body}\n  );\n}\n`;
 
   return { code, warnings };

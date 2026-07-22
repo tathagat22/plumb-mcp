@@ -188,4 +188,23 @@ describe("buildSemanticGraph — resolved style", () => {
     expect(style?.textDecoration).toBe("underline");
     expect(style?.textCase).toBe("UPPER");
   });
+
+  it("carries grow/selfAlign/sizing through for responsive React emit (Phase E)", () => {
+    const nodes: Record<string, PdsNode> = {
+      flexChild: {
+        id: "0",
+        el: "flexChild",
+        type: "frame",
+        box: { w: 100, h: 40 },
+        grow: 1,
+        selfAlign: "stretch",
+        sizing: { w: "fill", h: "hug" },
+      },
+    };
+
+    const style = buildSemanticGraph(doc(nodes, "flexChild")).nodes.flexChild?.style;
+    expect(style?.grow).toBe(1);
+    expect(style?.selfAlign).toBe("stretch");
+    expect(style?.sizing).toEqual({ w: "fill", h: "hug" });
+  });
 });

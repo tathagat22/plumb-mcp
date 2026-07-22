@@ -98,6 +98,9 @@ function styleOf(node: PdsNode, doc: PdsDocument): CirNodeStyle {
   // dropped underline/strike-through/case on every Figma-sourced text node.
   if (node.textDecoration) style.textDecoration = node.textDecoration;
   if (node.textCase) style.textCase = node.textCase;
+  if (node.grow) style.grow = node.grow;
+  if (node.selfAlign) style.selfAlign = node.selfAlign;
+  if (node.sizing) style.sizing = node.sizing;
   return style;
 }
 

@@ -224,6 +224,81 @@ describe("lowerToReact — text styling", () => {
   });
 });
 
+describe("lowerToReact — responsive sizing (Phase E)", () => {
+  it("emits flexGrow instead of a pixel width for a fill-sized child of a row parent", () => {
+    const child = node({ id: "child", kind: "container", style: { sizing: { w: "fill" } } });
+    const root = node({
+      id: "root",
+      kind: "container",
+      children: ["child"],
+      style: { layout: { flow: "row", pad: [0, 0, 0, 0] } },
+    });
+    const { code } = lowerToReact(graph(root, [child]));
+
+    expect(code).toContain("flexGrow: 1");
+    expect(code).not.toMatch(/child[\s\S]*width:/);
+  });
+
+  it("emits flexGrow from an explicit grow factor, on whichever axis is the parent's main axis", () => {
+    const child = node({ id: "child", kind: "container", style: { grow: 2 } });
+    const root = node({
+      id: "root",
+      kind: "container",
+      children: ["child"],
+      style: { layout: { flow: "col", pad: [0, 0, 0, 0] } },
+    });
+    const { code } = lowerToReact(graph(root, [child]));
+
+    expect(code).toContain("flexGrow: 2");
+  });
+
+  it("omits the pixel size (lets content dictate) for a hug-sized child", () => {
+    const child = node({ id: "child", kind: "container", box: { w: 50, h: 20 }, style: { sizing: { h: "hug" } } });
+    const root = node({
+      id: "root",
+      kind: "container",
+      children: ["child"],
+      style: { layout: { flow: "col", pad: [0, 0, 0, 0] } },
+    });
+    const { code } = lowerToReact(graph(root, [child]));
+
+    expect(code).not.toMatch(/child[\s\S]*height:\s*20/);
+    expect(code).toContain("width: 50"); // cross axis, untouched — still pixel-faithful
+  });
+
+  it("emits alignSelf: stretch for a cross-axis fill, and omits that axis's pixel size", () => {
+    const child = node({ id: "child", kind: "container", box: { w: 50, h: 20 }, style: { sizing: { h: "fill" } } });
+    const root = node({
+      id: "root",
+      kind: "container",
+      children: ["child"],
+      style: { layout: { flow: "row", pad: [0, 0, 0, 0] } },
+    });
+    const { code } = lowerToReact(graph(root, [child]));
+
+    expect(code).toContain('alignSelf: "stretch"');
+    expect(code).not.toMatch(/child[\s\S]*height:/);
+  });
+
+  it("stays pixel-faithful (unchanged) when the parent has no flex layout", () => {
+    const child = node({ id: "child", kind: "container", box: { w: 50, h: 20 }, style: { sizing: { w: "fill" } } });
+    const root = node({ id: "root", kind: "container", children: ["child"] }); // no layout on root
+    const { code } = lowerToReact(graph(root, [child]));
+
+    expect(code).toContain("width: 50");
+    expect(code).toContain("height: 20");
+    expect(code).not.toContain("flexGrow");
+  });
+
+  it("stays pixel-faithful for the root itself even if it declares sizing", () => {
+    const root = node({ id: "root", kind: "container", box: { w: 1440, h: 900 }, style: { sizing: { w: "fill" } } });
+    const { code } = lowerToReact(graph(root, []));
+
+    expect(code).toContain("width: 1440");
+    expect(code).not.toContain("flexGrow");
+  });
+});
+
 describe("lowerToReact — degrades per-node instead of throwing", () => {
   it("skips a missing child (a dangling reference) with a warning, and still renders the rest", () => {
     const present = node({ id: "present", kind: "text", chars: "here" });

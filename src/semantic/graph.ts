@@ -64,6 +64,14 @@ export interface CirNodeStyle {
   textDecoration?: "underline" | "line-through";
   /** CSS `text-transform` — text nodes only, mirrors `PdsNode.textCase`. */
   textCase?: "UPPER" | "LOWER" | "TITLE";
+  /** Flex-child sizing intent — mirrors `PdsNode.grow`/`.selfAlign`/`.sizing`
+   *  exactly (same field names, same meaning: main-axis grow factor,
+   *  cross-axis self-alignment, and hug/fill/fixed per axis). Only
+   *  meaningful when the PARENT is a flex container; a consumer with no use
+   *  for responsive sizing can ignore all three and fall back to `box`. */
+  grow?: number;
+  selfAlign?: "stretch" | "min" | "center" | "max";
+  sizing?: { w?: "fill" | "hug" | "fixed"; h?: "fill" | "hug" | "fixed" };
   /** CSS px. */
   letterSpacing?: number;
   /** CSS px (already resolved from a possibly-unitless/percentage

@@ -25,7 +25,7 @@ Deterministic PDS / WebSpec → React (JSX + inline styles) code generator. Pass
 
 ## What it does and doesn't do
 
-- Every box's `width`/`height` is emitted explicitly, from the measured/designed size — this is **pixel-faithful, not a hand-tuned responsive component**. There's no hug/fill/fixed sizing intent in the graph yet to generate `flex: 1` / `width: auto` from.
+- Every box's `width`/`height` is emitted as an explicit pixel value by default — **pixel-faithful**. When a node carries Figma's own hug/fill/fixed sizing intent (`grow`/`selfAlign`/`sizing`) AND its parent is a flex container, the matching axis emits `flexGrow`/`alignSelf` instead and omits that axis's pixel size, so the component actually reflows. Figma-sourced graphs carry this signal today; the HTML adapter doesn't infer it from CSS yet, so web-imported nodes stay pixel-faithful.
 - Roles (`nav`/`footer`/`sidebar`) become semantic tags (`<nav>`, `<footer>`, `<aside>`) instead of bare `<div>`s; `hero`/`card` fall back to `<div>` (no HTML5 equivalent).
 - Gradients, multi-layer shadows, opacity, backdrop-filter, border radius (including pill/circle), and typography (align/decoration/letter-spacing/line-height) all round-trip into inline styles.
 - **Vector nodes (icons, inline SVG) render as an empty box** — no vector path data is reproduced. Check `warnings` for every one.
