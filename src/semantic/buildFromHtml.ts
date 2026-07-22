@@ -112,6 +112,11 @@ function borderRadiusOf(css: string | undefined): number | "full" | undefined {
 }
 
 const TEXT_DECORATIONS = new Set(["underline", "line-through"]);
+const TEXT_TRANSFORM_MAP: Record<string, "UPPER" | "LOWER" | "TITLE" | undefined> = {
+  uppercase: "UPPER",
+  lowercase: "LOWER",
+  capitalize: "TITLE",
+};
 
 function styleOf(node: HtmlSourceNode, kind: NodeKind): CirNodeStyle {
   const s = node.style;
@@ -151,6 +156,8 @@ function styleOf(node: HtmlSourceNode, kind: NodeKind): CirNodeStyle {
     if (s.textAlign && s.textAlign !== "start" && s.textAlign !== "left") style.textAlign = s.textAlign;
     const decoration = (s.textDecorationLine ?? "").split(/\s+/).find((d) => TEXT_DECORATIONS.has(d));
     if (decoration) style.textDecoration = decoration as "underline" | "line-through";
+    const textCase = TEXT_TRANSFORM_MAP[s.textTransform ?? ""];
+    if (textCase) style.textCase = textCase;
     const letterSpacing = px(s.letterSpacing);
     if (letterSpacing) style.letterSpacing = letterSpacing;
     const lineHeightPx = px(s.lineHeight);

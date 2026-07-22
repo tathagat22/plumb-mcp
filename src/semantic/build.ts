@@ -92,6 +92,12 @@ function styleOf(node: PdsNode, doc: PdsDocument): CirNodeStyle {
   const borderColor = resolveColorRef(node.stroke, doc);
   if (borderColor) style.borderColor = borderColor;
   if (node.strokeW) style.borderWidth = node.strokeW;
+  // Figma-sourced text decoration/case are already resolved by normalize()
+  // onto PdsNode — carry them straight across, same as the HTML adapter
+  // computes its own from CSS. Without this, plumb_emit_react silently
+  // dropped underline/strike-through/case on every Figma-sourced text node.
+  if (node.textDecoration) style.textDecoration = node.textDecoration;
+  if (node.textCase) style.textCase = node.textCase;
   return style;
 }
 

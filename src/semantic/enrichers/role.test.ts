@@ -27,6 +27,10 @@ function annotationsFor(g: SemanticGraph): Map<string, string> {
   return new Map(RoleEnricher.run(g).map((a) => [a.nodeId, String(a.value)]));
 }
 
+function confidenceFor(g: SemanticGraph): Map<string, number | undefined> {
+  return new Map(RoleEnricher.run(g).map((a) => [a.nodeId, a.confidence]));
+}
+
 describe("RoleEnricher — sections (nav/hero/footer/sidebar)", () => {
   it("labels a full-width row-flow first child as nav, a tall wide second child as hero, and a short wide last child as footer", () => {
     const logo = node({ id: "logo", kind: "container", box: { w: 40, h: 40 } });
@@ -209,5 +213,48 @@ describe("RoleEnricher — card (repeats edges)", () => {
 
     expect(labels.get("t1")).toBe("card");
     expect(labels.get("t2")).toBeUndefined();
+  });
+});
+
+describe("RoleEnricher — confidence (Phase E)", () => {
+  function navRoot(navWidth: number, navHeight: number): SemanticGraph {
+    const logo = node({ id: "logo", kind: "container", box: { w: 40, h: 40 } });
+    const links = node({ id: "links", kind: "container", box: { w: 300, h: 20 } });
+    const nav = node({
+      id: "nav",
+      kind: "container",
+      box: { w: navWidth, h: navHeight },
+      children: ["logo", "links"],
+      style: { layout: { flow: "row", pad: [0, 0, 0, 0] } },
+    });
+    const filler = node({ id: "filler", kind: "container", box: { w: 1200, h: 900 } });
+    const root = node({
+      id: "root",
+      kind: "container",
+      box: { w: 1200, h: 1000 },
+      children: ["nav", "filler"],
+      style: { layout: { flow: "col", pad: [0, 0, 0, 0] } },
+    });
+    return graph(root, [logo, links, nav, filler]);
+  }
+
+  it("gives a comfortably full-width, short nav higher confidence than a barely-qualifying one", () => {
+    // 80% width is NAV_MIN_WIDTH_RATIO's exact floor — a bare pass.
+    const barelyPasses = confidenceFor(navRoot(961, 139)).get("nav"); // 961/1200 = 0.8008..., 139 vs 140 max
+    const solid = confidenceFor(navRoot(1200, 64)).get("nav"); // full width, comfortably short
+
+    expect(barelyPasses).toBeDefined();
+    expect(solid).toBeDefined();
+    expect(solid!).toBeGreaterThan(barelyPasses!);
+    expect(barelyPasses!).toBeGreaterThanOrEqual(0.5);
+    expect(solid).toBe(1);
+  });
+
+  it("keeps every confidence score within [0, 1]", () => {
+    for (const c of confidenceFor(navRoot(1200, 64)).values()) {
+      if (c === undefined) continue;
+      expect(c).toBeGreaterThanOrEqual(0);
+      expect(c).toBeLessThanOrEqual(1);
+    }
   });
 });

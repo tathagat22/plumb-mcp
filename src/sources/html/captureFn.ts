@@ -88,6 +88,7 @@ export const htmlCaptureFn = function (rootSelector: string | null, maxNodes: nu
       opacity: cs.opacity,
       textAlign: cs.textAlign,
       textDecorationLine: cs.textDecorationLine || cs.textDecoration,
+      textTransform: cs.textTransform,
       letterSpacing: cs.letterSpacing,
       lineHeight: cs.lineHeight,
       position: cs.position,

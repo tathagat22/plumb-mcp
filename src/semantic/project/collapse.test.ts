@@ -6,6 +6,7 @@ const EMPTY_TOKENS: TokenTable = { color: {}, text: {}, radius: {}, shadow: {} }
 
 function doc(nodes: Record<string, PdsNode>, root: string): PdsDocument {
   return {
+    schemaVersion: "1.0.0",
     file: { name: "test", version: "1" },
     root,
     tokens: EMPTY_TOKENS,

@@ -20,6 +20,9 @@ export function projectRoleOntoPds(doc: PdsDocument, annotations: CirAnnotation[
   for (const a of annotations) {
     if (a.namespace !== "role" || typeof a.value !== "string") continue;
     const node = doc.nodes[a.nodeId];
-    if (node && !node.pattern) node.pattern = a.value;
+    if (node && !node.pattern) {
+      node.pattern = a.value;
+      if (typeof a.confidence === "number") node.patternConfidence = a.confidence;
+    }
   }
 }

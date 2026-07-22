@@ -19,6 +19,9 @@ export interface WebNode {
    *  (nav/hero/footer/sidebar; not `card`, see buildFromHtml.ts's scope
    *  note — repeat/similarity detection isn't built for HTML yet). */
   role?: string;
+  /** 0..1 — same meaning as `PdsNode.patternConfidence`; see that field's
+   *  docstring. */
+  roleConfidence?: number;
   layout?: PdsLayout;
   textPx?: number;
   isSurface?: boolean;
@@ -55,8 +58,10 @@ export interface WebSpecDocument {
 }
 
 export function projectWebSpec(url: string, graph: SemanticGraph, annotations: CirAnnotation[]): WebSpecDocument {
-  const roleByNode = new Map(
-    annotations.filter((a) => a.namespace === "role").map((a) => [a.nodeId, String(a.value)]),
+  const roleAnnotations = annotations.filter((a) => a.namespace === "role");
+  const roleByNode = new Map(roleAnnotations.map((a) => [a.nodeId, String(a.value)]));
+  const roleConfidenceByNode = new Map(
+    roleAnnotations.filter((a) => typeof a.confidence === "number").map((a) => [a.nodeId, a.confidence as number]),
   );
 
   const nodes: Record<string, WebNode> = {};
@@ -68,6 +73,7 @@ export function projectWebSpec(url: string, graph: SemanticGraph, annotations: C
       pos: n.pos,
       chars: n.chars,
       role: roleByNode.get(id),
+      roleConfidence: roleConfidenceByNode.get(id),
       layout: n.style.layout,
       textPx: n.style.textPx,
       isSurface: n.style.isSurface,

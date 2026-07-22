@@ -51,6 +51,12 @@ const ROLE_TAG: Record<string, string> = {
   sidebar: "aside",
 };
 
+const TEXT_TRANSFORM_CSS: Record<"UPPER" | "LOWER" | "TITLE", string> = {
+  UPPER: "uppercase",
+  LOWER: "lowercase",
+  TITLE: "capitalize",
+};
+
 function tagFor(node: CirNode, role: string | undefined): string {
   if (role && ROLE_TAG[role]) return ROLE_TAG[role];
   if (node.kind === "text") return "p";
@@ -153,6 +159,7 @@ function styleEntriesFor(node: CirNode, isRoot: boolean, parentHasLayout: boolea
     if (s.textPx) entries.push(["fontSize", px(s.textPx)]);
     if (s.textAlign) entries.push(["textAlign", JSON.stringify(s.textAlign)]);
     if (s.textDecoration) entries.push(["textDecoration", JSON.stringify(s.textDecoration)]);
+    if (s.textCase) entries.push(["textTransform", JSON.stringify(TEXT_TRANSFORM_CSS[s.textCase])]);
     if (s.letterSpacing) entries.push(["letterSpacing", px(s.letterSpacing)]);
     if (s.lineHeightPx) entries.push(["lineHeight", JSON.stringify(`${px(s.lineHeightPx)}px`)]);
   }

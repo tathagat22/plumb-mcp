@@ -12,6 +12,7 @@ import type {
   FigmaReaction,
   FigmaTransition,
 } from "../figma/types";
+import { PDS_SCHEMA_VERSION } from "../pds";
 import type { Fill, MotionSpec, PdsDocument, PdsLayout, PdsNode } from "../pds";
 
 const TYPE_MAP: Record<string, string> = {
@@ -278,6 +279,10 @@ export function normalize(
       if (mode) node.maskMode = mode;
     }
 
+    if (fn.type === "BOOLEAN_OPERATION" && fn.booleanOperation) {
+      node.boolOp = fn.booleanOperation.toLowerCase() as PdsNode["boolOp"];
+    }
+
     // Inline vector path for small icons — saves an entire `plumb_assets`
     // round-trip per icon. Only single-path, single-winding-rule cases
     // under the per-node char budget. Bigger / multi-rule paths fall
@@ -291,6 +296,8 @@ export function normalize(
       const dec = fn.style?.textDecoration;
       if (dec === "UNDERLINE") node.textDecoration = "underline";
       else if (dec === "STRIKETHROUGH") node.textDecoration = "line-through";
+      const textCase = pdsTextCase(fn.style?.textCase);
+      if (textCase) node.textCase = textCase;
 
       // v0.10 Phase 3 — mixed inline styles. When the plugin captured runs
       // (a bold word inside a sentence, a coloured link, etc.) emit them
@@ -310,12 +317,14 @@ export function normalize(
               : runDec === "STRIKETHROUGH"
                 ? ("line-through" as const)
                 : undefined;
+          const tcRun = pdsTextCase(r.style?.textCase);
           const out: import("../pds").PdsTextRun = { t: r.characters };
           // Only emit overrides — agents reconstruct by inheriting from
           // the node's dominant style/fill/decoration when these are absent.
           if (sRef && sRef !== text) out.s = sRef;
           if (cRef && cRef !== dominantFill) out.c = cRef;
           if (dRun && dRun !== node.textDecoration) out.d = dRun;
+          if (tcRun && tcRun !== node.textCase) out.tc = tcRun;
           return out;
         });
         node.chars = builtRuns;
@@ -437,6 +446,7 @@ export function normalize(
   const assetCount = Object.values(nodes).filter((n) => n.assetId).length;
 
   const doc: PdsDocument = {
+    schemaVersion: PDS_SCHEMA_VERSION,
     file: { name: file.fileName, version: file.version },
     root,
     tokens,
@@ -528,6 +538,7 @@ function fingerprintSubtree(el: string, nodes: Record<string, PdsNode>): string 
     clip: n.clip,
     text: n.text,
     textDecoration: n.textDecoration,
+    textCase: n.textCase,
     component: n.component,
     pattern: n.pattern,
     // iconHint + notes are DERIVED from per-instance data (sibling chars,
@@ -536,6 +547,7 @@ function fingerprintSubtree(el: string, nodes: Record<string, PdsNode>): string 
     isMask: n.isMask,
     maskMode: n.maskMode,
     masked: n.masked,
+    boolOp: n.boolOp,
     grow: n.grow,
     selfAlign: n.selfAlign,
     sizing: n.sizing,
@@ -1133,6 +1145,18 @@ function cssBlendMode(figma: string): string | undefined {
     case "COLOR": return "color";
     case "LUMINOSITY": return "luminosity";
     default: return figma.toLowerCase();
+  }
+}
+
+/** Figma's `textCase` → CSS `text-transform`. `SMALL_CAPS`/`SMALL_CAPS_FORCED`
+ *  are a `font-variant` concept, not `text-transform` — omitted rather than
+ *  approximated as uppercase (that would misrepresent the actual glyphs). */
+function pdsTextCase(figma: string | undefined): "UPPER" | "LOWER" | "TITLE" | undefined {
+  switch (figma) {
+    case "UPPER": return "UPPER";
+    case "LOWER": return "LOWER";
+    case "TITLE": return "TITLE";
+    default: return undefined; // ORIGINAL / SMALL_CAPS* / unknown → omit
   }
 }
 

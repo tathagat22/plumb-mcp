@@ -4,6 +4,7 @@ import { buildSemanticGraph } from "./build";
 
 function doc(nodes: Record<string, PdsNode>, root: string, tokens: Partial<TokenTable> = {}): PdsDocument {
   return {
+    schemaVersion: "1.0.0",
     file: { name: "test", version: "1" },
     root,
     tokens: { color: {}, text: {}, radius: {}, shadow: {}, ...tokens },
@@ -166,5 +167,25 @@ describe("buildSemanticGraph — resolved style", () => {
 
     expect(buildSemanticGraph(doc(nodes, "photo")).nodes.photo?.imageSrc).toBe("./assets/abc123.png");
     expect(buildSemanticGraph(doc(nodes, "plain")).nodes.plain?.imageSrc).toBeUndefined();
+  });
+
+  it("carries textDecoration and textCase through from PdsNode (Phase E parity fix)", () => {
+    // Regression: styleOf() used to drop these on the floor for every
+    // Figma-sourced node, even though normalize() already resolved them —
+    // plumb_emit_react silently produced no underline/case for Figma text.
+    const nodes: Record<string, PdsNode> = {
+      label: {
+        id: "0",
+        el: "label",
+        type: "text",
+        box: { w: 40, h: 10 },
+        textDecoration: "underline",
+        textCase: "UPPER",
+      },
+    };
+
+    const style = buildSemanticGraph(doc(nodes, "label")).nodes.label?.style;
+    expect(style?.textDecoration).toBe("underline");
+    expect(style?.textCase).toBe("UPPER");
   });
 });

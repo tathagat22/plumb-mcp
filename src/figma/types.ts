@@ -198,6 +198,10 @@ export interface FigmaNode {
   isMask?: boolean;
   maskType?: "ALPHA" | "LUMINANCE" | "VECTOR" | "GEOMETRY";
 
+  /** BOOLEAN_OPERATION nodes only — which combine operation produced this
+   *  shape. Plugin path only; REST does not surface it. */
+  booleanOperation?: "UNION" | "INTERSECT" | "SUBTRACT" | "EXCLUDE";
+
   // v0.10 Phase 3 — fidelity additions.
   /** CSS-shaped rotation in degrees. Figma's `rotation` is anti-clockwise;
    * plugin converts to CSS-clockwise before emitting. */

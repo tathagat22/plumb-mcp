@@ -63,6 +63,9 @@ export interface PdsTextRun {
   c?: string;
   /** "underline" / "line-through" override. Omit if matches dominant. */
   d?: "underline" | "line-through";
+  /** `textCase` override — a differently-cased word/link within a run of
+   *  otherwise-uncased text. Omit if matches the node's dominant `textCase`. */
+  tc?: "UPPER" | "LOWER" | "TITLE";
 }
 
 /** A single colour stop inside a gradient fill. `at` is 0..1. */
@@ -350,6 +353,15 @@ export interface PdsNode {
    */
   textDecoration?: "underline" | "line-through";
   /**
+   * CSS `text-transform` — Figma's `textCase` style property. Maps to
+   * `uppercase`/`lowercase`/`capitalize` (button labels, eyebrow text,
+   * section kickers commonly rely on this rather than the source string
+   * literally containing the cased characters). Figma's `SMALL_CAPS` /
+   * `SMALL_CAPS_FORCED` variants are a distinct `font-variant` concept, not
+   * `text-transform`, and are omitted rather than approximated.
+   */
+  textCase?: "UPPER" | "LOWER" | "TITLE";
+  /**
    * The actual text content (TEXT nodes only). When the Figma node has
    * mixed inline styles — bold word in a sentence, coloured link in a
    * paragraph, anything where `getStyledTextSegments` returns more than
@@ -408,6 +420,17 @@ export interface PdsNode {
    * "this is the nav" by geometric inspection every call.
    */
   pattern?: string;
+  /**
+   * 0..1 confidence for a container-level `pattern` (nav/hero/footer/
+   * sidebar/card) — how comfortably the classifier's numeric thresholds
+   * were cleared, not a probability. Absent for the leaf-level `"button"`
+   * pattern (that detector doesn't score itself) and for any container
+   * label produced by an enricher version that predates this field. A
+   * present-but-low score (roughly 0.5–0.6) still means the label is the
+   * classifier's real, gate-passed answer — just a marginal one; weight it
+   * accordingly rather than distrusting it outright.
+   */
+  patternConfidence?: number;
   /**
    * Figma prototype transitions wired to this node. Pure design intent —
    * Plumb does not verify these at runtime today.
@@ -498,6 +521,14 @@ export interface PdsNode {
    * `$` is unambiguously a ref, not data.
    */
   vectorPath?: string;
+  /**
+   * Which combine operation produced a `type: "bool"` (BOOLEAN_OPERATION)
+   * node — lowercased to match CSS/JS naming conventions elsewhere in PDS.
+   * Only the generic `"bool"` type marker was previously surfaced, so an
+   * agent reconstructing the shape (rather than using `vectorPath`/
+   * `plumb_assets`) had no way to know union vs. subtract vs. intersect.
+   */
+  boolOp?: "union" | "intersect" | "subtract" | "exclude";
   /**
    * This node is a Figma mask — it shapes its subsequent siblings inside the
    * same container rather than rendering as its own surface. The renderer
@@ -592,7 +623,19 @@ export interface TokenTable {
   meta?: { counts?: Record<string, number> };
 }
 
+/**
+ * PDS wire-shape version — independent of `plumb-mcp`'s own npm version
+ * (`SERVER_VERSION`, src/meta.ts), which bumps on every release regardless
+ * of whether the wire shape changed. Bump this only on an actual breaking
+ * change to `PdsDocument`/`PdsNode`'s shape, so a client that snapshot-tests
+ * its own parsing has something concrete to check against. Mirrors
+ * `SemanticGraph.cirVersion`'s identical convention (src/semantic/graph.ts).
+ */
+export const PDS_SCHEMA_VERSION = "1.0.0";
+
 export interface PdsDocument {
+  /** See {@link PDS_SCHEMA_VERSION}. */
+  schemaVersion: string;
   file: { name: string; version: string };
   /** `el` of the requested root node. */
   root: string;

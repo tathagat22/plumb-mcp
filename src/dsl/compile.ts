@@ -18,6 +18,7 @@ import { TokenCtx } from "./tokens";
 import { HandleMinter } from "../normalize/handles";
 import { estimateTokens } from "../util/estimate";
 import type { LowerCtx } from "./blocks";
+import { PDS_SCHEMA_VERSION } from "../pds";
 import type { PdsDocument, PdsNode } from "../pds";
 import type {
   AssetResolver,
@@ -118,6 +119,7 @@ export async function compile(doc: DesignDoc, ctx: CompileContext): Promise<Comp
   const estTokens = estimateTokens(JSON.stringify({ tokens: table, nodes }));
 
   const pdsDoc: PdsDocument = {
+    schemaVersion: PDS_SCHEMA_VERSION,
     file: { name: doc.meta?.name ?? "Untitled", version: doc.version },
     root,
     tokens: table,

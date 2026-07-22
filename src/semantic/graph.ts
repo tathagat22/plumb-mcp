@@ -62,6 +62,8 @@ export interface CirNodeStyle {
   /** `underline` or `line-through` — text nodes only, mirrors
    *  `PdsNode.textDecoration`. */
   textDecoration?: "underline" | "line-through";
+  /** CSS `text-transform` — text nodes only, mirrors `PdsNode.textCase`. */
+  textCase?: "UPPER" | "LOWER" | "TITLE";
   /** CSS px. */
   letterSpacing?: number;
   /** CSS px (already resolved from a possibly-unitless/percentage
@@ -145,6 +147,16 @@ export interface CirAnnotation<T = unknown> {
    *  revision of a heuristic produced a given label. */
   version: string;
   value: T;
+  /**
+   * 0..1, only when the producing enricher computes one (today: `role`).
+   * A hard-gated heuristic's classifications are all equally "yes" by
+   * definition — this instead scores how comfortably the underlying
+   * numeric signals cleared their thresholds, so a consumer (plumb_diff,
+   * plumb_audit, plumb_query's role filters) can weight a borderline call
+   * differently from a clear one. Absent, not 1.0, when an enricher hasn't
+   * opted in — a missing score is a different fact from "fully confident."
+   */
+  confidence?: number;
 }
 
 export interface SemanticGraph {

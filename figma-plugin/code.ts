@@ -306,6 +306,10 @@ function serialize(
     if (typeof n.maskType === "string") out.maskType = n.maskType;
   }
 
+  if (node.type === "BOOLEAN_OPERATION" && typeof n.booleanOperation === "string") {
+    out.booleanOperation = n.booleanOperation;
+  }
+
   // Inline vector path data so agents can render small icons without a
   // round-trip to `plumb_assets`. Only vector-shape types — RECTANGLE /
   // FRAME / GROUP / TEXT / INSTANCE all render via CSS without paths.
@@ -352,6 +356,9 @@ function serialize(
     if (t.textDecoration && t.textDecoration !== figma.mixed && t.textDecoration !== "NONE") {
       style.textDecoration = t.textDecoration;
     }
+    if (t.textCase && t.textCase !== figma.mixed && t.textCase !== "ORIGINAL") {
+      style.textCase = t.textCase;
+    }
     out.style = style;
 
     // v0.10 Phase 3 — capture styled segments so mixed-style text (a bold
@@ -366,6 +373,7 @@ function serialize(
         "lineHeight",
         "letterSpacing",
         "textDecoration",
+        "textCase",
       ]);
       if (segments.length > 1) {
         out.characterRuns = segments.map((seg) => {
@@ -390,6 +398,9 @@ function serialize(
           }
           if (seg.textDecoration && seg.textDecoration !== "NONE") {
             runStyle.textDecoration = seg.textDecoration;
+          }
+          if (seg.textCase && seg.textCase !== "ORIGINAL") {
+            runStyle.textCase = seg.textCase;
           }
           const runOut: Record<string, unknown> = {
             characters: seg.characters,

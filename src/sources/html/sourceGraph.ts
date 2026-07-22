@@ -38,6 +38,7 @@ export interface HtmlStyle {
   opacity?: string;
   textAlign?: string;
   textDecorationLine?: string;
+  textTransform?: string;
   letterSpacing?: string;
   lineHeight?: string;
   position?: string;

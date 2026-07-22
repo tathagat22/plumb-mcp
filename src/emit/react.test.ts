@@ -209,6 +209,21 @@ describe("lowerToReact — role-aware tags", () => {
   });
 });
 
+describe("lowerToReact — text styling", () => {
+  it("emits textTransform for a textCase'd node, working from either source", () => {
+    const upperFromFigma = node({
+      id: "upper",
+      kind: "text",
+      chars: "SHOP NOW",
+      style: { textCase: "UPPER" },
+      sourceRef: { adapter: "figma", nativeId: "1:1" },
+    });
+    const { code } = lowerToReact(graph(upperFromFigma, []));
+
+    expect(code).toContain('textTransform: "uppercase"');
+  });
+});
+
 describe("lowerToReact — degrades per-node instead of throwing", () => {
   it("skips a missing child (a dangling reference) with a warning, and still renders the rest", () => {
     const present = node({ id: "present", kind: "text", chars: "here" });

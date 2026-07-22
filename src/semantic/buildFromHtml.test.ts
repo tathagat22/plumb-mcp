@@ -298,6 +298,18 @@ describe("buildSemanticGraphFromHtml — extended style fidelity (M9.1)", () => 
     expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.style.textAlign).toBeUndefined();
   });
 
+  it("maps CSS text-transform to textCase (Phase E)", () => {
+    const upper = html({ tag: "span", text: "shop now", style: { textTransform: "uppercase" } });
+    const lower = html({ tag: "span", text: "SHOP NOW", style: { textTransform: "lowercase" } });
+    const title = html({ tag: "span", text: "shop now", style: { textTransform: "capitalize" } });
+    const none = html({ tag: "span", text: "Shop Now", style: { textTransform: "none" } });
+
+    expect(buildSemanticGraphFromHtml(upper).nodes[upper.id]?.style.textCase).toBe("UPPER");
+    expect(buildSemanticGraphFromHtml(lower).nodes[lower.id]?.style.textCase).toBe("LOWER");
+    expect(buildSemanticGraphFromHtml(title).nodes[title.id]?.style.textCase).toBe("TITLE");
+    expect(buildSemanticGraphFromHtml(none).nodes[none.id]?.style.textCase).toBeUndefined();
+  });
+
   it("captures position, but never 'static' (the CSS default)", () => {
     const fixed = html({ id: "fixed", tag: "div", style: { position: "fixed" } });
     const staticEl = html({ id: "static", tag: "div", style: { position: "static" } });

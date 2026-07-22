@@ -100,6 +100,21 @@ function deepChain(depth: number): FigmaFileResult {
   return { document: node, fileName: "deep-chain", version: "1" };
 }
 
+describe("normalize() — boolean operation subtype (Phase E)", () => {
+  it("surfaces the combine operation, lowercased, on a BOOLEAN_OPERATION node", () => {
+    const root: FigmaNode = {
+      id: "0",
+      name: "Icon",
+      type: "BOOLEAN_OPERATION",
+      absoluteBoundingBox: { x: 0, y: 0, width: 24, height: 24 },
+      booleanOperation: "SUBTRACT",
+    };
+    const doc = normalize({ document: root, fileName: "f", version: "1" }, 1);
+    expect(doc.nodes[doc.root]?.boolOp).toBe("subtract");
+    expect(doc.nodes[doc.root]?.type).toBe("bool");
+  });
+});
+
 describe("buildPreWalk() — iterative traversal (Phase A5)", () => {
   it("handles a tree far deeper than the JS call stack without throwing", () => {
     // Comfortably beyond Node's default recursion limit (~10-15k simple
