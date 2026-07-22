@@ -345,3 +345,26 @@ describe("buildSemanticGraphFromHtml — extended style fidelity (M9.1)", () => 
     expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.imageSrc).toBeUndefined();
   });
 });
+
+describe("buildSemanticGraphFromHtml — iterative traversal (Phase A5)", () => {
+  it("handles a tree far deeper than the JS call stack without throwing", () => {
+    // plumb_import_web is the least-trusted input source (openWorldHint:
+    // true) — a narrow, deeply-nested live page (framework wrapper-div
+    // soup) must degrade to "just runs a while," not a stack overflow. This
+    // depth is comfortably beyond Node's default recursion limit; a
+    // recursive walk would throw here.
+    let node = html({ tag: "div" });
+    for (let i = 0; i < 50_000; i++) {
+      node = html({ tag: "div", children: [node] });
+    }
+    expect(() => buildSemanticGraphFromHtml(node)).not.toThrow();
+  });
+
+  it("still computes correct relative positions after the iterative rewrite", () => {
+    const child = html({ tag: "span", pos: { x: 30, y: 40 }, box: { w: 5, h: 5 } });
+    const parent = html({ tag: "div", pos: { x: 10, y: 10 }, children: [child] });
+    const graph = buildSemanticGraphFromHtml(parent);
+
+    expect(graph.nodes[child.id]?.pos).toEqual({ x: 20, y: 30 });
+  });
+});

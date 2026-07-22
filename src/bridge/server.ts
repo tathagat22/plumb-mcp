@@ -452,13 +452,33 @@ function bindPort(port: number): Promise<{ wss: WebSocketServer; http: Server } 
  * Plumb" click in the plugin panel; only one plugin may be paired at a time;
  * data and replies from unpaired connections are ignored.
  */
+let activeWss: WebSocketServer | null = null;
+let activeHttp: Server | null = null;
+
+/** Closes the bridge's WS + HTTP servers, if running. Mainly for tests —
+ *  a real `plumb-mcp` process just exits and the OS reclaims the port. */
+export async function stopBridge(): Promise<void> {
+  if (sweepTimer) {
+    clearInterval(sweepTimer);
+    sweepTimer = undefined;
+  }
+  await new Promise<void>((resolve) => (activeWss ? activeWss.close(() => resolve()) : resolve()));
+  await new Promise<void>((resolve) => (activeHttp ? activeHttp.close(() => resolve()) : resolve()));
+  activeWss = null;
+  activeHttp = null;
+  bridge.reset();
+  bridge.port = null;
+}
+
 export async function startBridge(): Promise<void> {
   let wss: WebSocketServer | null = null;
+  let http: Server | null = null;
   let chosen = 0;
   for (const port of BRIDGE_PORTS) {
     const bound = await bindPort(port);
     if (bound) {
       wss = bound.wss;
+      http = bound.http;
       chosen = port;
       break;
     }
@@ -468,6 +488,8 @@ export async function startBridge(): Promise<void> {
     return;
   }
   bridge.port = chosen;
+  activeWss = wss;
+  activeHttp = http;
   const sessionLabel = process.env.PLUMB_SESSION_NAME?.trim() || basename(process.cwd());
   log(`listening on 127.0.0.1:${chosen} as "${sessionLabel}"`);
   if (studioAvailable()) {
