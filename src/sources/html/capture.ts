@@ -51,3 +51,50 @@ export async function captureHtmlSource(url: string, opts: CaptureHtmlOpts = {})
     await browser.close();
   }
 }
+
+export interface CaptureViewport {
+  /** e.g. "mobile" / "tablet" / "desktop" — echoed back as the result key. */
+  label: string;
+  width: number;
+  height: number;
+}
+
+/** Same capture as {@link captureHtmlSource}, at N viewport sizes against
+ *  ONE browser/page — real responsive layouts (a hamburger nav that only
+ *  exists under 768px, a grid that collapses to one column) are otherwise
+ *  invisible to a single fixed-size capture. Reuses `Emulation.
+ *  setDeviceMetricsOverride` (the same live-resize CDP call
+ *  `src/brand/capture.ts`'s `captureInBrowser` already uses) instead of
+ *  relaunching Chrome per viewport — N `--window-size` cold starts would
+ *  cost N Chrome launches for one page. */
+export async function captureHtmlSourceAtViewports(
+  url: string,
+  viewports: CaptureViewport[],
+  opts: Omit<CaptureHtmlOpts, "width" | "height"> = {},
+): Promise<{ label: string; root: HtmlSourceNode | null }[]> {
+  assertNavigableUrl(url);
+  const chromePath = opts.chromePath ?? findChrome();
+  if (!chromePath) throw new Error("No Chrome found — set PLUMB_CHROME=/path/to/chrome.");
+
+  const browser = await launchBrowser({ chromePath });
+  try {
+    const results: { label: string; root: HtmlSourceNode | null }[] = [];
+    for (const vp of viewports) {
+      await browser.send("Emulation.setDeviceMetricsOverride", {
+        width: vp.width,
+        height: vp.height,
+        deviceScaleFactor: 1,
+        mobile: vp.width < 768,
+      });
+      await navigate(browser, url, opts.settleMs ?? DEFAULT_SETTLE_MS);
+      const result = await evaluate<HtmlSourceNode | null>(
+        browser,
+        htmlCaptureExpression(opts.rootSelector ?? null, opts.maxNodes),
+      );
+      results.push({ label: vp.label, root: result ?? null });
+    }
+    return results;
+  } finally {
+    await browser.close();
+  }
+}

@@ -10,8 +10,9 @@ Import a live webpage's structure and semantics — no Figma connection needed. 
 |---|---|---|
 | `url` | string · required | The page URL to import. |
 | `selector` | string · optional | CSS selector to root the walk at. Omit to walk from `document.body`. |
+| `viewports` | `true` \| `{label, width, height}[]` · optional | Capture the SAME page at multiple sizes in one call. `true` uses the default set (mobile 390×844, tablet 768×1024, desktop 1440×900). Omit for a single desktop capture (today's default, unchanged). |
 
-## Returns
+## Returns (single capture — no `viewports`)
 
 ```jsonc
 {
@@ -34,7 +35,21 @@ Import a live webpage's structure and semantics — no Figma connection needed. 
 }
 ```
 
-Each node carries real CSS values — a resolved hex color, an actual px number — never a Figma-style `$cN` token ref. Fields present depend on the node: `fills`/`effects` for gradients/shadows, `imageSrc` for images, `textAlign`/`textDecoration`/`letterSpacing`/`lineHeightPx` for text, `borderRadius`/`borderColor`/`borderWidth` for styled surfaces.
+Each node carries real CSS values — a resolved hex color, an actual px number — never a Figma-style `$cN` token ref. Fields present depend on the node: `fills`/`effects` for gradients/shadows, `imageSrc` for images, `svgMarkup` for inline `<svg>` icons/logos (verbatim markup, ≤20,000 chars — feeds `plumb_emit_react`'s real `<svg>`/`dangerouslySetInnerHTML` output instead of an empty box), `textAlign`/`textDecoration`/`textCase`/`letterSpacing`/`lineHeightPx` for text, `borderRadius`/`borderColor`/`borderWidth` for styled surfaces.
+
+## Returns (`viewports` passed)
+
+```jsonc
+{
+  "url": "https://example.com",
+  "viewports": {
+    "mobile": { "root": "0.0", "nodes": { /* … */ }, "meta": { "nodeCount": 180 }, "next": "…" },
+    "desktop": { "root": "0.0", "nodes": { /* … */ }, "meta": { "nodeCount": 214 }, "next": "…" }
+  }
+}
+```
+
+Each key is a full `WebSpecDocument`, same shape as the single-capture return — or `{ "error": "…", "nextAction": "…" }` if that one size captured no visible content (selector matched nothing at that width, for instance). One browser is reused across all sizes (a live CDP viewport resize, not N separate Chrome launches), and the page is freshly navigated per size so lazy-load/hydration/responsive `srcset` behavior is accurate at each one.
 
 ## What's classified, what isn't
 
