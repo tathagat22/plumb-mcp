@@ -53,7 +53,7 @@ Each key is a full `WebSpecDocument`, same shape as the single-capture return �
 
 ## What's classified, what isn't
 
-`nav` / `hero` / `footer` / `sidebar` use the exact same conservative heuristics Figma-sourced screens get (structural signals only — box size, position, layout flow; silence over a guess). `card` is **not** detected on imported pages — it depends on repeat-group similarity detection this adapter doesn't build yet.
+`nav` / `hero` / `footer` / `sidebar` / `card` all use the exact same conservative heuristics Figma-sourced screens get (structural signals only — box size, position, layout flow, repeat-group similarity; silence over a guess). `card` detection runs a structural-similarity pass over each container's direct children (same kind, same child-shape, similar size, ≥3 of them) to find repeat groups — the HTML-adapter analog of Figma's plugin-side repeat-group detection.
 
 CSS Grid layouts and complex fixed/sticky-positioned regions currently under-detect (the layout mapper only understands `display:flex`) — the classifier correctly abstains rather than guessing wrong, so a Grid-heavy nav may simply carry no role.
 

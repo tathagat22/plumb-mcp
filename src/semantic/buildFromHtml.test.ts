@@ -233,6 +233,49 @@ describe("RoleEnricher runs UNCHANGED on an HTML-sourced graph — the adapter-a
     expect(labels.get("hero")).toBe("hero");
     expect(labels.get("footer")).toBe("footer");
   });
+
+  it("classifies a repeated card list (Phase F4) — was previously impossible on a web import", () => {
+    // Nested a level below the root (as on a real page — a card grid inside
+    // a page section, not the root's own direct children) so nav/hero/
+    // footer/sidebar classification of the ROOT's children doesn't collide
+    // with the cards themselves.
+    const card = (n: number) =>
+      html({
+        id: `card${n}`,
+        tag: "div",
+        box: { w: 300, h: 200 },
+        style: { borderRadius: "8px" },
+        children: [html({ id: `cardLabel${n}`, tag: "h3", text: `Plan ${n}` })],
+      });
+    const list = html({ id: "list", tag: "div", box: { w: 1000, h: 200 }, children: [card(1), card(2), card(3)] });
+    // A second sibling so `resolveEffectiveRoot`'s single-child-wrapper
+    // collapse (real, deliberate behavior — see that function's own
+    // docstring) doesn't promote `list` itself to the graph root, which
+    // would re-expose card1/2/3 to root-level nav/hero/footer/sidebar
+    // classification the same way direct root children were above.
+    const filler = html({ id: "filler", tag: "div", box: { w: 1200, h: 400 } });
+    const body = html({ id: "body", tag: "body", box: { w: 1200, h: 800 }, children: [list, filler] });
+
+    const graph = buildSemanticGraphFromHtml(body);
+    const labels = new Map(RoleEnricher.run(graph).map((a) => [a.nodeId, a.value]));
+
+    expect(labels.get("card1")).toBe("card");
+  });
+
+  it("does not treat two similar children as a repeat group — the threshold is 3, matching Figma's own", () => {
+    const card = (n: number) =>
+      html({
+        id: `card${n}`,
+        tag: "div",
+        box: { w: 300, h: 200 },
+        style: { borderRadius: "8px" },
+        children: [html({ id: `cardLabel${n}`, tag: "h3", text: `Plan ${n}` })],
+      });
+    const list = html({ id: "list", tag: "div", box: { w: 1000, h: 200 }, children: [card(1), card(2)] });
+
+    const graph = buildSemanticGraphFromHtml(list);
+    expect(graph.edges.some((e) => e.kind === "repeats")).toBe(false);
+  });
 });
 
 describe("buildSemanticGraphFromHtml — extended style fidelity (M9.1)", () => {

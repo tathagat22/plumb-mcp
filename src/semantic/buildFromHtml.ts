@@ -10,15 +10,15 @@
  * assumptions baked in, so nothing downstream needed to change for this
  * file to exist.
  *
- * Honest scope note: `RoleEnricher`'s `nav`/`hero`/`footer`/`sidebar`
- * detection works unmodified on an HTML-sourced graph — those rules only
- * read `box`/`pos`/`style.layout`/`style.textPx`/`children`, all populated
- * here. `card` detection does NOT, yet: it keys off `repeats` edges, which
- * come from Figma's plugin-side repeat-group detection (`PdsRepeatGroup`)
- * — this mapper doesn't run an equivalent structural-similarity pass over
- * HTML siblings. That's a real, scoped gap, not a silent one: card
- * detection on an imported webpage needs its own similarity detector,
- * deferred rather than faked here.
+ * `RoleEnricher`'s `nav`/`hero`/`footer`/`sidebar` detection works unmodified
+ * on an HTML-sourced graph — those rules only read
+ * `box`/`pos`/`style.layout`/`style.textPx`/`children`, all populated here.
+ * `card` detection now does too (Phase F4): `detectRepeatGroups` below runs
+ * a structural-similarity pass over each container's direct children —
+ * same shape (kind + child-kind sequence + coarse size bucket), ≥3 of
+ * them — and emits the same `repeats` edge shape Figma's plugin-side
+ * repeat-group detection (`PdsRepeatGroup`) produces, so `RoleEnricher`'s
+ * `classifyCardTemplates` picks it up with zero changes.
  */
 import { parseColor } from "../verify";
 import { parseBoxShadow, parseGradient } from "../sources/html/cssParse";
@@ -178,6 +178,61 @@ function styleOf(node: HtmlSourceNode, kind: NodeKind): CirNodeStyle {
   return style;
 }
 
+/** Same threshold Figma's own repeat-group compression uses (PdsRepeatGroup,
+ *  src/normalize/normalize.ts) — "≥3 consecutive/similar children" is the
+ *  established bar for "this is a list, not a coincidence." */
+const MIN_REPEAT_GROUP = 3;
+
+/** Coarse buckets (not exact px) so minor real-world variance (a card with
+ *  one extra line of text, a badge that adds 4px) doesn't split an obvious
+ *  repeat group into singletons. */
+function sizeBucket(px: number): number {
+  return Math.round(px / 24);
+}
+
+/** A cheap structural signature: own kind, immediate children's kind
+ *  sequence, and a coarse size bucket. Two nodes with the same fingerprint
+ *  are "shaped the same" — not proof they're semantically a repeat, just
+ *  the same conservative bar Figma's plugin-side detection uses (structural
+ *  shape, not content). `RoleEnricher`'s `classifyCardTemplates` still
+ *  requires `isSurface` + real text on top of this before calling anything
+ *  a `card` — this only decides what's ELIGIBLE to be considered. */
+function shapeFingerprint(node: CirNode, nodes: Record<string, CirNode>): string {
+  const childKinds = node.children.map((cid) => nodes[cid]?.kind ?? "?").join(",");
+  return `${node.kind}|${childKinds}|${sizeBucket(node.box.w)}x${sizeBucket(node.box.h)}`;
+}
+
+/**
+ * Structural-similarity pass over each container's direct children — the
+ * HTML-adapter analog of Figma's plugin-side repeat-group detection
+ * (`PdsRepeatGroup`). Closes a real, previously-documented gap: `card`
+ * detection never fired on a web import because no `repeats` edge was ever
+ * produced for one. Emits the same edge shape Figma's `build.ts` does
+ * (`{from: container, to: template}`), so `RoleEnricher` picks it up
+ * completely unmodified — the concrete "the graph is source-agnostic" proof
+ * for repeat detection, matching how `plumb_emit_react` already proves it
+ * for codegen.
+ */
+function detectRepeatGroups(nodes: Record<string, CirNode>): CirEdge[] {
+  const edges: CirEdge[] = [];
+  for (const parent of Object.values(nodes)) {
+    if (parent.children.length < MIN_REPEAT_GROUP) continue;
+    const groups = new Map<string, string[]>();
+    for (const childId of parent.children) {
+      const child = nodes[childId];
+      if (!child) continue;
+      const fp = shapeFingerprint(child, nodes);
+      const group = groups.get(fp);
+      if (group) group.push(childId);
+      else groups.set(fp, [childId]);
+    }
+    for (const group of groups.values()) {
+      if (group.length >= MIN_REPEAT_GROUP) edges.push({ from: parent.id, to: group[0]!, kind: "repeats" });
+    }
+  }
+  return edges;
+}
+
 export function buildSemanticGraphFromHtml(root: HtmlSourceNode): SemanticGraph {
   const nodes: Record<string, CirNode> = {};
   const edges: CirEdge[] = [];
@@ -215,6 +270,8 @@ export function buildSemanticGraphFromHtml(root: HtmlSourceNode): SemanticGraph 
       stack.push({ node: node.children[i]!, parentAbsPos: node.pos });
     }
   }
+
+  edges.push(...detectRepeatGroups(nodes));
 
   return { cirVersion: CIR_VERSION, root: resolveEffectiveRoot(root.id, nodes), nodes, edges };
 }
