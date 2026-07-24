@@ -34,6 +34,13 @@ export interface WebNode {
   opacity?: number;
   textAlign?: string;
   textDecoration?: CirNodeStyle["textDecoration"];
+  /** Real bug, found while wiring `svgMarkup` through this same file:
+   *  `buildFromHtml.ts`'s `styleOf()` already computes this from CSS
+   *  `text-transform` (Phase E, prior session) but this projection never
+   *  copied it across — silently dropped before it ever reached the agent's
+   *  JSON, exactly the class of parity bug `imageSrc`'s own docstring above
+   *  describes. */
+  textCase?: CirNodeStyle["textCase"];
   letterSpacing?: number;
   lineHeightPx?: number;
   position?: CirNodeStyle["position"];
@@ -46,6 +53,8 @@ export interface WebNode {
    *  a real gap, found and closed the same way the `opacity`-captured-but-
    *  dropped bug in M9.1 was: by trying to build the next real consumer. */
   imageSrc?: string;
+  /** `kind: "vector"` nodes only — see `CirNode.svgMarkup`'s own docstring. */
+  svgMarkup?: string;
   children?: string[];
 }
 
@@ -84,6 +93,7 @@ export function projectWebSpec(url: string, graph: SemanticGraph, annotations: C
       opacity: n.style.opacity,
       textAlign: n.style.textAlign,
       textDecoration: n.style.textDecoration,
+      textCase: n.style.textCase,
       letterSpacing: n.style.letterSpacing,
       lineHeightPx: n.style.lineHeightPx,
       position: n.style.position,
@@ -91,6 +101,7 @@ export function projectWebSpec(url: string, graph: SemanticGraph, annotations: C
       borderColor: n.style.borderColor,
       borderWidth: n.style.borderWidth,
       imageSrc: n.imageSrc,
+      svgMarkup: n.svgMarkup,
       children: n.children.length ? n.children : undefined,
     };
   }
@@ -134,6 +145,7 @@ export function graphFromWebSpec(doc: WebSpecDocument): { graph: SemanticGraph; 
       children: n.children ?? [],
       chars: n.chars,
       imageSrc: n.imageSrc,
+      svgMarkup: n.svgMarkup,
       style: {
         layout: n.layout,
         textPx: n.textPx,
@@ -145,6 +157,7 @@ export function graphFromWebSpec(doc: WebSpecDocument): { graph: SemanticGraph; 
         opacity: n.opacity,
         textAlign: n.textAlign,
         textDecoration: n.textDecoration,
+        textCase: n.textCase,
         letterSpacing: n.letterSpacing,
         lineHeightPx: n.lineHeightPx,
         position: n.position,

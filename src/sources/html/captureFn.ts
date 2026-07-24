@@ -137,6 +137,17 @@ export const htmlCaptureFn = function (rootSelector: string | null, maxNodes: nu
     }
     if (!isImage && imageSrc) isImage = true;
 
+    // Inline <svg> icons/logos are real, already-serialized markup — no
+    // geometry extraction needed (unlike Figma's fill-geometry → path
+    // budget). Before this, every web-sourced vector rendered as an empty
+    // box in plumb_emit_react; capped so a pathological inline SVG (a huge
+    // embedded illustration, not an icon) doesn't blow the JSON payload.
+    let svgMarkup: string | undefined;
+    if (tag === "svg") {
+      const raw = el.outerHTML;
+      if (typeof raw === "string" && raw.length > 0 && raw.length <= 20000) svgMarkup = raw;
+    }
+
     // Own text only when this element has no element children — matches
     // how a design tool's TEXT leaf works, rather than decomposing every
     // inline span into its own node.
@@ -155,6 +166,7 @@ export const htmlCaptureFn = function (rootSelector: string | null, maxNodes: nu
       style,
       isImage,
       imageSrc,
+      svgMarkup,
       children,
     };
   };

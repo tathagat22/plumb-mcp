@@ -120,6 +120,16 @@ function imageSrcOf(node: PdsNode): string | undefined {
   return node.assetId ? `./assets/${node.assetId}.png` : undefined;
 }
 
+/** Resolves `PdsNode.vectorPath`'s possible `$vN` token ref, same pattern
+ *  as `resolveColorRef` above. Before this was wired up, EVERY vector node
+ *  rendered as an empty box in `plumb_emit_react` regardless of source —
+ *  even though the Figma adapter already had the real path data. */
+function vectorPathOf(node: PdsNode, doc: PdsDocument): string | undefined {
+  const ref = node.vectorPath;
+  if (!ref) return undefined;
+  return ref.startsWith("$v") ? doc.tokens.vector?.[ref] : ref;
+}
+
 export function buildSemanticGraph(doc: PdsDocument): SemanticGraph {
   const nodes: Record<string, CirNode> = {};
   const edges: CirEdge[] = [];
@@ -134,6 +144,7 @@ export function buildSemanticGraph(doc: PdsDocument): SemanticGraph {
       children,
       chars: charsOf(node),
       imageSrc: imageSrcOf(node),
+      vectorPath: vectorPathOf(node, doc),
       style: styleOf(node, doc),
       sourceRef: { adapter: "figma", nativeId: node.id },
     };

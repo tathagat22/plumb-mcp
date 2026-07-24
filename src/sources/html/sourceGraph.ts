@@ -67,5 +67,11 @@ export interface HtmlSourceNode {
    *  React emitter, which is what first needed to actually USE this data
    *  rather than just classify around it. */
   imageSrc?: string;
+  /** Verbatim `outerHTML` of an inline `<svg>` (icons/logos/illustrations),
+   *  capped at 20,000 chars — real markup, not extracted geometry, so no
+   *  Figma-style path budget applies. Undefined for non-`<svg>` elements or
+   *  an oversized one; those still fall back to the empty-box placeholder,
+   *  same as before this field existed. */
+  svgMarkup?: string;
   children: HtmlSourceNode[];
 }

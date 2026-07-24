@@ -207,4 +207,18 @@ describe("buildSemanticGraph — resolved style", () => {
     expect(style?.selfAlign).toBe("stretch");
     expect(style?.sizing).toEqual({ w: "fill", h: "hug" });
   });
+
+  it("carries a literal vectorPath through, and resolves a $v token ref (Phase F1)", () => {
+    const nodes: Record<string, PdsNode> = {
+      literal: { id: "0", el: "literal", type: "vector", box: { w: 24, h: 24 }, vectorPath: "M0 0h24v24H0z" },
+      ref: { id: "1", el: "ref", type: "vector", box: { w: 24, h: 24 }, vectorPath: "$v1" },
+    };
+    const tokens: Partial<TokenTable> = { vector: { $v1: "M2 2h20v20H2z" } };
+
+    const g = buildSemanticGraph(doc(nodes, "literal", tokens));
+    expect(g.nodes.literal?.vectorPath).toBe("M0 0h24v24H0z");
+
+    const g2 = buildSemanticGraph(doc(nodes, "ref", tokens));
+    expect(g2.nodes.ref?.vectorPath).toBe("M2 2h20v20H2z");
+  });
 });

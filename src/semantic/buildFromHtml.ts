@@ -205,6 +205,7 @@ export function buildSemanticGraphFromHtml(root: HtmlSourceNode): SemanticGraph 
       children,
       chars: kind === "text" ? node.text : undefined,
       imageSrc: kind === "image" ? node.imageSrc : undefined,
+      svgMarkup: kind === "vector" ? node.svgMarkup : undefined,
       style: styleOf(node, kind),
       sourceRef: { adapter: "html", nativeId: node.id },
     };

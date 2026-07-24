@@ -93,4 +93,23 @@ describe("graphFromWebSpec — round-trips a projected doc back into a usable Se
 
     expect(rebuilt.edges).toEqual([]);
   });
+
+  it("carries svgMarkup and textCase through the projection (Phase F1 fix) — textCase was silently dropped before", () => {
+    const icon = node({
+      id: "icon",
+      kind: "vector",
+      svgMarkup: '<svg viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg>',
+    });
+    const label = node({ id: "label", kind: "text", chars: "SHOP NOW", style: { textCase: "UPPER" } });
+    const root = node({ id: "root", kind: "container", children: ["icon", "label"] });
+    const graph: SemanticGraph = { cirVersion: "1.0.0", root: "root", nodes: { root, icon, label }, edges: [] };
+
+    const projected = projectWebSpec("https://example.com", graph, []);
+    expect(projected.nodes.icon?.svgMarkup).toContain("<svg");
+    expect(projected.nodes.label?.textCase).toBe("UPPER");
+
+    const { graph: rebuilt } = graphFromWebSpec(projected);
+    expect(rebuilt.nodes.icon?.svgMarkup).toContain("<svg");
+    expect(rebuilt.nodes.label?.style.textCase).toBe("UPPER");
+  });
 });

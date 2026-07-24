@@ -118,6 +118,20 @@ export interface CirNode {
    *  before this every generated `<img>` would've been a meaningless
    *  placeholder regardless of source. */
   imageSrc?: string;
+  /** `vector`-kind nodes only. A bare SVG `d` path string (Figma source —
+   *  mirrors `PdsNode.vectorPath`, budget-capped in `inlineVectorPath()`,
+   *  `src/normalize/normalize.ts`). Mutually exclusive with `svgMarkup`;
+   *  the emitter checks this first since it's the cheaper, JSX-native shape.
+   *  Added for the same reason as `imageSrc` above — before this every
+   *  generated vector node rendered as an empty box regardless of source. */
+  vectorPath?: string;
+  /** `vector`-kind nodes only. Full already-serialized SVG markup (HTML
+   *  source — captured verbatim via `outerHTML`, since a live page's icon
+   *  is real markup, not geometry to extract). Rendered via
+   *  `dangerouslySetInnerHTML` rather than a JSX-attribute transform — real
+   *  SVGs use attributes (`class`, kebab-case) that don't map cleanly to
+   *  JSX, and correctness matters more than stylistic purity here. */
+  svgMarkup?: string;
   style: CirNodeStyle;
   /** The only adapter-leaking field. Nothing except "open in the source
    *  tool" tooling should ever read this — enrichers and projections must

@@ -257,6 +257,27 @@ function renderNode(
   }
 
   if (node.kind === "vector") {
+    if (node.vectorPath) {
+      // Figma source — a bare `d` path string; `d` never contains quotes or
+      // characters that need escaping, but every other dynamic value in
+      // this file goes through JSON.stringify for a JS-expression
+      // attribute, so this stays consistent rather than being the one
+      // literal-string exception.
+      return (
+        `${indent(depth)}<svg viewBox={\`0 0 ${px(node.box.w)} ${px(node.box.h)}\`}${style}>` +
+        `<path d={${JSON.stringify(node.vectorPath)}} /></svg>${comment}`
+      );
+    }
+    if (node.svgMarkup) {
+      // HTML source — already-serialized real markup. dangerouslySetInnerHTML
+      // rather than a JSX-attribute transform: real-world SVGs use `class`,
+      // kebab-case attrs, and namespaced attributes that don't map cleanly
+      // to JSX, and correctness matters more than stylistic purity for a
+      // generated-code output the agent will read, not hand-author.
+      return (
+        `${indent(depth)}<div${style} dangerouslySetInnerHTML={{ __html: ${JSON.stringify(node.svgMarkup)} }} />${comment}`
+      );
+    }
     warnings.push(`Node "${id}" is a vector (icon/illustration) — no vector path is reproduced, rendered as an empty box.`);
     return `${indent(depth)}<${tag}${style} />${comment}`;
   }

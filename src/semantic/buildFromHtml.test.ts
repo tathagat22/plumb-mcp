@@ -50,6 +50,19 @@ describe("buildSemanticGraphFromHtml — node kind mapping", () => {
     expect(buildSemanticGraphFromHtml(svg).nodes[svg.id]?.kind).toBe("vector");
   });
 
+  it("carries svgMarkup through onto the vector node (Phase F1) — was previously dropped entirely", () => {
+    const markup = '<svg viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg>';
+    const svg = html({ tag: "svg", isImage: true, box: { w: 24, h: 24 }, svgMarkup: markup });
+
+    expect(buildSemanticGraphFromHtml(svg).nodes[svg.id]?.svgMarkup).toBe(markup);
+  });
+
+  it("does not leak svgMarkup onto a non-vector node even if the field happens to be set", () => {
+    const div = html({ tag: "div", svgMarkup: "<svg></svg>" });
+
+    expect(buildSemanticGraphFromHtml(div).nodes[div.id]?.svgMarkup).toBeUndefined();
+  });
+
   it("prefers container over text when the node has element children even if it also has direct text", () => {
     // captureFn.ts only sets `text` on leaf (childless) nodes, so this
     // models what the mapper does if that invariant is ever violated —

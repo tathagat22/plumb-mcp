@@ -299,6 +299,36 @@ describe("lowerToReact — responsive sizing (Phase E)", () => {
   });
 });
 
+describe("lowerToReact — vectors render real content, not blank boxes (Phase F1)", () => {
+  it("renders an inline <svg><path/> for a Figma-sourced vectorPath", () => {
+    const icon = node({ id: "icon", kind: "vector", box: { w: 24, h: 24 }, vectorPath: "M0 0h24v24H0z" });
+    const { code, warnings } = lowerToReact(graph(icon, []));
+
+    expect(code).toContain("<svg");
+    expect(code).toContain('d={"M0 0h24v24H0z"}');
+    expect(warnings).toHaveLength(0);
+  });
+
+  it("renders dangerouslySetInnerHTML for an HTML-sourced svgMarkup", () => {
+    const markup = '<svg viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg>';
+    const icon = node({ id: "icon", kind: "vector", box: { w: 24, h: 24 }, svgMarkup: markup });
+    const { code, warnings } = lowerToReact(graph(icon, []));
+
+    expect(code).toContain("dangerouslySetInnerHTML");
+    expect(code).toContain(JSON.stringify(markup));
+    expect(warnings).toHaveLength(0);
+  });
+
+  it("still warns and renders an empty box when neither is present", () => {
+    const icon = node({ id: "icon", kind: "vector", box: { w: 24, h: 24 } });
+    const { code, warnings } = lowerToReact(graph(icon, []));
+
+    expect(code).not.toContain("<svg");
+    expect(code).not.toContain("dangerouslySetInnerHTML");
+    expect(warnings.some((w) => w.includes("no vector path is reproduced"))).toBe(true);
+  });
+});
+
 describe("lowerToReact — degrades per-node instead of throwing", () => {
   it("skips a missing child (a dangling reference) with a warning, and still renders the rest", () => {
     const present = node({ id: "present", kind: "text", chars: "here" });
