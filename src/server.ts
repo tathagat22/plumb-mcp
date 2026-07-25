@@ -15,6 +15,7 @@ import { registerPlumbNode } from "./tools/node";
 import { registerPlumbOutline } from "./tools/outline";
 import { registerPlumbQuery } from "./tools/query";
 import { registerPlumbReview } from "./tools/review";
+import { registerPlumbScanReferences } from "./tools/scanReferences";
 import { registerPlumbScreenshot } from "./tools/screenshot";
 import { registerPlumbSearch } from "./tools/search";
 import { registerPlumbSelection } from "./tools/selection";
@@ -62,7 +63,11 @@ export function createServer(): McpServer {
         "semantically compresses matched sections instead of expanding them. " +
         "plumb_import_web extracts the same structure and roles from a live " +
         "URL, no Figma involved; plumb_emit_react deterministically generates " +
-        "React/JSX from either a PDS or a plumb_import_web result.",
+        "React/JSX from either a PDS or a plumb_import_web result. " +
+        "plumb_scan_references scans several live reference URLs and returns " +
+        "a per-role (nav/hero/footer/card) style digest — concrete exemplars " +
+        "to inform a plumb_design DSL or a plumb_studio brief, not a build " +
+        "itself.",
     },
   );
 
@@ -87,6 +92,7 @@ export function createServer(): McpServer {
   registerPlumbAudit(server);
   registerPlumbImportWeb(server);
   registerPlumbEmitReact(server);
+  registerPlumbScanReferences(server);
   // Write direction: author + build from the Design DSL, source assets, review.
   registerPlumbDesign(server);
   registerBrandTool(server);

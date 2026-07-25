@@ -5,7 +5,7 @@ description: "Twenty-four Model Context Protocol tools built on one shared seman
 
 # Tools
 
-Plumb exposes **twenty-four** MCP tools, all reading from or writing to one shared **semantic design graph** — split across the two directions it plumbs — **design → code** (Figma or the live web, read) and **prompt → design** (write). Each tool has a focused, single responsibility; the agent composes them.
+Plumb exposes **twenty-five** MCP tools, all reading from or writing to one shared **semantic design graph** — split across the two directions it plumbs — **design → code** (Figma or the live web, read) and **prompt → design** (write). Each tool has a focused, single responsibility; the agent composes them.
 
 ## Read — Figma → code
 
@@ -32,6 +32,7 @@ Extract a design as a compact spec, build it, then diff the render against the d
 | [`plumb_audit`](/tools/plumb_audit) | Heuristic accessibility checks — text contrast against its resolved background, button touch-target size. |
 | [`plumb_import_web`](/tools/plumb_import_web) | Import a live webpage's structure and semantics via headless Chrome — no Figma connection needed. |
 | [`plumb_emit_react`](/tools/plumb_emit_react) | Deterministic React/JSX generator — works on a PDS or a `plumb_import_web` result, same emitter either way. |
+| [`plumb_scan_references`](/tools/plumb_scan_references) | Scan N live reference URLs and return a per-role (nav/hero/footer/card) style digest — concrete exemplars to inform a `plumb_design` DSL or `plumb_studio` brief. |
 
 ## Write — prompt → design (the director)
 
