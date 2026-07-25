@@ -62,6 +62,38 @@ function timeAgo(t: number, now: number): string {
   return `${m}m ${s % 60}s`;
 }
 
+const REFERENCE_TOOLS = new Set(["plumb_import_web", "plumb_scan_references"]);
+
+interface ReferenceStatus {
+  url: string;
+  status: "scanning" | "done" | "failed";
+  summary: string;
+  lastUpdate: number;
+}
+
+/** Groups the flat event log into one live status per reference URL —
+ *  plumb_import_web/plumb_scan_references (D1/D2) emit a "log" event per
+ *  URL while scanning and a "screen" event when that URL is done; no
+ *  screenshot bytes are emitted (both tools are structural extraction, not
+ *  visual capture), so this reads status from the event sequence, not an
+ *  image. Order preserved: most recently updated reference first, so an
+ *  in-progress scan naturally stays near the top. */
+function referenceStatuses(events: StudioEvent[]): ReferenceStatus[] {
+  const byUrl = new Map<string, ReferenceStatus>();
+  for (const e of events) {
+    if (!e.tool || !REFERENCE_TOOLS.has(e.tool) || !e.screen) continue;
+    const summary = e.summary ?? "";
+    const failed = /failed|no visible content/i.test(summary);
+    byUrl.set(e.screen, {
+      url: e.screen,
+      status: failed ? "failed" : e.kind === "screen" ? "done" : "scanning",
+      summary,
+      lastUpdate: e.t,
+    });
+  }
+  return [...byUrl.values()].sort((a, b) => b.lastUpdate - a.lastUpdate);
+}
+
 export default function App() {
   const { status, events } = useStudioSocket();
   const [mode, setMode] = useState<Mode>("mirror");
@@ -80,6 +112,7 @@ export default function App() {
   const done = lastFit?.done ?? false;
   const designImage = [...events].reverse().find((e) => e.image)?.image ?? null;
   const build = [...events].reverse().find((e) => e.buildHtml || e.buildUrl) ?? null;
+  const references = referenceStatuses(events);
 
   return (
     <div className="app">
@@ -112,6 +145,23 @@ export default function App() {
           </div>
         )}
       </section>
+
+      {references.length > 0 && (
+        <section className="panel references">
+          <h2>Scanning references</h2>
+          <div className="ref-row">
+            {references.map((r) => (
+              <div key={r.url} className={`ref-card ${r.status}`}>
+                <div className="ref-head">
+                  <span className={`dot ${r.status === "done" ? "open" : r.status === "failed" ? "closed" : "connecting"}`} />
+                  <span className="ref-url" title={r.url}>{r.url.replace(/^https?:\/\//, "")}</span>
+                </div>
+                <div className="ref-sum">{r.summary || "…"}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="stage">
         <figure>
