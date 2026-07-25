@@ -46,6 +46,22 @@ export interface FigmaPaint {
    * hex when this is present.
    */
   var?: string;
+  /**
+   * IMAGE paints only — Figma's per-image adjustment sliders, each roughly
+   * -1..1 (0/absent = untouched). Plugin path only: the raw Figma Plugin
+   * API object is shallow-copied through `normalizePaint()`
+   * (figma-plugin/code.ts) unmodified, so this requires no plugin-side
+   * capture code — it was already on the wire, just not typed or read.
+   */
+  filters?: {
+    exposure?: number;
+    contrast?: number;
+    saturation?: number;
+    temperature?: number;
+    tint?: number;
+    highlights?: number;
+    shadows?: number;
+  };
 }
 
 export interface FigmaEffect {

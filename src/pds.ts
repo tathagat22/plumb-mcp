@@ -139,6 +139,30 @@ export interface ImageFill {
   crop?: number[][];
   /** Image rotation, degrees clockwise (v0.10+). Omitted at 0°. */
   rotation?: number;
+  /**
+   * Ready-to-paste CSS `filter` value approximating Figma's per-image
+   * adjustment sliders (exposure/contrast/saturation → `brightness()`/
+   * `contrast()`/`saturate()` — the three that have a clean 1:1 CSS
+   * equivalent). Omitted when none of those three are set. Figma's
+   * `temperature`/`tint`/`highlights`/`shadows` have no native CSS filter
+   * equivalent and are intentionally NOT approximated into this string —
+   * approximating those would misrepresent what the CSS actually
+   * reproduces; `filtersRaw` below carries them for a consumer that wants
+   * the underlying numbers regardless.
+   */
+  cssFilter?: string;
+  /** Raw Figma filter values, roughly -1..1 each, 0/absent = untouched.
+   *  Present whenever the source paint had ANY filter set, even ones
+   *  `cssFilter` couldn't express. */
+  filtersRaw?: {
+    exposure?: number;
+    contrast?: number;
+    saturation?: number;
+    temperature?: number;
+    tint?: number;
+    highlights?: number;
+    shadows?: number;
+  };
 }
 
 export type Fill = SolidFill | GradientFill | ImageFill;

@@ -67,6 +67,25 @@ const GRADIENT_KIND: Record<string, GradientFill["type"]> = {
   GRADIENT_DIAMOND: "diamond-gradient",
 };
 
+/** Figma's exposure/contrast/saturation sliders are roughly -1..1, 0 =
+ *  untouched — the same scale CSS's own `brightness()`/`contrast()`/
+ *  `saturate()` use around their neutral point of 1. `1 + value` is the
+ *  standard approximation (used by every other tool that bridges these two
+ *  scales); Figma's own curve is closer to exponential for exposure
+ *  specifically, so this is a faithful-enough approximation, not a
+ *  bit-exact reproduction. */
+function cssImageFilter(f: NonNullable<FigmaPaint["filters"]>): string | undefined {
+  const parts: string[] = [];
+  if (typeof f.exposure === "number" && f.exposure !== 0) parts.push(`brightness(${round(1 + f.exposure, 2)})`);
+  if (typeof f.contrast === "number" && f.contrast !== 0) parts.push(`contrast(${round(1 + f.contrast, 2)})`);
+  if (typeof f.saturation === "number" && f.saturation !== 0) parts.push(`saturate(${round(1 + f.saturation, 2)})`);
+  return parts.length > 0 ? parts.join(" ") : undefined;
+}
+
+function hasAnyFilter(f: FigmaPaint["filters"]): f is NonNullable<FigmaPaint["filters"]> {
+  return !!f && Object.values(f).some((v) => typeof v === "number" && v !== 0);
+}
+
 const SCALE_MODE: Record<string, NonNullable<ImageFill["scaleMode"]>> = {
   FILL: "fill",
   FIT: "fit",
@@ -135,6 +154,11 @@ function fillOf(p: FigmaPaint): Fill | undefined {
     if (Array.isArray(p.imageTransform)) out.crop = p.imageTransform as number[][];
     if (typeof p.rotation === "number" && Math.abs(p.rotation) > 0.0001) {
       out.rotation = round(p.rotation, 2);
+    }
+    if (hasAnyFilter(p.filters)) {
+      out.filtersRaw = { ...p.filters };
+      const css = cssImageFilter(p.filters);
+      if (css) out.cssFilter = css;
     }
     return out;
   }
