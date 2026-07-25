@@ -55,7 +55,7 @@ Each key is a full `WebSpecDocument`, same shape as the single-capture return �
 
 `nav` / `hero` / `footer` / `sidebar` / `card` all use the exact same conservative heuristics Figma-sourced screens get (structural signals only — box size, position, layout flow, repeat-group similarity; silence over a guess). `card` detection runs a structural-similarity pass over each container's direct children (same kind, same child-shape, similar size, ≥3 of them) to find repeat groups — the HTML-adapter analog of Figma's plugin-side repeat-group detection.
 
-CSS Grid layouts and complex fixed/sticky-positioned regions currently under-detect (the layout mapper only understands `display:flex`) — the classifier correctly abstains rather than guessing wrong, so a Grid-heavy nav may simply carry no role.
+`display:grid` containers map to a grid-shaped `layout` (`flow: "grid"`, `columns`/`rows` as the browser's resolved px track sizes, `gap`/`gapCross` for column-gap/row-gap) — `plumb_emit_react` renders these as real `display: grid` output, not flex. Complex fixed/sticky-positioned regions still currently under-detect for role classification (nav/hero/footer/sidebar) — the classifier correctly abstains rather than guessing wrong.
 
 ## When the agent should use it
 

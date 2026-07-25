@@ -21,6 +21,13 @@ export interface HtmlStyle {
   justifyContent?: string;
   alignItems?: string;
   flexWrap?: string;
+  /** CSS Grid — captured alongside the flex properties above regardless of
+   *  `display`, same as everything else here; `layoutOf()` picks the
+   *  matching branch. */
+  gridTemplateColumns?: string;
+  gridTemplateRows?: string;
+  rowGap?: string;
+  columnGap?: string;
   paddingTop?: string;
   paddingRight?: string;
   paddingBottom?: string;

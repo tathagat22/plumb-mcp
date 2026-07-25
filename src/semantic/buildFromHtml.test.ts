@@ -121,6 +121,43 @@ describe("buildSemanticGraphFromHtml — layout", () => {
 
     expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.style.layout).toBeUndefined();
   });
+
+  it("maps display:grid to a grid-shaped PdsLayout (Phase F5)", () => {
+    const node = html({
+      tag: "div",
+      style: {
+        display: "grid",
+        gridTemplateColumns: "384px 384px 384px",
+        gridTemplateRows: "none",
+        columnGap: "24px",
+        rowGap: "16px",
+        paddingTop: "8px",
+        paddingRight: "8px",
+        paddingBottom: "8px",
+        paddingLeft: "8px",
+      },
+    });
+
+    expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.style.layout).toEqual({
+      flow: "grid",
+      pad: [8, 8, 8, 8],
+      columns: "384px 384px 384px",
+      gap: 24,
+      gapCross: 16,
+    });
+  });
+
+  it("omits rows when the computed value is the CSS default 'none'", () => {
+    const node = html({ tag: "div", style: { display: "grid", gridTemplateRows: "none" } });
+
+    expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.style.layout?.rows).toBeUndefined();
+  });
+
+  it("carries an explicit grid-template-rows through when the site sets one", () => {
+    const node = html({ tag: "div", style: { display: "grid", gridTemplateRows: "200px 200px" } });
+
+    expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.style.layout?.rows).toBe("200px 200px");
+  });
 });
 
 describe("buildSemanticGraphFromHtml — color and surface", () => {

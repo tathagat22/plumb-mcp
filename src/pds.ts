@@ -4,14 +4,18 @@
  * implement correctly. See plan §5.
  */
 
-export type Flow = "row" | "col";
+export type Flow = "row" | "col" | "grid";
 
 export interface PdsLayout {
-  /** flex-direction */
+  /** flex-direction — or `"grid"` for a CSS Grid container (web adapter
+   *  only; Figma has no native Grid concept, so `normalize()` never
+   *  produces this value). When `flow === "grid"`, `columns`/`rows` carry
+   *  the grid-specific shape and `justify`/`align`/`wrap` don't apply. */
   flow: Flow;
-  /** itemSpacing → gap */
+  /** itemSpacing → gap (flex) — or grid column-gap when `flow === "grid"`. */
   gap?: number;
-  /** counterAxisSpacing on a wrapping container */
+  /** counterAxisSpacing on a wrapping container (flex) — or grid row-gap
+   *  when `flow === "grid"`. */
   gapCross?: number;
   /** [top, right, bottom, left] */
   pad: [number, number, number, number];
@@ -21,6 +25,18 @@ export interface PdsLayout {
   align?: string;
   /** flex-wrap */
   wrap?: boolean;
+  /** `grid-template-columns` — only present when `flow === "grid"`. Web
+   *  adapter only. This is the browser's COMPUTED value (resolved track
+   *  sizes in px, e.g. `"384px 384px 384px"`), not the authored shorthand
+   *  (`"repeat(3, 1fr)"`) — same "computed, not authored" convention every
+   *  other captured style in this adapter already follows (padding, colors,
+   *  etc.), and still faithful for a renderer at the captured viewport. */
+  columns?: string;
+  /** `grid-template-rows`, same computed-value convention as `columns` —
+   *  only present when the site sets it explicitly (most real grids only
+   *  constrain columns and let rows size to content, so this is often
+   *  absent even on a real grid container). */
+  rows?: string;
   /**
    * Main-axis content size: sum(children main-axis box) + (n-1)*gap.
    * Emitted only when `justify` is set AND the result is meaningfully

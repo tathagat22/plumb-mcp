@@ -69,14 +69,34 @@ function kindOf(node: HtmlSourceNode): NodeKind {
   return "container";
 }
 
+/** `display:grid` → a grid-shaped `PdsLayout` (Phase F5). Web adapter only —
+ *  Figma has no native Grid concept, so `normalize()` never produces
+ *  `flow: "grid"`. `columns`/`rows` are the browser's COMPUTED values
+ *  (resolved px tracks), not the authored shorthand — see `PdsLayout.
+ *  columns`'s own docstring for why that's still faithful. */
+function gridLayoutOf(style: HtmlStyle): PdsLayout {
+  const layout: PdsLayout = {
+    flow: "grid",
+    pad: [px(style.paddingTop), px(style.paddingRight), px(style.paddingBottom), px(style.paddingLeft)],
+  };
+  if (style.gridTemplateColumns) layout.columns = style.gridTemplateColumns;
+  if (style.gridTemplateRows && style.gridTemplateRows !== "none") layout.rows = style.gridTemplateRows;
+  const columnGap = px(style.columnGap);
+  if (columnGap) layout.gap = columnGap;
+  const rowGap = px(style.rowGap);
+  if (rowGap) layout.gapCross = rowGap;
+  return layout;
+}
+
 /** `display:flex` → `PdsLayout`. `PdsLayout` was already CSS-shaped before
  *  this adapter existed (`normalize/layout.ts`'s `toLayout()`: "Auto-layout
  *  → flexbox... the single source of truth") — `justify-content` values
- *  pass through unchanged, no Figma-enum translation needed. Grid and other
- *  non-flex layout modes aren't mapped to a layout object (their children
- *  keep DOM-order + real `pos`, which the section/sidebar heuristics can
- *  still reason about via the free-canvas fallback path). */
+ *  pass through unchanged, no Figma-enum translation needed. Other non-flex,
+ *  non-grid layout modes still aren't mapped to a layout object (their
+ *  children keep DOM-order + real `pos`, which the section/sidebar
+ *  heuristics can still reason about via the free-canvas fallback path). */
 function layoutOf(style: HtmlStyle): PdsLayout | undefined {
+  if (style.display === "grid" || style.display === "inline-grid") return gridLayoutOf(style);
   if (style.display !== "flex" && style.display !== "inline-flex") return undefined;
   const flow = style.flexDirection === "column" || style.flexDirection === "column-reverse" ? "col" : "row";
   const layout: PdsLayout = {

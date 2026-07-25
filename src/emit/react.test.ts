@@ -224,6 +224,39 @@ describe("lowerToReact — text styling", () => {
   });
 });
 
+describe("lowerToReact — CSS Grid (Phase F5)", () => {
+  it("emits display:grid + gridTemplateColumns/rowGap/columnGap instead of flex", () => {
+    const card = node({ id: "card", kind: "container" });
+    const grid = node({
+      id: "grid",
+      kind: "container",
+      children: ["card"],
+      style: { layout: { flow: "grid", pad: [0, 0, 0, 0], columns: "384px 384px 384px", gap: 24, gapCross: 16 } },
+    });
+    const { code } = lowerToReact(graph(grid, [card]));
+
+    expect(code).toContain('display: "grid"');
+    expect(code).toContain('gridTemplateColumns: "384px 384px 384px"');
+    expect(code).toContain("columnGap: 24");
+    expect(code).toContain("rowGap: 16");
+    expect(code).not.toContain('display: "flex"');
+  });
+
+  it("does not apply flex responsive-sizing (flexGrow/alignSelf) to a grid child", () => {
+    const item = node({ id: "item", kind: "container", box: { w: 50, h: 50 }, style: { sizing: { w: "fill" } } });
+    const grid = node({
+      id: "grid",
+      kind: "container",
+      children: ["item"],
+      style: { layout: { flow: "grid", pad: [0, 0, 0, 0], columns: "1fr 1fr" } },
+    });
+    const { code } = lowerToReact(graph(grid, [item]));
+
+    expect(code).not.toContain("flexGrow");
+    expect(code).toContain("width: 50"); // stays pixel-faithful under a grid parent
+  });
+});
+
 describe("lowerToReact — responsive sizing (Phase E)", () => {
   it("emits flexGrow instead of a pixel width for a fill-sized child of a row parent", () => {
     const child = node({ id: "child", kind: "container", style: { sizing: { w: "fill" } } });

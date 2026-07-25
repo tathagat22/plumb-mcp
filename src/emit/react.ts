@@ -113,20 +113,21 @@ const SELF_ALIGN_CSS: Record<"stretch" | "min" | "center" | "max", string> = {
 function styleEntriesFor(
   node: CirNode,
   isRoot: boolean,
-  parentFlow: "row" | "col" | undefined,
+  parentFlow: "row" | "col" | "grid" | undefined,
 ): [string, string][] {
   const entries: [string, string][] = [];
   const s = node.style;
   const parentHasLayout = parentFlow !== undefined;
 
-  // Responsive sizing only applies to a flex CHILD (parent has layout) —
-  // the root and any absolutely-positioned node keep the pixel-faithful
-  // default, matching PDS's own "sizing only matters under auto-layout"
-  // contract. `mainIsWidth` is the parent's main axis: width under a row
-  // parent, height under a column parent.
+  // Responsive sizing (flexGrow/alignSelf) is a flexbox concept — grid
+  // items stretch to their cell by default and don't use flex-grow at all,
+  // so a grid parent skips this block entirely and its children stay
+  // pixel-faithful, same as a node with no layout parent. `mainIsWidth` is
+  // the flex parent's main axis: width under a row parent, height under a
+  // column parent.
   let emitWidth = true;
   let emitHeight = true;
-  if (!isRoot && parentHasLayout) {
+  if (!isRoot && (parentFlow === "row" || parentFlow === "col")) {
     const mainIsWidth = parentFlow === "row";
     const mainSizing = mainIsWidth ? s.sizing?.w : s.sizing?.h;
     const crossSizing = mainIsWidth ? s.sizing?.h : s.sizing?.w;
@@ -165,7 +166,18 @@ function styleEntriesFor(
     entries.push(["position", '"relative"']);
   }
 
-  if (s.layout) {
+  if (s.layout?.flow === "grid") {
+    // Web adapter only — Figma has no native Grid concept. `columns`/`rows`
+    // are already the browser's resolved px track sizes (see PdsLayout.
+    // columns's own docstring), so they paste straight in.
+    entries.push(["display", '"grid"']);
+    if (s.layout.columns) entries.push(["gridTemplateColumns", JSON.stringify(s.layout.columns)]);
+    if (s.layout.rows) entries.push(["gridTemplateRows", JSON.stringify(s.layout.rows)]);
+    if (s.layout.gap) entries.push(["columnGap", px(s.layout.gap)]);
+    if (s.layout.gapCross) entries.push(["rowGap", px(s.layout.gapCross)]);
+    const [t, r, b, l] = s.layout.pad;
+    if (t || r || b || l) entries.push(["padding", JSON.stringify(`${px(t)}px ${px(r)}px ${px(b)}px ${px(l)}px`)]);
+  } else if (s.layout) {
     entries.push(["display", '"flex"'], ["flexDirection", JSON.stringify(s.layout.flow === "col" ? "column" : "row")]);
     const [t, r, b, l] = s.layout.pad;
     if (t || r || b || l) entries.push(["padding", JSON.stringify(`${px(t)}px ${px(r)}px ${px(b)}px ${px(l)}px`)]);
@@ -215,7 +227,7 @@ function styleEntriesFor(
   return entries;
 }
 
-function styleAttr(node: CirNode, isRoot: boolean, parentFlow: "row" | "col" | undefined): string {
+function styleAttr(node: CirNode, isRoot: boolean, parentFlow: "row" | "col" | "grid" | undefined): string {
   const entries = styleEntriesFor(node, isRoot, parentFlow);
   if (!entries.length) return "";
   return ` style={{ ${entries.map(([k, v]) => `${k}: ${v}`).join(", ")} }}`;
@@ -232,7 +244,7 @@ function renderNode(
   warnings: string[],
   depth: number,
   isRoot: boolean,
-  parentFlow: "row" | "col" | undefined,
+  parentFlow: "row" | "col" | "grid" | undefined,
 ): string {
   const node = graph.nodes[id];
   if (!node) {

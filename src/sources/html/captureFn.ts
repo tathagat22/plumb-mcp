@@ -96,6 +96,10 @@ export const htmlCaptureFn = function (rootSelector: string | null, maxNodes: nu
       // render/captureFn.ts's own backdropFilter capture: still
       // vendor-prefixed in some engines.
       backdropFilter: cs.backdropFilter || cs.webkitBackdropFilter,
+      gridTemplateColumns: cs.gridTemplateColumns,
+      gridTemplateRows: cs.gridTemplateRows,
+      rowGap: cs.rowGap,
+      columnGap: cs.columnGap,
     };
 
     const children: unknown[] = [];
