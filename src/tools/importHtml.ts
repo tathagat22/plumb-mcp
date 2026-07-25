@@ -6,6 +6,7 @@ import { runEnrichers } from "../semantic/enricher";
 import { RoleEnricher } from "../semantic/enrichers/role";
 import { projectWebSpec } from "../semantic/project/web";
 import { googleFontsLinkUrl, isKnownGoogleFont } from "../assets/providers/fonts";
+import { emitStudio } from "../studio/events";
 import { fail, ok } from "./shared";
 import type { WebSpecDocument } from "../semantic/project/web";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -95,10 +96,22 @@ export function registerPlumbImportWeb(server: McpServer): void {
         const viewportList = args.viewports === true ? DEFAULT_VIEWPORTS : args.viewports;
 
         if (viewportList) {
+          emitStudio({
+            kind: "log",
+            tool: "plumb_import_web",
+            screen: args.url,
+            summary: `scanning ${args.url} at ${viewportList.length} viewport(s)…`,
+          });
           let captures: Awaited<ReturnType<typeof captureHtmlSourceAtViewports>>;
           try {
             captures = await captureHtmlSourceAtViewports(args.url, viewportList, { rootSelector: args.selector });
           } catch (e) {
+            emitStudio({
+              kind: "log",
+              tool: "plumb_import_web",
+              screen: args.url,
+              summary: `scan failed — ${e instanceof Error ? e.message : String(e)}`,
+            });
             throw describeCaptureError(e, args.url);
           }
 
@@ -109,6 +122,12 @@ export function registerPlumbImportWeb(server: McpServer): void {
                 error: `No visible content captured at "${args.url}" (${label})${args.selector ? ` — selector "${args.selector}"` : ""}.`,
                 nextAction: "Check the page actually loads content at this size, or drop `selector` to walk the whole body.",
               };
+              emitStudio({
+                kind: "log",
+                tool: "plumb_import_web",
+                screen: args.url,
+                summary: `${label}: no visible content captured`,
+              });
               continue;
             }
             const graph = buildSemanticGraphFromHtml(root);
@@ -116,14 +135,33 @@ export function registerPlumbImportWeb(server: McpServer): void {
             const doc = projectWebSpec(args.url, graph, annotations);
             attachFontLinks(doc);
             viewportDocs[label] = doc;
+            emitStudio({
+              kind: "log",
+              tool: "plumb_import_web",
+              screen: args.url,
+              summary: `${label}: ${doc.meta.nodeCount} node(s) captured`,
+            });
           }
+          emitStudio({
+            kind: "screen",
+            tool: "plumb_import_web",
+            screen: args.url,
+            summary: `imported ${args.url} — ${viewportList.length} viewport(s)`,
+          });
           return ok({ url: args.url, viewports: viewportDocs });
         }
 
+        emitStudio({ kind: "log", tool: "plumb_import_web", screen: args.url, summary: `scanning ${args.url}…` });
         let root;
         try {
           root = await captureHtmlSource(args.url, { rootSelector: args.selector });
         } catch (e) {
+          emitStudio({
+            kind: "log",
+            tool: "plumb_import_web",
+            screen: args.url,
+            summary: `scan failed — ${e instanceof Error ? e.message : String(e)}`,
+          });
           throw describeCaptureError(e, args.url);
         }
         if (!root) {
@@ -137,6 +175,12 @@ export function registerPlumbImportWeb(server: McpServer): void {
         const annotations = runEnrichers(graph, [RoleEnricher]);
         const doc = projectWebSpec(args.url, graph, annotations);
         attachFontLinks(doc);
+        emitStudio({
+          kind: "screen",
+          tool: "plumb_import_web",
+          screen: args.url,
+          summary: `imported ${args.url} — ${doc.meta.nodeCount} node(s)`,
+        });
         return ok(doc);
       } catch (e) {
         return fail(e);
