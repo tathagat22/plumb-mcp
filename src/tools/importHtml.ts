@@ -5,6 +5,7 @@ import { PlumbError } from "../errors";
 import { runEnrichers } from "../semantic/enricher";
 import { RoleEnricher } from "../semantic/enrichers/role";
 import { projectWebSpec } from "../semantic/project/web";
+import { googleFontsLinkUrl, isKnownGoogleFont } from "../assets/providers/fonts";
 import { fail, ok } from "./shared";
 import type { WebSpecDocument } from "../semantic/project/web";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -18,7 +19,10 @@ const DESCRIPTION =
   "using the exact same classifier plumb_node's `pattern` field uses. Use " +
   "this to understand an existing site's structure, audit it " +
   "(plumb_audit accepts this shape too), or track it over time " +
-  "(plumb_diff two imports of the same URL). Pass `viewports` to capture " +
+  "(plumb_diff two imports of the same URL). Text nodes also carry " +
+  "`fontFamily`, and the result carries `fontLinks` — <link> URLs for every " +
+  "captured family that matches a known Google Fonts family — so generated " +
+  "code doesn't silently fall back to a system font. Pass `viewports` to capture " +
   "the SAME page at multiple sizes in one call (e.g. mobile + desktop) — " +
   "a real responsive layout (a hamburger nav under 768px, a grid that " +
   "collapses to one column) is invisible to a single fixed-size capture.";
@@ -28,6 +32,22 @@ const DEFAULT_VIEWPORTS = [
   { label: "tablet", width: 768, height: 1024 },
   { label: "desktop", width: 1440, height: 900 },
 ];
+
+/** Scans every text node's `fontFamily`, matches against the keyless Google
+ *  Fonts manifest (`src/assets/providers/fonts.ts` — the same list the
+ *  WRITE/generation path already resolves fonts from), and attaches
+ *  dedup'd `<link>` URLs. Without this, an agent generating code from the
+ *  captured `fontFamily` alone has no way to actually LOAD that font — the
+ *  page would silently render in a fallback. Mutates `doc` in place; a
+ *  no-op (no `fontLinks` field at all) when nothing captured matches, so
+ *  callers don't have to special-case "no fonts detected." */
+function attachFontLinks(doc: WebSpecDocument): void {
+  const families = new Set<string>();
+  for (const node of Object.values(doc.nodes)) {
+    if (node.fontFamily && isKnownGoogleFont(node.fontFamily)) families.add(node.fontFamily);
+  }
+  if (families.size > 0) doc.fontLinks = [...families].map(googleFontsLinkUrl);
+}
 
 /** Shared between the single- and multi-viewport capture paths. */
 function describeCaptureError(e: unknown, url: string): PlumbError {
@@ -93,7 +113,9 @@ export function registerPlumbImportWeb(server: McpServer): void {
             }
             const graph = buildSemanticGraphFromHtml(root);
             const annotations = runEnrichers(graph, [RoleEnricher]);
-            viewportDocs[label] = projectWebSpec(args.url, graph, annotations);
+            const doc = projectWebSpec(args.url, graph, annotations);
+            attachFontLinks(doc);
+            viewportDocs[label] = doc;
           }
           return ok({ url: args.url, viewports: viewportDocs });
         }
@@ -113,7 +135,9 @@ export function registerPlumbImportWeb(server: McpServer): void {
 
         const graph = buildSemanticGraphFromHtml(root);
         const annotations = runEnrichers(graph, [RoleEnricher]);
-        return ok(projectWebSpec(args.url, graph, annotations));
+        const doc = projectWebSpec(args.url, graph, annotations);
+        attachFontLinks(doc);
+        return ok(doc);
       } catch (e) {
         return fail(e);
       }

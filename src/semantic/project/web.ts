@@ -24,6 +24,9 @@ export interface WebNode {
   roleConfidence?: number;
   layout?: PdsLayout;
   textPx?: number;
+  /** Primary font family — text nodes only. See `CirNodeStyle.fontFamily`'s
+   *  own docstring. Feeds `WebSpecDocument.fontLinks`. */
+  fontFamily?: string;
   isSurface?: boolean;
   fillColor?: string;
   /** Full fill stack — gradients, or a compact-would-be-lossy multi-layer
@@ -64,6 +67,13 @@ export interface WebSpecDocument {
   nodes: Record<string, WebNode>;
   meta: { nodeCount: number };
   next: string;
+  /** `<link>` URLs for every distinct captured `fontFamily` that matches a
+   *  known Google Fonts family — set by `src/tools/importHtml.ts` after
+   *  projection (font-catalog matching lives with the asset engine, not
+   *  this projection layer). Without this, a generated page silently falls
+   *  back to a system font even when the source page used a real webfont —
+   *  the captured `fontFamily` alone isn't enough to actually LOAD it. */
+  fontLinks?: string[];
 }
 
 export function projectWebSpec(url: string, graph: SemanticGraph, annotations: CirAnnotation[]): WebSpecDocument {
@@ -85,6 +95,7 @@ export function projectWebSpec(url: string, graph: SemanticGraph, annotations: C
       roleConfidence: roleConfidenceByNode.get(id),
       layout: n.style.layout,
       textPx: n.style.textPx,
+      fontFamily: n.style.fontFamily,
       isSurface: n.style.isSurface,
       fillColor: n.style.fillColor,
       fills: n.style.fills,
@@ -149,6 +160,7 @@ export function graphFromWebSpec(doc: WebSpecDocument): { graph: SemanticGraph; 
       style: {
         layout: n.layout,
         textPx: n.textPx,
+        fontFamily: n.fontFamily,
         isSurface: n.isSurface,
         fillColor: n.fillColor,
         fills: n.fills,

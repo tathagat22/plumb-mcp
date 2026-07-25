@@ -138,6 +138,26 @@ const TEXT_TRANSFORM_MAP: Record<string, "UPPER" | "LOWER" | "TITLE" | undefined
   capitalize: "TITLE",
 };
 
+/** A computed `font-family` is the FULL fallback stack (`'"Inter", -apple-
+ *  system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'`), not just
+ *  the intended family — the browser always resolves it to a complete
+ *  stack even when the author only wrote one name. Take the first entry,
+ *  strip quotes, and skip it if it's a generic keyword or a system-font
+ *  placeholder (meaning the author never set a real family at all — the
+ *  page is just using the OS default, nothing to link). */
+const GENERIC_FONT_FAMILIES = new Set([
+  "serif", "sans-serif", "monospace", "cursive", "fantasy",
+  "system-ui", "ui-sans-serif", "ui-serif", "ui-monospace", "ui-rounded",
+  "-apple-system", "blinkmacsystemfont",
+]);
+
+function primaryFontFamily(stack: string | undefined): string | undefined {
+  if (!stack) return undefined;
+  const first = stack.split(",")[0]?.trim().replace(/^["']|["']$/g, "");
+  if (!first || GENERIC_FONT_FAMILIES.has(first.toLowerCase())) return undefined;
+  return first;
+}
+
 function styleOf(node: HtmlSourceNode, kind: NodeKind): CirNodeStyle {
   const s = node.style;
   const style: CirNodeStyle = {};
@@ -146,6 +166,8 @@ function styleOf(node: HtmlSourceNode, kind: NodeKind): CirNodeStyle {
   if (kind === "text") {
     const size = px(s.fontSize);
     if (size) style.textPx = size;
+    const family = primaryFontFamily(s.fontFamily);
+    if (family) style.fontFamily = family;
   }
   if (isSurface(node)) style.isSurface = true;
 

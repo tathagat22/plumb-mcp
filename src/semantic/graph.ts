@@ -25,6 +25,12 @@ export interface CirNodeStyle {
   layout?: PdsLayout;
   /** Resolved font size in px — text nodes only. */
   textPx?: number;
+  /** The primary font family — text nodes only, first entry of the CSS
+   *  font-family fallback stack (quotes stripped), not the whole stack.
+   *  Web adapter only today; used to detect a known Google Fonts family and
+   *  surface a `<link>` hint (`WebSpecDocument.fontLinks`) so a generated
+   *  page doesn't silently fall back to a system font. */
+  fontFamily?: string;
   /** Has a radius, a shadow/blur effect, or a fill+stroke pair — reads as a
    *  bounded, styled "surface" rather than a bare layout container. */
   isSurface?: boolean;

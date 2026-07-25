@@ -257,6 +257,22 @@ describe("lowerToReact — CSS Grid (Phase F5)", () => {
   });
 });
 
+describe("lowerToReact — fontFamily (Phase F3)", () => {
+  it("emits fontFamily for a text node that carries one", () => {
+    const text = node({ id: "text", kind: "text", chars: "Ship faster", style: { fontFamily: "Inter" } });
+    const { code } = lowerToReact(graph(text, []));
+
+    expect(code).toContain('fontFamily: "Inter"');
+  });
+
+  it("omits fontFamily when the node has none", () => {
+    const text = node({ id: "text", kind: "text", chars: "Ship faster" });
+    const { code } = lowerToReact(graph(text, []));
+
+    expect(code).not.toContain("fontFamily");
+  });
+});
+
 describe("lowerToReact — responsive sizing (Phase E)", () => {
   it("emits flexGrow instead of a pixel width for a fill-sized child of a row parent", () => {
     const child = node({ id: "child", kind: "container", style: { sizing: { w: "fill" } } });

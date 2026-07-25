@@ -215,6 +215,7 @@ function styleEntriesFor(
 
   if (node.kind === "text") {
     if (s.textPx) entries.push(["fontSize", px(s.textPx)]);
+    if (s.fontFamily) entries.push(["fontFamily", JSON.stringify(s.fontFamily)]);
     if (s.textAlign) entries.push(["textAlign", JSON.stringify(s.textAlign)]);
     if (s.textDecoration) entries.push(["textDecoration", JSON.stringify(s.textDecoration)]);
     if (s.textCase) entries.push(["textTransform", JSON.stringify(TEXT_TRANSFORM_CSS[s.textCase])]);

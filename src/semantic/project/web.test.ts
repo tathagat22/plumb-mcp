@@ -112,4 +112,15 @@ describe("graphFromWebSpec — round-trips a projected doc back into a usable Se
     expect(rebuilt.nodes.icon?.svgMarkup).toContain("<svg");
     expect(rebuilt.nodes.label?.style.textCase).toBe("UPPER");
   });
+
+  it("carries fontFamily through the projection in both directions (Phase F3)", () => {
+    const label = node({ id: "label", kind: "text", chars: "Ship faster", style: { fontFamily: "Inter" } });
+    const graph: SemanticGraph = { cirVersion: "1.0.0", root: "label", nodes: { label }, edges: [] };
+
+    const projected = projectWebSpec("https://example.com", graph, []);
+    expect(projected.nodes.label?.fontFamily).toBe("Inter");
+
+    const { graph: rebuilt } = graphFromWebSpec(projected);
+    expect(rebuilt.nodes.label?.style.fontFamily).toBe("Inter");
+  });
 });

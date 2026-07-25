@@ -35,7 +35,9 @@ Import a live webpage's structure and semantics — no Figma connection needed. 
 }
 ```
 
-Each node carries real CSS values — a resolved hex color, an actual px number — never a Figma-style `$cN` token ref. Fields present depend on the node: `fills`/`effects` for gradients/shadows, `imageSrc` for images, `svgMarkup` for inline `<svg>` icons/logos (verbatim markup, ≤20,000 chars — feeds `plumb_emit_react`'s real `<svg>`/`dangerouslySetInnerHTML` output instead of an empty box), `textAlign`/`textDecoration`/`textCase`/`letterSpacing`/`lineHeightPx` for text, `borderRadius`/`borderColor`/`borderWidth` for styled surfaces.
+Each node carries real CSS values — a resolved hex color, an actual px number — never a Figma-style `$cN` token ref. Fields present depend on the node: `fills`/`effects` for gradients/shadows, `imageSrc` for images, `svgMarkup` for inline `<svg>` icons/logos (verbatim markup, ≤20,000 chars — feeds `plumb_emit_react`'s real `<svg>`/`dangerouslySetInnerHTML` output instead of an empty box), `textAlign`/`textDecoration`/`textCase`/`fontFamily`/`letterSpacing`/`lineHeightPx` for text, `borderRadius`/`borderColor`/`borderWidth` for styled surfaces.
+
+`fontFamily` is the primary font (first entry of the computed fallback stack, quotes stripped) — a generic keyword or a bare system-font stack means the page never set a real family, so it's omitted. The document itself carries a top-level `fontLinks: string[]` — a `<link>`-equivalent stylesheet URL for every distinct captured family that matches a known Google Fonts family (present even in multi-viewport mode, per viewport). Without loading these, generated code with the right `fontFamily` value still silently renders in a fallback font.
 
 ## Returns (`viewports` passed)
 

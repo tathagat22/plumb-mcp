@@ -77,6 +77,27 @@ const CURATED: CuratedFont[] = [
 
 const DEFAULT_VARIANTS = ["400", "500", "600", "700"];
 
+/** Lowercased for case-insensitive matching against a captured `font-family`
+ *  value, which may not match the catalog's canonical casing exactly. */
+const CURATED_FAMILY_NAMES = new Set(CURATED.map((f) => f.family.toLowerCase()));
+
+/** True when `family` matches a family in the keyless curated manifest —
+ *  the same set `search()` falls back to without an API key, so "known" here
+ *  means "known even with zero configuration," not "known to the full
+ *  Google Fonts catalog" (which would need `GOOGLE_FONTS_API_KEY` to check
+ *  reliably, and this is a cheap, offline classification, not a lookup). */
+export function isKnownGoogleFont(family: string): boolean {
+  return CURATED_FAMILY_NAMES.has(family.trim().toLowerCase());
+}
+
+/** The `<link>`-equivalent stylesheet URL for `family` — same keyless css2
+ *  endpoint `fetch()` above already uses, just exposed for a caller that
+ *  wants the URL itself (e.g. to hint an agent to add a `<link>` tag)
+ *  rather than the fetched CSS bytes. */
+export function googleFontsLinkUrl(family: string): string {
+  return css2Url(family, DEFAULT_VARIANTS);
+}
+
 interface WebfontsItem {
   family: string;
   category?: string;

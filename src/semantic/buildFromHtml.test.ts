@@ -473,3 +473,37 @@ describe("buildSemanticGraphFromHtml — iterative traversal (Phase A5)", () => 
     expect(graph.nodes[child.id]?.pos).toEqual({ x: 20, y: 30 });
   });
 });
+
+describe("buildSemanticGraphFromHtml — fontFamily (Phase F3)", () => {
+  it("takes the first entry of the computed font-family stack, quotes stripped", () => {
+    const node = html({
+      tag: "p",
+      text: "hi",
+      style: { fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
+    });
+
+    expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.style.fontFamily).toBe("Inter");
+  });
+
+  it("skips a system-font-only stack (the author never set a real family)", () => {
+    const node = html({
+      tag: "p",
+      text: "hi",
+      style: { fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif" },
+    });
+
+    expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.style.fontFamily).toBeUndefined();
+  });
+
+  it("skips a bare generic keyword", () => {
+    const node = html({ tag: "p", text: "hi", style: { fontFamily: "sans-serif" } });
+
+    expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.style.fontFamily).toBeUndefined();
+  });
+
+  it("only sets fontFamily on text nodes", () => {
+    const node = html({ tag: "div", style: { fontFamily: '"Inter", sans-serif' } });
+
+    expect(buildSemanticGraphFromHtml(node).nodes[node.id]?.style.fontFamily).toBeUndefined();
+  });
+});
