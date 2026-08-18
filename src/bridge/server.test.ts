@@ -2,7 +2,7 @@ import { createServer as createNetServer, type Server as HttpServer } from "node
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bridge } from "./store";
-import { requestAssets, startBridge, stopBridge } from "./server";
+import { healthReport, requestAssets, startBridge, stopBridge } from "./server";
 
 /**
  * Reserve two ports the OS confirms are free right now and pin the bridge to
@@ -180,5 +180,59 @@ describe("bridge message-handling robustness (Phase A2)", () => {
     const result = await assetsPromise;
     expect(result.assets).toHaveLength(1);
     expect(result.assets[0]?.id).toBe("1:1");
+  });
+});
+
+describe("GET /healthz", () => {
+  let port: number;
+  const previousPool = process.env.PLUMB_BRIDGE_PORTS;
+
+  beforeAll(async () => {
+    process.env.PLUMB_BRIDGE_PORTS = "0";
+    await startBridge();
+    if (!bridge.port) throw new Error("bridge failed to bind a port for the test");
+    port = bridge.port;
+  });
+
+  afterAll(async () => {
+    await stopBridge();
+    if (previousPool === undefined) delete process.env.PLUMB_BRIDGE_PORTS;
+    else process.env.PLUMB_BRIDGE_PORTS = previousPool;
+  });
+
+  it("answers with a JSON liveness document", async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/healthz`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("application/json");
+
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+    expect(body.port).toBe(port);
+    expect(typeof body.version).toBe("string");
+    expect(typeof body.uptimeSec).toBe("number");
+  });
+
+  it("reports unpaired and no in-flight requests on a fresh bridge", async () => {
+    // Readiness, not just liveness: a container can be up and still unable to
+    // serve a plugin-path tool call.
+    const body = (await (await fetch(`http://127.0.0.1:${port}/healthz`)).json()) as {
+      paired: boolean;
+      pluginVersion: string | null;
+      pending: number;
+      lastSeenMsAgo: number | null;
+    };
+    expect(body.paired).toBe(false);
+    expect(body.pluginVersion).toBeNull();
+    expect(body.pending).toBe(0);
+    expect(body.lastSeenMsAgo).toBeNull();
+  });
+
+  it("is never cached — a stale health answer is worse than none", async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/healthz`);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("exposes the same snapshot to in-process callers", () => {
+    expect(healthReport()).toMatchObject({ ok: true, port, paired: false });
   });
 });

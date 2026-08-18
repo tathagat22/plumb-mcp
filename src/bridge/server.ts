@@ -6,6 +6,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { resolveBridgeHost, resolveBridgePorts } from "./ports";
 import { bridge } from "./store";
 import { PlumbError } from "../errors";
+import { createLogger } from "../logger";
 import { SERVER_VERSION } from "../meta";
 import { onStudio, recentStudio } from "../studio/events";
 import { serveStudio, studioAvailable } from "../studio/serve";
@@ -109,17 +110,15 @@ function send(ws: WebSocket, msg: ServerMessage): void {
   }
 }
 
-/** stdout is the MCP protocol channel; bridge logs go to stderr. */
-function log(line: string): void {
-  process.stderr.write(`plumb bridge: ${line}\n`);
-}
+/** stdout is the MCP protocol channel — `createLogger` writes only to stderr. */
+const log = createLogger("bridge");
 
 function resolvePending(reqId: string, value: unknown): void {
   const p = pending.get(reqId);
   if (!p) {
     // Reply arrived after we already timed out — surface it so we can tell
     // a slow-but-eventual reply from a genuine hang during debugging.
-    log(`late reply for ${reqId} (already timed out or unknown)`);
+    log.warn("late reply — already timed out or unknown", { reqId });
     return;
   }
   clearTimeout(p.timer);
@@ -359,6 +358,39 @@ export function stageInboundAsset(bytes: Buffer | Uint8Array, ext: string): stri
  *  the `/upload/:reqId.:ext` POST that the plugin UI uses to ship raw screenshot
  *  bytes, and the `/asset/:key.:ext` GET the plugin pulls inbound bytes from —
  *  no base64 anywhere in the hot path. */
+/** Health/readiness snapshot served at `GET /healthz`. */
+export interface HealthReport {
+  ok: true;
+  version: string;
+  /** The port the bridge bound, or null when no port in the pool was free. */
+  port: number | null;
+  /** Whether a Figma plugin has completed the one-time pairing click. */
+  paired: boolean;
+  pluginVersion: string | null;
+  /** Seconds since the process started. */
+  uptimeSec: number;
+  /** ms since the last message from the plugin, or null if none yet. */
+  lastSeenMsAgo: number | null;
+  /** In-flight plugin requests — a number that only grows means a wedged plugin. */
+  pending: number;
+  /** Whether the built Studio SPA is present in this install. */
+  studio: boolean;
+}
+
+export function healthReport(): HealthReport {
+  return {
+    ok: true,
+    version: SERVER_VERSION,
+    port: bridge.port,
+    paired: bridge.paired,
+    pluginVersion: bridge.pluginVersion,
+    uptimeSec: Math.round(process.uptime()),
+    lastSeenMsAgo: bridge.lastSeen ? Date.now() - bridge.lastSeen : null,
+    pending: pending.size,
+    studio: studioAvailable(),
+  };
+}
+
 function handleHttp(req: IncomingMessage, res: ServerResponse): void {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -369,6 +401,20 @@ function handleHttp(req: IncomingMessage, res: ServerResponse): void {
     return;
   }
   if (req.method === "GET") {
+    // Liveness + readiness in one document. `ok` answers "is this process
+    // alive"; `paired` answers "can the plugin path actually serve a request
+    // right now" — a container orchestrator wants the first, a human
+    // debugging "why did plumb_node time out" wants the second.
+    if (req.url === "/healthz") {
+      const body = JSON.stringify(healthReport());
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Length": Buffer.byteLength(body),
+        "Cache-Control": "no-store",
+      });
+      res.end(body);
+      return;
+    }
     // Inbound asset pull: the plugin UI eager-hydrates plan.assets from here.
     const am = req.url && /^\/asset\/([A-Za-z0-9_-]+)\.([a-z0-9]+)$/.exec(req.url);
     if (am) {
@@ -408,7 +454,7 @@ function handleHttp(req: IncomingMessage, res: ServerResponse): void {
     res.end(JSON.stringify({ ok: true }));
   });
   out.on("error", (err) => {
-    log(`upload write failed: ${err.message}`);
+    log.error("upload write failed", { reqId, path, err });
     res.writeHead(500);
     res.end();
   });
@@ -491,18 +537,20 @@ export async function startBridge(): Promise<void> {
     }
   }
   if (!wss) {
-    log("no free port in range — plugin path disabled, REST path still works");
+    log.warn("no free port in range — plugin path disabled, REST path still works", {
+      ports: resolveBridgePorts(),
+    });
     return;
   }
   bridge.port = chosen;
   activeWss = wss;
   activeHttp = http;
   const sessionLabel = process.env.PLUMB_SESSION_NAME?.trim() || basename(process.cwd());
-  log(`listening on ${resolveBridgeHost()}:${chosen} as "${sessionLabel}"`);
+  log.info("listening", { host: resolveBridgeHost(), port: chosen, session: sessionLabel });
   if (studioAvailable()) {
-    log(
-      `Plumb Studio (live cockpit): http://${resolveBridgeHost()}:${chosen}/  ·  run \`plumb-mcp studio\` to open it`,
-    );
+    log.info("Plumb Studio (live cockpit) available — run `plumb-mcp studio` to open it", {
+      url: `http://${resolveBridgeHost()}:${chosen}/`,
+    });
   }
 
   if (!sweepTimer) {
@@ -517,7 +565,7 @@ export async function startBridge(): Promise<void> {
       handleStudioClient(ws);
       return;
     }
-    log(`connection from origin ${req.headers.origin ?? "(none)"}`);
+    log.debug("connection", { origin: req.headers.origin ?? null });
     send(ws, { t: "plumb-hello", serverVersion: SERVER_VERSION, sessionLabel });
 
     let thisPaired = false;
@@ -539,11 +587,10 @@ export async function startBridge(): Promise<void> {
       try {
         handlePluginMessage(msg);
       } catch (e) {
-        log(
-          `dropped malformed message (t=${(msg as { t?: string })?.t ?? "?"}): ${
-            e instanceof Error ? e.message : String(e)
-          }`,
-        );
+        log.warn("dropped malformed message", {
+          t: (msg as { t?: string })?.t ?? null,
+          err: e instanceof Error ? e : String(e),
+        });
       }
     });
 
@@ -559,7 +606,7 @@ export async function startBridge(): Promise<void> {
         thisPaired = true;
         pairedSocket = ws;
         send(ws, { t: "paired" });
-        log("plugin paired");
+        log.info("plugin paired", { pluginVersion: bridge.pluginVersion });
         return;
       }
 
@@ -580,7 +627,7 @@ export async function startBridge(): Promise<void> {
           break;
         case "inventory": {
           if (!Array.isArray(msg.pages)) {
-            log("dropped inventory message: `pages` is not an array");
+            log.warn("dropped inventory message", { reason: "`pages` is not an array" });
             break;
           }
           bridge.inventory = { fileName: msg.fileName, pages: msg.pages };
@@ -590,7 +637,11 @@ export async function startBridge(): Promise<void> {
           // next request actually re-fetches.
           bridge.fileVersion += 1;
           if (bridge.nodeCache.size > 0) bridge.nodeCache.clear();
-          log(`inventory: ${msg.pages.reduce((n, p) => n + (p.frames?.length ?? 0), 0)} screen(s)`);
+          log.debug("inventory", {
+            pages: msg.pages.length,
+            screens: msg.pages.reduce((n, p) => n + (p.frames?.length ?? 0), 0),
+            fileVersion: bridge.fileVersion,
+          });
           break;
         }
         case "node":
@@ -598,7 +649,7 @@ export async function startBridge(): Promise<void> {
           break;
         case "assets": {
           if (!Array.isArray(msg.assets)) {
-            log("dropped assets message: `assets` is not an array");
+            log.warn("dropped assets message", { reason: "`assets` is not an array" });
             resolvePending(msg.reqId, { assets: [], error: msg.error ?? "malformed assets reply" });
             break;
           }
@@ -616,7 +667,7 @@ export async function startBridge(): Promise<void> {
           const startedAt = assetRequestStart.get(msg.reqId);
           assetRequestStart.delete(msg.reqId);
           if (startedAt !== undefined) {
-            log(`assets reply: ${filled.length} asset(s) in ${Date.now() - startedAt}ms`);
+            log.debug("assets reply", { count: filled.length, ms: Date.now() - startedAt });
           }
           resolvePending(msg.reqId, { assets: filled, error: msg.error });
           break;
@@ -708,7 +759,7 @@ export async function startBridge(): Promise<void> {
         // Nothing will ever drain these now — reclaim the temp files and
         // markers immediately rather than waiting out sweepExpiredUploads's TTL.
         clearAllPendingUploads();
-        log("plugin disconnected");
+        log.info("plugin disconnected");
       }
     });
 

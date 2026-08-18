@@ -245,6 +245,8 @@ Copy [`.env.example`](./.env.example) to `.env` (gitignored) for local use. Plum
 | `PLUMB_BRIDGE_PORTS` | An ordered pool to try, comma-separated; `0` means any free port | Same built-in pool |
 | `PLUMB_BRIDGE_HOST` | Publishing the bridge from inside a container | `127.0.0.1` — loopback only |
 | `PLUMB_SESSION_NAME` | The label this session shows as in the plugin panel | The current directory name |
+| `PLUMB_LOG_LEVEL` | `debug` \| `info` \| `warn` \| `error` — logs always go to stderr, never stdout | `info` |
+| `PLUMB_LOG_FORMAT` | `json` for one JSON object per line, for a log shipper | Human-readable lines |
 | `PLUMB_ASSETS_DIR` | Where `plumb_assets` writes exports | `./plumb-assets/` |
 | `PLUMB_SCREENSHOTS_DIR` | Where `plumb_screenshot` writes PNGs | `./plumb-screenshots/` |
 | `PLUMB_CACHE_DIR` | Response cache root | `~/.cache/plumb/` |
@@ -267,6 +269,8 @@ docker compose up demo      # the offline walkthrough, network disabled — star
 docker compose up bridge    # bridge + Plumb Studio on http://127.0.0.1:31337
 docker compose run --rm mcp # the stdio MCP server, for an editor to attach to
 ```
+
+The bridge serves `GET /healthz` — liveness plus whether a plugin is actually paired — which is what the Compose healthcheck probes.
 
 `bridge` publishes a single fixed port (containers can only publish ports they know, so `PLUMB_BRIDGE_PORT` replaces the scan) and maps it to the host's loopback only — no more reachable than running natively. Exported assets, screenshots, and the cache land in the `plumb-data` volume.
 

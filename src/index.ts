@@ -2,6 +2,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { startBridge } from "./bridge/server";
 import { closeAllBrowsers } from "./cli/cdp";
 import { loadEnv } from "./env";
+import { createLogger } from "./logger";
 import { runDemoCli } from "./demo/run";
 import { runFitCli } from "./cli/fit";
 import { runInit } from "./cli/init";
@@ -56,6 +57,13 @@ Docs:    https://tathagat22.github.io/plumb-mcp/
 Source:  https://github.com/tathagat22/plumb-mcp
 `;
 
+const log = createLogger("plumb-mcp");
+
+/** Normalise a thrown value so the logger can serialise message + stack. */
+function asError(e: unknown): Error {
+  return e instanceof Error ? e : new Error(String(e));
+}
+
 /**
  * The bridge is a shared process — potentially serving several concurrent
  * MCP client sessions at once (multi-agent pairing, see docs/architecture.md).
@@ -66,14 +74,10 @@ Source:  https://github.com/tathagat22/plumb-mcp
  */
 function installProcessGuards(): void {
   process.on("uncaughtException", (e: unknown) => {
-    process.stderr.write(
-      `plumb-mcp: uncaught exception (server stays up): ${e instanceof Error ? (e.stack ?? e.message) : String(e)}\n`,
-    );
+    log.error("uncaught exception — server stays up", { err: asError(e) });
   });
   process.on("unhandledRejection", (e: unknown) => {
-    process.stderr.write(
-      `plumb-mcp: unhandled rejection (server stays up): ${e instanceof Error ? (e.stack ?? e.message) : String(e)}\n`,
-    );
+    log.error("unhandled rejection — server stays up", { err: asError(e) });
   });
 
   // A killed/restarted MCP host (editor reload, host crash) must not leave a
@@ -83,7 +87,7 @@ function installProcessGuards(): void {
   const shutdown = (signal: NodeJS.Signals) => {
     if (shuttingDown) return;
     shuttingDown = true;
-    process.stderr.write(`plumb-mcp: received ${signal}, closing any open browsers…\n`);
+    log.info("shutting down — closing any open browsers", { signal });
     closeAllBrowsers().finally(() => process.exit(0));
   };
   process.on("SIGINT", shutdown);
@@ -146,12 +150,10 @@ async function main(): Promise<void> {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  process.stderr.write(`plumb-mcp ${SERVER_VERSION} running (stdio)\n`);
+  log.info("running", { version: SERVER_VERSION, transport: "stdio" });
 }
 
 main().catch((e: unknown) => {
-  process.stderr.write(
-    `plumb-mcp failed to start: ${e instanceof Error ? e.message : String(e)}\n`,
-  );
+  log.error("failed to start", { err: asError(e) });
   process.exit(1);
 });

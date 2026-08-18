@@ -46,6 +46,9 @@ services:
       PLUMB_ASSETS_DIR: /data/assets
       PLUMB_SCREENSHOTS_DIR: /data/screenshots
       PLUMB_CACHE_DIR: /data/cache
+      # One JSON object per line, for a log shipper. Drop this for the
+      # human-readable default.
+      PLUMB_LOG_FORMAT: json
       # Optional — only needed for the Figma REST path. Left empty when unset.
       FIGMA_TOKEN: ${FIGMA_TOKEN:-}
     ports:
@@ -54,14 +57,14 @@ services:
       - plumb-data:/data
     stdin_open: true
     healthcheck:
-      # The bridge serves Studio (or a plain 404 body) on the same port it
-      # accepts plugin WebSockets on, so a plain GET is a true liveness check.
+      # /healthz reports liveness plus whether a plugin is actually paired —
+      # see `healthReport()` in src/bridge/server.ts.
       test:
         - CMD
         - node
         - -e
         # `$$` escapes Compose interpolation so Node, not Compose, expands this.
-        - "fetch(`http://127.0.0.1:$${process.env.PLUMB_BRIDGE_PORT}/`).then(()=>process.exit(0)).catch(()=>process.exit(1))"
+        - "fetch(`http://127.0.0.1:$${process.env.PLUMB_BRIDGE_PORT}/healthz`).then(()=>process.exit(0)).catch(()=>process.exit(1))"
       interval: 10s
       timeout: 3s
       retries: 5

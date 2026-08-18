@@ -62,6 +62,10 @@ class BridgeStore {
     this.selection = null;
     this.inventory = null;
     this.fileVersion = 0;
+    // `lastSeen` is a heartbeat from the plugin that just went away. Leaving
+    // it set makes health/status report a recent heartbeat for a dead session,
+    // which reads as "the plugin is fine, your tool call is just slow".
+    this.lastSeen = 0;
     this.nodeCache.clear();
   }
 }
