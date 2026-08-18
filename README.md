@@ -97,6 +97,39 @@ Install: `npm install -g plumb-mcp` → `plumb-mcp init`.
 
 ---
 
+## See it work in 30 seconds — no account, no key, no network
+
+Before you install anything or connect a Figma file, run the loop and watch it score itself:
+
+```bash
+npx plumb-mcp demo          # or: docker compose up demo
+```
+
+It takes a real design spec, hands the verification engine a build of that same screen with **13 planted mistakes** in it — a headline one step down the type scale, a pill button rendered as a rounded rectangle, a gradient flattened to a flat fill, a badge that was never built at all — and prints what it caught:
+
+```txt
+  Round 1 · First pass — built straight from the spec, no verification
+    ▰▰▰▰▰▰▰▱▱▱  71.0%   8 errors · 1 warnings · 32/34 key nodes built
+
+    ✓ The "MOST POPULAR" badge was never built — no element carries its handle
+      pro-badge           not built         no data-plumb-id for this handle in the DOM
+    ✓ Headline came out one step down the type scale (48px → 40px)
+      title               text.size         expected 48  ·  got 40
+    ✓ Primary CTA is a hand-picked purple, not the brand token
+      pro-cta             fill              expected #6366f1  ·  got #7c5cf5
+    …
+
+  Scoreboard
+    Mistakes planted      13
+    Caught                13   (100% recall)
+    False positives       0   across 27 untouched nodes
+    Convergence           71.0% → 96.2% → 100.0%
+```
+
+No Figma token, no plugin, no browser, no network — `docker compose up demo` even runs with `network_mode: none`. The engine scoring the demo is the same one behind `plumb_verify` and `plumb_fit`, and those numbers are asserted in [`src/demo/demo.test.ts`](./src/demo/demo.test.ts), so the demo fails CI if it ever stops being true. `plumb-mcp demo --pds` prints the design spec it runs against; `--json` emits the results for scripting.
+
+---
+
 ## Quick start
 
 ```bash
@@ -196,18 +229,48 @@ Tools auto-pick the path. With the plugin paired, omit `fileKey` and pass `id` o
 
 ## Configuration
 
-`.env` (gitignored — never commit secrets; Plumb loads it on startup):
+Nothing is required to try Plumb: `npm run demo` needs no configuration at all, and the plugin path (`plumb_outline`, `plumb_node`, `plumb_selection`, …) only needs the Figma plugin paired.
+
+Copy [`.env.example`](./.env.example) to `.env` (gitignored) for local use. Plumb loads it from the working directory and the package root on startup — but an MCP client spawns the server as a fresh process, so the most reliable place for keys is your client's server `env` block.
+
+### Environment variables
+
+| Variable | Required for | Default when unset |
+|---|---|---|
+| `FIGMA_TOKEN` | The Figma REST path (`plumb_fig_outline`, `plumb_fig_node`) and the standalone CLIs | REST tools return an instruction-shaped error; the plugin path is unaffected |
+| `FIGMA_ACCESS_TOKEN` | Alias for `FIGMA_TOKEN`, checked second | — |
+| `PLUMB_FILE_KEY` | `npm run prove`; default file for the CLIs | Must be passed as an argument instead |
+| `PLUMB_NODE_ID` | `npm run prove` | `131:6950` |
+| `PLUMB_BRIDGE_PORT` | Pinning the bridge to one port (containers, >10 concurrent sessions) | Scans the `31337`–`31346` pool |
+| `PLUMB_BRIDGE_PORTS` | An ordered pool to try, comma-separated; `0` means any free port | Same built-in pool |
+| `PLUMB_BRIDGE_HOST` | Publishing the bridge from inside a container | `127.0.0.1` — loopback only |
+| `PLUMB_SESSION_NAME` | The label this session shows as in the plugin panel | The current directory name |
+| `PLUMB_ASSETS_DIR` | Where `plumb_assets` writes exports | `./plumb-assets/` |
+| `PLUMB_SCREENSHOTS_DIR` | Where `plumb_screenshot` writes PNGs | `./plumb-screenshots/` |
+| `PLUMB_CACHE_DIR` | Response cache root | `~/.cache/plumb/` |
+| `PLUMB_CACHE_TTL_MS` | Cache entry lifetime | `300000` (5 minutes) |
+| `PLUMB_CHROME` | Chrome binary for `plumb_verify` / `plumb_fit` / `plumb_import_web` | Auto-detected from the standard install paths |
+| `CHROME_PATH` | Alias for `PLUMB_CHROME`, checked second | — |
+| `ANTHROPIC_API_KEY` | The standalone `plumb-mcp fit` CLI **only** — every MCP tool is key-free | `plumb-mcp fit` exits with a setup message |
+| `PLUMB_FIT_MODEL` | Model override for that CLI | The built-in default |
+| `UNSPLASH_ACCESS_KEY` | On-brief photography in the write direction (free tier) | Falls back to random Lorem Picsum placeholders |
+| `PEXELS_API_KEY` | Same, alternative provider (free tier) | Same fallback |
+| `PIXABAY_API_KEY` | Same, alternative provider (free tier) | Same fallback |
+| `GOOGLE_FONTS_API_KEY` | Searching the full Google Fonts catalog | Popular-subset search still works |
+
+---
+
+## Run it in a container
 
 ```bash
-FIGMA_TOKEN=figd_your_read_only_token   # REST path only
-# prompt→design photo providers (all free — for on-brief imagery)
-UNSPLASH_ACCESS_KEY=…
-PEXELS_API_KEY=…
-PIXABAY_API_KEY=…
+docker compose up demo      # the offline walkthrough, network disabled — start here
+docker compose up bridge    # bridge + Plumb Studio on http://127.0.0.1:31337
+docker compose run --rm mcp # the stdio MCP server, for an editor to attach to
 ```
 
-- **Cache** — `~/.cache/plumb/v1/` (override with `PLUMB_CACHE_DIR`).
-- **Assets** — `./plumb-assets/<screen>/` · **Screenshots** — `./plumb-screenshots/`.
+`bridge` publishes a single fixed port (containers can only publish ports they know, so `PLUMB_BRIDGE_PORT` replaces the scan) and maps it to the host's loopback only — no more reachable than running natively. Exported assets, screenshots, and the cache land in the `plumb-data` volume.
+
+There is also a [devcontainer](./.devcontainer/devcontainer.json): open the repo in VS Code or Codespaces, and it installs both workspaces and runs the demo on attach.
 
 ---
 

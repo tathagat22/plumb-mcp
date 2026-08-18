@@ -1,0 +1,33 @@
+{
+  "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.schema.json",
+  "name": "plumb-mcp",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-20-bookworm",
+
+  // Everything a fresh clone needs, in one step. `npm ci` covers the server;
+  // the studio workspace has its own lockfile and is installed alongside it.
+  "postCreateCommand": "npm ci && npm ci --prefix studio",
+
+  // Prove the checkout works the moment the container is ready: the offline
+  // demo exercises the real comparison engine and exits non-zero if it misses
+  // anything. No token, no plugin, no network.
+  "postAttachCommand": "npm run demo",
+
+  // The bridge's default port pool. Forwarded so Plumb Studio is reachable
+  // from the host browser when you run the server inside the container.
+  "forwardPorts": [31337],
+  "portsAttributes": {
+    "31337": { "label": "Plumb bridge + Studio", "onAutoForward": "silent" }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"],
+      "settings": {
+        "editor.formatOnSave": true,
+        "eslint.useFlatConfig": true
+      }
+    }
+  },
+
+  "remoteUser": "node"
+}

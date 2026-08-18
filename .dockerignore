@@ -14,3 +14,9 @@ docs
 README*.md
 LICENSE
 .gitignore
+
+# Studio and playground bring their own node_modules; the build installs them.
+studio/node_modules
+playground/node_modules
+studio/dist
+docker-compose.yml

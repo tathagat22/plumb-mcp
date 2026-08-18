@@ -1,0 +1,90 @@
+# One command to bring Plumb up in isolation:
+#
+#   docker compose up demo      # run the whole design→code→verify loop, offline
+#   docker compose up bridge    # long-running bridge + Studio on http://127.0.0.1:31337
+#                               # (PLUMB_BRIDGE_PORT=31400 moves both sides)
+#   docker compose run --rm mcp # the stdio MCP server, for an editor to attach to
+#
+# Nothing here needs a credential, a network call, or a Figma account. `demo`
+# in particular is the fastest way to see whether this project does what it
+# says: it builds the image, runs the real comparison engine against a bundled
+# design, and exits non-zero if the engine misses anything.
+
+name: plumb
+
+services:
+  # ── The 60-second evaluation ────────────────────────────────────────────────
+  # Runs the offline walkthrough and exits. Exit code is the verdict.
+  demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: plumb-mcp:local
+    command: ["demo"]
+    # A TTY gets the coloured report; without one the same content prints plain.
+    tty: true
+    network_mode: none # proves the claim: the demo reaches nothing.
+
+  # ── The bridge + Plumb Studio ───────────────────────────────────────────────
+  # The long-running half. Publishes one fixed port instead of scanning the
+  # 31337–31346 range, because a container can only publish ports it knows.
+  bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: plumb-mcp:local
+    environment:
+      # Bind all interfaces *inside* the container; the port mapping below
+      # exposes it on the host's loopback only, so the bridge is no more
+      # reachable than it is when run natively.
+      PLUMB_BRIDGE_HOST: "0.0.0.0"
+      # Set PLUMB_BRIDGE_PORT in your shell (or a .env next to this file) to
+      # move both sides at once — useful when a native plumb-mcp session
+      # already holds the default.
+      PLUMB_BRIDGE_PORT: "${PLUMB_BRIDGE_PORT:-31337}"
+      PLUMB_SESSION_NAME: "docker"
+      PLUMB_ASSETS_DIR: /data/assets
+      PLUMB_SCREENSHOTS_DIR: /data/screenshots
+      PLUMB_CACHE_DIR: /data/cache
+      # Optional — only needed for the Figma REST path. Left empty when unset.
+      FIGMA_TOKEN: ${FIGMA_TOKEN:-}
+    ports:
+      - "127.0.0.1:${PLUMB_BRIDGE_PORT:-31337}:${PLUMB_BRIDGE_PORT:-31337}"
+    volumes:
+      - plumb-data:/data
+    stdin_open: true
+    healthcheck:
+      # The bridge serves Studio (or a plain 404 body) on the same port it
+      # accepts plugin WebSockets on, so a plain GET is a true liveness check.
+      test:
+        - CMD
+        - node
+        - -e
+        # `$$` escapes Compose interpolation so Node, not Compose, expands this.
+        - "fetch(`http://127.0.0.1:$${process.env.PLUMB_BRIDGE_PORT}/`).then(()=>process.exit(0)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ── The MCP server itself ───────────────────────────────────────────────────
+  # stdio transport: your editor spawns this and speaks MCP over stdin/stdout,
+  # so it is `docker compose run`, never `up`. Included so the compose file
+  # documents the real wiring rather than only the demo.
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: plumb-mcp:local
+    environment:
+      FIGMA_TOKEN: ${FIGMA_TOKEN:-}
+      PLUMB_ASSETS_DIR: /data/assets
+      PLUMB_SCREENSHOTS_DIR: /data/screenshots
+      PLUMB_CACHE_DIR: /data/cache
+    volumes:
+      - plumb-data:/data
+    stdin_open: true
+    profiles: ["manual"] # never started by a bare `docker compose up`
+
+volumes:
+  plumb-data:
