@@ -32,9 +32,12 @@ const TOKENS = {
     $t7: "400 13px/1.5 Inter",
   },
   radius: { $r0: 20, $r1: 12, $r2: "full" as const },
+  // The exact shape normalize() emits: `{ox}px {oy}px {blur}px {spread}px {hex}`,
+  // hex with alpha, spread always present. Anything looser would make this
+  // fixture a worse stand-in for real `plumb_node` output than it looks.
   shadow: {
-    $s0: "0px 8px 24px rgba(0, 0, 0, 0.24)",
-    $s1: "0px 16px 48px rgba(99, 102, 241, 0.35)",
+    $s0: "0px 8px 24px 0px #0000003d",
+    $s1: "0px 16px 48px 0px #6366f159",
   },
   layout: {
     $l0: { flow: "col" as const, gap: 12, pad: [0, 0, 0, 0] as [number, number, number, number] },
