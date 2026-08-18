@@ -1,11 +1,23 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { createWriteStream, unlink } from "node:fs";
+import { createWriteStream } from "node:fs";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { WebSocketServer, type WebSocket } from "ws";
 import { resolveBridgeHost, resolveBridgePorts } from "./ports";
 import { bridge } from "./store";
 import { PlumbError } from "../errors";
+import {
+  PENDING_UPLOAD_TTL_MS,
+  clearAllPendingUploads,
+  markAssetRequest,
+  readInboundAsset,
+  resetStaging,
+  stageUpload,
+  stagingStats,
+  sweepExpiredUploads,
+  takeAssetRequestElapsed,
+  takeUpload,
+} from "./uploads";
 import { createLogger } from "../logger";
 import { SERVER_VERSION } from "../meta";
 import { onStudio, recentStudio } from "../studio/events";
@@ -30,47 +42,6 @@ import type {
 let pairedSocket: WebSocket | null = null;
 let reqCounter = 0;
 
-/** How long an un-drained upload / in-flight asset request is allowed to
- *  linger before the sweep reclaims it — covers the plugin crashing or
- *  reloading mid-request, when nothing ever arrives to drain these maps
- *  on their normal (successful) path. Mirrors `INBOUND_TTL_MS` below. */
-const PENDING_UPLOAD_TTL_MS = 10 * 60 * 1000;
-
-/** reqId → path the plugin's binary upload was written to. Drained when the
- *  matching `screenshot` WS reply arrives, so the resolved promise can carry
- *  the on-disk path instead of a base64 string. */
-const uploadMap = new Map<string, { path: string; expires: number }>();
-
-function deleteUpload(reqId: string): void {
-  const upload = uploadMap.get(reqId);
-  if (!upload) return;
-  uploadMap.delete(reqId);
-  unlink(upload.path, () => {}); // best-effort — a leftover temp file is a leak, not a correctness issue
-}
-
-/** Periodic backstop: reclaims uploads/asset-request markers whose matching
- *  WS reply is simply never going to arrive (plugin crashed without a clean
- *  disconnect event) — otherwise both maps, and their staged temp files,
- *  grow without bound over a long-running multi-session process. */
-function sweepExpiredUploads(): void {
-  const now = Date.now();
-  for (const [reqId, upload] of uploadMap) {
-    if (upload.expires < now) deleteUpload(reqId);
-  }
-  for (const [reqId, startedAt] of assetRequestStart) {
-    if (now - startedAt > PENDING_UPLOAD_TTL_MS) assetRequestStart.delete(reqId);
-  }
-}
-
-/** Only one plugin is ever paired at a time — so when it disconnects, every
- *  currently-pending upload/asset-request belongs to a request that plugin
- *  will now never answer. Clear both maps immediately rather than waiting
- *  out the TTL; a fresh pairing starts with fresh reqIds regardless. */
-function clearAllPendingUploads(): void {
-  for (const reqId of [...uploadMap.keys()]) deleteUpload(reqId);
-  assetRequestStart.clear();
-}
-
 let sweepTimer: ReturnType<typeof setInterval> | undefined;
 
 interface Pending {
@@ -86,21 +57,6 @@ const pending = new Map<string, Pending>();
 
 /** Non-terminal apply-progress listeners, keyed by reqId (write ops only). */
 const progressListeners = new Map<string, (p: ApplyProgressMessage) => void>();
-
-/** Staged inbound asset bytes the plugin pulls via GET /asset/:key.:ext.
- *  TTL 10 min, lazy-expired on read. */
-const inbound = new Map<string, { bytes: Buffer; contentType: string; expires: number }>();
-const INBOUND_TTL_MS = 10 * 60 * 1000;
-let inboundCounter = 0;
-
-const EXT_CONTENT_TYPE: Record<string, string> = {
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  webp: "image/webp",
-  gif: "image/gif",
-  svg: "image/svg+xml",
-};
 
 function send(ws: WebSocket, msg: ServerMessage): void {
   try {
@@ -216,8 +172,6 @@ export interface RequestAssetsOptions {
   raw?: boolean;
 }
 
-/** reqId → timestamp of the get-assets request, used to time-stamp uploads. */
-const assetRequestStart = new Map<string, number>();
 
 /** Ask the plugin to export assets (default: every asset in `nodeId`). */
 export function requestAssets(
@@ -225,7 +179,7 @@ export function requestAssets(
 ): Promise<{ assets: WireAsset[]; error: string | null }> {
   return request(
     (reqId) => {
-      assetRequestStart.set(reqId, Date.now());
+      markAssetRequest(reqId);
       return {
         t: "get-assets",
         reqId,
@@ -337,22 +291,9 @@ export async function requestApplyMotion(
   );
 }
 
-/**
- * Stage bytes for the plugin to pull via GET /asset/:key.:ext. Returns the
- * key. TTL 10 min, lazy-expired on read. The asset engine's inbound.registerAsset
- * delegates here — server.ts is the single home for the HTTP route + the map.
- */
-export function stageInboundAsset(bytes: Buffer | Uint8Array, ext: string): string {
-  const key = `a${++inboundCounter}${Date.now().toString(36)}`;
-  const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
-  const e = ext.toLowerCase().replace(/^\./, "");
-  inbound.set(key, {
-    bytes: buf,
-    contentType: EXT_CONTENT_TYPE[e] ?? "application/octet-stream",
-    expires: Date.now() + INBOUND_TTL_MS,
-  });
-  return key;
-}
+/** Stage bytes for the plugin to pull via GET /asset/:key.:ext. Re-exported so
+ *  the asset engine keeps importing it from the bridge, which owns the route. */
+export { stageInboundAsset } from "./uploads";
 
 /** HTTP request handler for the bridge's loopback server. Serves CORS preflight,
  *  the `/upload/:reqId.:ext` POST that the plugin UI uses to ship raw screenshot
@@ -373,6 +314,9 @@ export interface HealthReport {
   lastSeenMsAgo: number | null;
   /** In-flight plugin requests — a number that only grows means a wedged plugin. */
   pending: number;
+  /** Bytes and temp files held between an HTTP upload and its WS reply. Also a
+   *  number that should return to zero; one that doesn't is a leak. */
+  staging: { uploads: number; assetRequests: number; inbound: number };
   /** Whether the built Studio SPA is present in this install. */
   studio: boolean;
 }
@@ -387,6 +331,7 @@ export function healthReport(): HealthReport {
     uptimeSec: Math.round(process.uptime()),
     lastSeenMsAgo: bridge.lastSeen ? Date.now() - bridge.lastSeen : null,
     pending: pending.size,
+    staging: stagingStats(),
     studio: studioAvailable(),
   };
 }
@@ -418,10 +363,8 @@ function handleHttp(req: IncomingMessage, res: ServerResponse): void {
     // Inbound asset pull: the plugin UI eager-hydrates plan.assets from here.
     const am = req.url && /^\/asset\/([A-Za-z0-9_-]+)\.([a-z0-9]+)$/.exec(req.url);
     if (am) {
-      const key = am[1]!;
-      const staged = inbound.get(key);
-      if (!staged || staged.expires < Date.now()) {
-        if (staged) inbound.delete(key); // lazy-expire on read
+      const staged = readInboundAsset(am[1]!);
+      if (!staged) {
         res.writeHead(404);
         res.end();
         return;
@@ -449,7 +392,7 @@ function handleHttp(req: IncomingMessage, res: ServerResponse): void {
   const out = createWriteStream(path);
   req.pipe(out);
   out.on("finish", () => {
-    uploadMap.set(reqId, { path, expires: Date.now() + PENDING_UPLOAD_TTL_MS });
+    stageUpload(reqId, path);
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true }));
   });
@@ -519,6 +462,10 @@ export async function stopBridge(): Promise<void> {
   await new Promise<void>((resolve) => (activeHttp ? activeHttp.close(() => resolve()) : resolve()));
   activeWss = null;
   activeHttp = null;
+  // Staged bytes and temp files belong to requests this bridge will never
+  // answer now. Dropping them here also stops one test's staging leaking into
+  // the next, since the maps are module state.
+  resetStaging();
   bridge.reset();
   bridge.port = null;
 }
@@ -659,24 +606,16 @@ export async function startBridge(): Promise<void> {
           // uploads — those entries keep path = null.
           const filled = msg.assets.map((a, i) => {
             if (a.path !== null) return a;
-            const key = `${msg.reqId}-${i}`;
-            const upload = uploadMap.get(key);
-            uploadMap.delete(key);
-            return { ...a, path: upload?.path ?? null };
+            return { ...a, path: takeUpload(`${msg.reqId}-${i}`) ?? null };
           });
-          const startedAt = assetRequestStart.get(msg.reqId);
-          assetRequestStart.delete(msg.reqId);
-          if (startedAt !== undefined) {
-            log.debug("assets reply", { count: filled.length, ms: Date.now() - startedAt });
-          }
+          const ms = takeAssetRequestElapsed(msg.reqId);
+          if (ms !== undefined) log.debug("assets reply", { count: filled.length, ms });
           resolvePending(msg.reqId, { assets: filled, error: msg.error });
           break;
         }
         case "screenshot": {
-          const upload = uploadMap.get(msg.reqId);
-          uploadMap.delete(msg.reqId);
           resolvePending(msg.reqId, {
-            path: upload?.path ?? null,
+            path: takeUpload(msg.reqId) ?? null,
             format: msg.format,
             nodeName: msg.nodeName,
             error: msg.error,
