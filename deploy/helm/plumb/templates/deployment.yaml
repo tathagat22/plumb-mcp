@@ -1,0 +1,144 @@
+{{- if .Values.bridge.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "plumb.fullname" . }}
+  labels:
+    {{- include "plumb.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.bridge.replicaCount }}
+  {{- /*
+    Recreate, not RollingUpdate. The bridge holds pairing state in memory and
+    only one plugin may pair with a process at a time, so overlapping old and
+    new pods during a rollout gives a paired plugin a 50/50 chance of talking
+    to a pod that has never heard of it. A brief gap is the honest trade.
+  */}}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "plumb.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "plumb.selectorLabels" . | nindent 8 }}
+        {{- with .Values.bridge.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        {{- /*
+          Roll the pods when the token changes — otherwise a Secret edit leaves
+          the running process holding the old value until something else
+          restarts it.
+        */}}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with (merge (dict) .Values.bridge.podAnnotations .Values.commonAnnotations) }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "plumb.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.bridge.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.bridge.terminationGracePeriodSeconds }}
+      containers:
+        - name: plumb
+          image: {{ include "plumb.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: bridge
+              containerPort: {{ .Values.bridge.port }}
+              protocol: TCP
+          env:
+            {{- /*
+              0.0.0.0 inside the pod is what makes the Service reachable at all;
+              the default 127.0.0.1 would only ever answer the pod itself. The
+              NetworkPolicy, not the bind address, is what limits who can talk
+              to it.
+            */}}
+            - name: PLUMB_BRIDGE_HOST
+              value: "0.0.0.0"
+            - name: PLUMB_BRIDGE_PORT
+              value: {{ .Values.bridge.port | quote }}
+            - name: PLUMB_SESSION_NAME
+              value: {{ default (include "plumb.fullname" .) .Values.bridge.sessionName | quote }}
+            {{- include "plumb.commonEnv" . | nindent 12 }}
+            {{- with .Values.bridge.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- /*
+            /healthz reports liveness AND whether a plugin is paired. Readiness
+            deliberately checks only that the port answers: an unpaired bridge
+            still serves Studio and the REST tools, so gating traffic on pairing
+            would take the Service down every time a designer closes Figma.
+          */}}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: bridge
+            periodSeconds: 2
+            failureThreshold: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: bridge
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: bridge
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.bridge.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            {{- /*
+              readOnlyRootFilesystem is on, and the bridge stages uploaded
+              screenshot bytes through os.tmpdir() before draining them.
+            */}}
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-data" (include "plumb.fullname" .)) .Values.persistence.existingClaim }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.bridge.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.bridge.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.bridge.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.bridge.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

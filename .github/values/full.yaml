@@ -1,0 +1,54 @@
+# Every optional feature of the chart, turned on at once.
+#
+# CI lints and renders with this alongside the defaults, because a template
+# that is only ever exercised with `helm install` and no flags will happily
+# hide a broken `{{- if }}` in the ingress, the CronJob, or the PVC until the
+# first person who needs one finds it.
+#
+# The token here is a syntactically valid dummy — the chart never contacts
+# Figma at template time.
+figma:
+  token: figd_test_token
+assetProviders:
+  unsplashAccessKey: u123
+  pexelsApiKey: p456
+persistence:
+  enabled: true
+  size: 10Gi
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: plumb-basic-auth
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+  hosts:
+    - host: plumb.internal.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: plumb-tls
+      hosts: [plumb.internal.example.com]
+podDisruptionBudget:
+  enabled: true
+networkPolicy:
+  allowFromPodSelector:
+    matchLabels:
+      plumb.dev/client: "true"
+verify:
+  enabled: true
+  fileKey: abc123def456
+  schedule: "*/30 * * * *"
+  timeZone: Europe/London
+  targets:
+    - name: dashboard
+      url: http://app.default.svc.cluster.local/dashboard
+      node: "190:109884"
+      waitMs: 2500
+    - name: pricing
+      url: http://app.default.svc.cluster.local/pricing
+      node: "12:100"
+      selector: "[data-plumb-id]"
+commonLabels:
+  team: design-eng

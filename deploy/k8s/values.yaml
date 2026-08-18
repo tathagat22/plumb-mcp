@@ -1,0 +1,41 @@
+# Values used to generate deploy/k8s/plumb.yaml.
+#
+# The Helm chart is the source of truth; this file pins the one configuration
+# the plain manifests represent — a locked-down, credential-free bridge you can
+# `kubectl apply -f` and reach with `kubectl port-forward`.
+#
+# Edit this and re-run `npm run deploy:manifests`; CI fails if the checked-in
+# YAML no longer matches, so the two can never drift apart.
+
+fullnameOverride: plumb
+
+bridge:
+  sessionName: cluster
+
+# No token: the plugin path needs none, and a generated manifest must never
+# carry a placeholder that someone ships to production by accident. Create a
+# Secret named `plumb-figma` with a FIGMA_TOKEN key to enable the REST tools.
+figma:
+  existingSecret: ""
+
+# Everything under /data is a regenerable cache, so the plain manifests use an
+# emptyDir. Turn on persistence in the chart if you want it to survive a
+# restart.
+persistence:
+  enabled: false
+
+# Default-deny. Reach it with `kubectl port-forward`, which tunnels through the
+# API server and is not subject to this policy.
+networkPolicy:
+  enabled: true
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: false
+
+# Continuous design verification needs a Figma token and your own URLs, so it
+# can't be represented in a credential-free static manifest. Use the chart.
+verify:
+  enabled: false

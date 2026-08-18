@@ -1,0 +1,140 @@
+{{- if .Values.verify.enabled }}
+{{- if not (include "plumb.hasFigmaSecret" .) }}
+{{- fail "verify.enabled requires a Figma token: set figma.existingSecret (preferred) or figma.token." }}
+{{- end }}
+{{- if not .Values.verify.targets }}
+{{- fail "verify.enabled requires at least one entry in verify.targets — see deploy/README.md." }}
+{{- end }}
+{{- range $i, $target := .Values.verify.targets }}
+{{- if not $target.url }}{{ fail (printf "verify.targets[%d] is missing `url`." $i) }}{{ end }}
+{{- if not $target.node }}{{ fail (printf "verify.targets[%d] is missing `node` (the Figma node id, using ':' not '-')." $i) }}{{ end }}
+{{- $name := default (printf "%d" $i) $target.name }}
+---
+{{- /*
+  Continuous design verification.
+
+  This is the reason Plumb earns a place in a cluster rather than only on a
+  laptop. It renders a URL you already serve, reads every [data-plumb-id]
+  element's box and computed styles, diffs them against the Figma design the
+  page was built from, and exits non-zero when they have drifted apart. A
+  design regression stops being something a designer notices in a review three
+  weeks later, and starts being a failing job with a timestamp.
+
+  It needs the `verifier` image — the default image ships no browser — and a
+  Figma token, because it reads the design over REST rather than through the
+  plugin.
+*/}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ printf "%s-verify-%s" (include "plumb.fullname" $) $name | trunc 52 | trimSuffix "-" }}
+  labels:
+    {{- include "plumb.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: verify
+    plumb.dev/target: {{ $name | quote }}
+  {{- with $.Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  schedule: {{ $.Values.verify.schedule | quote }}
+  {{- with $.Values.verify.timeZone }}
+  timeZone: {{ . | quote }}
+  {{- end }}
+  concurrencyPolicy: {{ $.Values.verify.concurrencyPolicy }}
+  successfulJobsHistoryLimit: {{ $.Values.verify.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ $.Values.verify.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ $.Values.verify.backoffLimit }}
+      activeDeadlineSeconds: {{ $.Values.verify.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "plumb.selectorLabels" $ | nindent 12 }}
+            app.kubernetes.io/component: verify
+          {{- with $.Values.verify.podAnnotations }}
+          annotations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        spec:
+          restartPolicy: {{ $.Values.verify.restartPolicy }}
+          {{- with $.Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          serviceAccountName: {{ include "plumb.serviceAccountName" $ }}
+          automountServiceAccountToken: false
+          securityContext:
+            {{- toYaml $.Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: verify
+              image: {{ include "plumb.verifyImage" $ }}
+              imagePullPolicy: {{ $.Values.verify.image.pullPolicy }}
+              securityContext:
+                {{- toYaml $.Values.securityContext | nindent 16 }}
+              args:
+                - verify
+                - {{ $target.url | quote }}
+                - --node
+                - {{ $target.node | quote }}
+                {{- with (default $.Values.verify.fileKey $target.fileKey) }}
+                - --file
+                - {{ . | quote }}
+                {{- end }}
+                {{- with $target.selector }}
+                - --selector
+                - {{ . | quote }}
+                {{- end }}
+                {{- with $target.waitMs }}
+                - --wait
+                - {{ . | quote }}
+                {{- end }}
+                {{- /*
+                  --json so the result is machine-readable in the pod log; the
+                  exit code is still what fails the Job.
+                */}}
+                - --json
+              env:
+                {{- include "plumb.commonEnv" $ | nindent 16 }}
+                {{- with $.Values.verify.extraEnv }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+              resources:
+                {{- toYaml $.Values.verify.resources | nindent 16 }}
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                {{- /*
+                  Chromium needs a writable /tmp for its profile and its shared
+                  memory, and the root filesystem is read-only. /dev/shm is
+                  64 MB by default in a container, which Chromium will exhaust
+                  on a real page — hence the explicit memory-backed volume.
+                */}}
+                - name: tmp
+                  mountPath: /tmp
+                - name: dshm
+                  mountPath: /dev/shm
+          volumes:
+            - name: data
+              emptyDir: {}
+            - name: tmp
+              emptyDir: {}
+            - name: dshm
+              emptyDir:
+                medium: Memory
+                sizeLimit: 512Mi
+          {{- with $.Values.verify.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $.Values.verify.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $.Values.verify.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}
+{{- end }}

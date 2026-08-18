@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "plumb chart values",
+  "description": "Validated at lint and install time, so a typo fails before anything reaches the cluster. Deliberately permissive about unknown keys — extra values are how people patch charts — but strict about the fields where a wrong type or value silently produces a broken or over-exposed deployment.",
+  "type": "object",
+  "properties": {
+    "image": {
+      "type": "object",
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+      },
+      "required": ["repository"]
+    },
+    "bridge": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "The bridge keeps pairing state and a node cache in memory, and only one plugin may pair with a process. A second replica means a paired plugin's requests can land on a pod that never saw the pairing."
+        },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "sessionName": { "type": "string" },
+        "logLevel": { "enum": ["debug", "info", "warn", "error"] },
+        "logFormat": { "type": "string" },
+        "extraEnv": { "type": "array" },
+        "resources": { "type": "object" }
+      }
+    },
+    "figma": {
+      "type": "object",
+      "properties": {
+        "existingSecret": { "type": "string" },
+        "existingSecretKey": { "type": "string" },
+        "token": { "type": "string" }
+      }
+    },
+    "service": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": ["ClusterIP", "NodePort", "LoadBalancer"],
+          "description": "The bridge has no authentication. NodePort and LoadBalancer put it on the network with nothing in front of it."
+        },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "className": { "type": "string" },
+        "annotations": { "type": "object" },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "host": { "type": "string", "minLength": 1 },
+              "paths": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": { "type": "string" },
+                    "pathType": { "enum": ["Exact", "Prefix", "ImplementationSpecific"] }
+                  },
+                  "required": ["path", "pathType"]
+                }
+              }
+            },
+            "required": ["host", "paths"]
+          }
+        },
+        "tls": { "type": "array" }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "allowFromNamespaceSelector": { "type": "object" },
+        "allowFromPodSelector": { "type": "object" },
+        "allowEgress": { "type": "boolean" }
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "existingClaim": { "type": "string" },
+        "storageClass": { "type": "string" },
+        "accessModes": { "type": "array", "items": { "type": "string" } },
+        "size": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|K|M|G|T)?$" },
+        "annotations": { "type": "object" }
+      }
+    },
+    "verify": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "schedule": { "type": "string", "minLength": 1 },
+        "timeZone": { "type": "string" },
+        "concurrencyPolicy": { "enum": ["Allow", "Forbid", "Replace"] },
+        "restartPolicy": { "enum": ["Never", "OnFailure"] },
+        "backoffLimit": { "type": "integer", "minimum": 0 },
+        "activeDeadlineSeconds": { "type": "integer", "minimum": 1 },
+        "successfulJobsHistoryLimit": { "type": "integer", "minimum": 0 },
+        "failedJobsHistoryLimit": { "type": "integer", "minimum": 0 },
+        "fileKey": { "type": "string" },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": { "type": "string" },
+            "tag": { "type": "string" },
+            "suffix": {
+              "type": "string",
+              "description": "The default image has no browser. Point this at a tag built from the Dockerfile's `verifier` target."
+            },
+            "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+          }
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" },
+              "url": { "type": "string", "pattern": "^https?://" },
+              "node": {
+                "type": "string",
+                "pattern": "^[0-9]+:[0-9]+$",
+                "description": "Figma node id, using ':' not '-'. Copying it out of a Figma URL gives you the '-' form."
+              },
+              "fileKey": { "type": "string" },
+              "selector": { "type": "string" },
+              "waitMs": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["url", "node"]
+          }
+        }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "properties": {
+        "create": { "type": "boolean" },
+        "name": { "type": "string" },
+        "annotations": { "type": "object" },
+        "automountServiceAccountToken": { "type": "boolean" }
+      }
+    },
+    "podDisruptionBudget": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "podSecurityContext": { "type": "object" },
+    "securityContext": { "type": "object" },
+    "assetProviders": { "type": "object" },
+    "imagePullSecrets": { "type": "array" },
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" },
+    "commonLabels": { "type": "object" },
+    "commonAnnotations": { "type": "object" }
+  }
+}

@@ -302,6 +302,34 @@ There is also a [devcontainer](./.devcontainer/devcontainer.json): open the repo
 
 ---
 
+## Run it on Kubernetes — and catch design drift on a schedule
+
+```bash
+helm install plumb ./deploy/helm/plumb --namespace plumb --create-namespace
+helm test plumb --namespace plumb
+kubectl -n plumb port-forward svc/plumb 31337:31337   # Studio + plugin pairing
+```
+
+A [Helm chart](./deploy/helm/plumb), [plain manifests](./deploy/k8s), and a [Terraform module](./deploy/terraform) — all three producing the same locked-down deployment, all validated in CI (`helm lint`, `kubeconform -strict` against real API schemas on two Kubernetes versions, `terraform validate`, and a regenerate-and-diff so the plain manifests can't drift from the chart).
+
+The reason to put Plumb in a cluster rather than only on a laptop is **continuous design verification**: a CronJob renders a URL you already serve, diffs every `[data-plumb-id]` element against the Figma node it was built from, and **fails when they drift**.
+
+```yaml
+verify:
+  enabled: true
+  schedule: "0 * * * *"
+  targets:
+    - name: dashboard
+      url: http://app.default.svc.cluster.local/dashboard
+      node: "190:109884"
+```
+
+A design regression stops being something someone notices in a review three weeks later, and becomes a failing job with a timestamp and a delta list.
+
+> The bridge has **no authentication of its own** — its security model is loopback plus a deliberate pairing click. So the defaults expose nothing: ClusterIP, a deny-all NetworkPolicy, no ingress, and `kubectl port-forward` as the way in. [`deploy/README.md`](./deploy/README.md) is explicit about what works in a cluster, what doesn't (the Figma plugin scans `127.0.0.1`, so it needs the port-forward), and what each switch actually exposes.
+
+---
+
 ## Standalone CLI
 
 Two commands run outside any MCP client, straight from a terminal — useful for CI or for driving Plumb without an agent in the loop:

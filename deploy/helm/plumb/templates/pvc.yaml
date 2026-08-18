@@ -1,0 +1,26 @@
+{{- if and .Values.persistence.enabled (not .Values.persistence.existingClaim) }}
+{{- /*
+  Everything under /data is a cache — exported assets, screenshots, and the
+  response cache all regenerate from Figma. A PVC only buys you a warm cache
+  across restarts, which is why persistence is off by default.
+*/}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "plumb.fullname" . }}-data
+  labels:
+    {{- include "plumb.labels" . | nindent 4 }}
+  {{- with (merge (dict) .Values.persistence.annotations .Values.commonAnnotations) }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size | quote }}
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,73 @@
+{{- if and .Values.bridge.enabled .Values.networkPolicy.enabled }}
+{{- /*
+  The bridge authenticates nobody. On a laptop that is fine — it binds
+  127.0.0.1 and pairing is a deliberate click. In a cluster the bind address
+  has to be 0.0.0.0 for the Service to work at all, so this policy is what
+  actually restricts access.
+
+  With the default empty selectors, no pod is allowed in and you reach the
+  bridge with `kubectl port-forward` — which is also the only way the Figma
+  plugin can ever reach it, since the plugin scans 127.0.0.1. Add
+  `allowFromPodSelector` to let named workloads in.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "plumb.fullname" . }}
+  labels:
+    {{- include "plumb.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "plumb.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    {{- if .Values.networkPolicy.allowEgress }}
+    - Egress
+    {{- end }}
+  {{- if or .Values.networkPolicy.allowFromPodSelector .Values.networkPolicy.allowFromNamespaceSelector }}
+  ingress:
+    - from:
+        {{- with .Values.networkPolicy.allowFromNamespaceSelector }}
+        - namespaceSelector:
+            {{- toYaml . | nindent 12 }}
+        {{- end }}
+        {{- with .Values.networkPolicy.allowFromPodSelector }}
+        - podSelector:
+            {{- toYaml . | nindent 12 }}
+        {{- end }}
+      ports:
+        - port: {{ .Values.bridge.port }}
+          protocol: TCP
+  {{- else }}
+  # An empty rule list is the explicit "deny every ingress connection" form.
+  # `kubectl port-forward` still works: it tunnels through the API server, not
+  # the pod network, so it never meets this policy.
+  ingress: []
+  {{- end }}
+  {{- if .Values.networkPolicy.allowEgress }}
+  egress:
+    # DNS.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # api.figma.com (REST path), Google Fonts, and the asset providers. Narrow
+    # this with an FQDN-aware policy engine if you have one; plain
+    # NetworkPolicy cannot express hostnames.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+  {{- end }}
+{{- end }}

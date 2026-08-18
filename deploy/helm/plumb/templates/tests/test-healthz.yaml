@@ -1,0 +1,52 @@
+{{- if .Values.bridge.enabled }}
+{{- /*
+  `helm test` — proves the release actually works, not merely that it rolled
+  out. Hits /healthz through the Service, so it exercises the Service selector
+  and the NetworkPolicy alongside the pod itself.
+
+  Carries the chart's own selector labels so a default-deny NetworkPolicy that
+  allows the release's pods also allows this one.
+*/}}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "plumb.fullname" . }}-test-healthz
+  labels:
+    {{- include "plumb.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    {{- toYaml .Values.podSecurityContext | nindent 4 }}
+  containers:
+    - name: healthz
+      image: {{ include "plumb.image" . }}
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      command:
+        - node
+        - -e
+        - |
+          const url = `http://{{ include "plumb.fullname" . }}:{{ .Values.service.port }}/healthz`;
+          fetch(url)
+            .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+            .then((body) => {
+              if (body.ok !== true) throw new Error(`unhealthy: ${JSON.stringify(body)}`);
+              // `paired` is expected to be false here — a fresh release has no
+              // Figma plugin attached, and that is a working bridge, not a
+              // broken one.
+              console.log(`plumb ${body.version} healthy on port ${body.port} (paired=${body.paired})`);
+            })
+            .catch((e) => { console.error(`healthz failed: ${e.message}`); process.exit(1); });
+      volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+  volumes:
+    - name: tmp
+      emptyDir: {}
+{{- end }}

@@ -1,0 +1,207 @@
+# GENERATED FILE — DO NOT EDIT.
+#
+# Rendered from deploy/helm/plumb with deploy/k8s/values.yaml by
+# `npm run deploy:manifests`. Edit the chart or those values, then regenerate.
+# CI fails if this file is out of date.
+#
+#   kubectl create namespace plumb
+#   kubectl apply -n plumb -f deploy/k8s/plumb.yaml
+#   kubectl -n plumb port-forward svc/plumb 31337:31337
+#
+# See deploy/README.md for what this does and does not expose.
+---
+# Source: plumb/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: plumb
+  labels:
+    helm.sh/chart: plumb-0.1.0
+    app.kubernetes.io/name: plumb
+    app.kubernetes.io/instance: plumb
+    app.kubernetes.io/version: "0.13.2"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: plumb
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: plumb
+      app.kubernetes.io/instance: plumb
+  policyTypes:
+    - Ingress
+    - Egress
+  # An empty rule list is the explicit "deny every ingress connection" form.
+  # `kubectl port-forward` still works: it tunnels through the API server, not
+  # the pod network, so it never meets this policy.
+  ingress: []
+  egress:
+    # DNS.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # api.figma.com (REST path), Google Fonts, and the asset providers. Narrow
+    # this with an FQDN-aware policy engine if you have one; plain
+    # NetworkPolicy cannot express hostnames.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+
+---
+# Source: plumb/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: plumb
+  labels:
+    helm.sh/chart: plumb-0.1.0
+    app.kubernetes.io/name: plumb
+    app.kubernetes.io/instance: plumb
+    app.kubernetes.io/version: "0.13.2"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: plumb
+# Plumb never calls the Kubernetes API, so it has no use for a mounted token.
+automountServiceAccountToken: false
+
+---
+# Source: plumb/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: plumb
+  labels:
+    helm.sh/chart: plumb-0.1.0
+    app.kubernetes.io/name: plumb
+    app.kubernetes.io/instance: plumb
+    app.kubernetes.io/version: "0.13.2"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: plumb
+spec:
+  type: ClusterIP
+  ports:
+    - name: bridge
+      port: 31337
+      targetPort: bridge
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: plumb
+    app.kubernetes.io/instance: plumb
+
+---
+# Source: plumb/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plumb
+  labels:
+    helm.sh/chart: plumb-0.1.0
+    app.kubernetes.io/name: plumb
+    app.kubernetes.io/instance: plumb
+    app.kubernetes.io/version: "0.13.2"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: plumb
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: plumb
+      app.kubernetes.io/instance: plumb
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: plumb
+        app.kubernetes.io/instance: plumb
+      annotations:
+        checksum/secret: 316deeb28892b1cdebfe5c12c2cd620b5b8f29289c1ffe3d4f5fc1b2e6a4ea7d
+    spec:
+      serviceAccountName: plumb
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: plumb
+          image: ghcr.io/tathagat22/plumb-mcp:0.13.2
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            privileged: false
+            readOnlyRootFilesystem: true
+          ports:
+            - name: bridge
+              containerPort: 31337
+              protocol: TCP
+          env:
+            - name: PLUMB_BRIDGE_HOST
+              value: "0.0.0.0"
+            - name: PLUMB_BRIDGE_PORT
+              value: "31337"
+            - name: PLUMB_SESSION_NAME
+              value: "cluster"
+            - name: PLUMB_ASSETS_DIR
+              value: /data/assets
+            - name: PLUMB_SCREENSHOTS_DIR
+              value: /data/screenshots
+            - name: PLUMB_CACHE_DIR
+              value: /data/cache
+            - name: PLUMB_LOG_LEVEL
+              value: "info"
+            - name: PLUMB_LOG_FORMAT
+              value: "json"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: bridge
+            periodSeconds: 2
+            failureThreshold: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: bridge
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: bridge
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---

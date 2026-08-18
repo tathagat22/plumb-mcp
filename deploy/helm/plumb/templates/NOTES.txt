@@ -1,0 +1,55 @@
+{{ .Chart.Name }} {{ .Chart.AppVersion }} is installed as "{{ .Release.Name }}" in namespace {{ .Release.Namespace }}.
+
+{{ if .Values.bridge.enabled -}}
+Check it came up healthy:
+
+  helm test {{ .Release.Name }} --namespace {{ .Release.Namespace }}
+
+Open Plumb Studio, and let the Figma plugin find the bridge:
+
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "plumb.fullname" . }} {{ .Values.bridge.port }}:{{ .Values.service.port }}
+
+  then open http://127.0.0.1:{{ .Values.bridge.port }}/
+
+  The Figma plugin scans 127.0.0.1:31337-31346, so the port-forward above is
+  what lets it pair with an in-cluster bridge. Keep the local port at 31337
+  unless you have also changed the plugin.
+{{- end }}
+
+{{ if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+Studio is also published at http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+
+  !! The bridge has NO authentication of its own. Anyone who can reach that
+  !! host can drive it and read whatever a paired plugin has streamed. Put
+  !! authentication in front of the ingress before you point anyone at it.
+{{- end }}
+{{- else if eq .Values.service.type "ClusterIP" }}
+The Service is ClusterIP{{ if .Values.networkPolicy.enabled }} and a default-deny NetworkPolicy is in place{{ end }}, so nothing outside the cluster can reach the bridge. That is the intended posture — use the port-forward above.
+{{- end }}
+
+{{ if .Values.verify.enabled -}}
+Continuous design verification is ON for {{ len .Values.verify.targets }} target(s), on schedule "{{ .Values.verify.schedule }}":
+{{- range .Values.verify.targets }}
+  - {{ default "unnamed" .name }}: {{ .url }} vs Figma node {{ .node }}
+{{- end }}
+
+  Run one now instead of waiting for the schedule:
+
+    kubectl --namespace {{ .Release.Namespace }} create job --from=cronjob/{{ printf "%s-verify-%s" (include "plumb.fullname" .) (default "0" (first .Values.verify.targets).name) | trunc 52 | trimSuffix "-" }} plumb-verify-now
+
+  A failing job means the deployed page has drifted from its design. The pod
+  log carries the deltas as JSON.
+{{- else -}}
+Continuous design verification is off. Turn it on to have Plumb render a URL
+you already serve and fail a job when it drifts from its Figma design:
+
+  --set verify.enabled=true \
+  --set verify.targets[0].name=dashboard \
+  --set verify.targets[0].url=http://my-app.default.svc.cluster.local/dashboard \
+  --set verify.targets[0].node=190:109884
+
+  See deploy/README.md § Continuous design verification.
+{{- end }}
+
+Docs: https://tathagat22.github.io/plumb-mcp/

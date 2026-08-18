@@ -1,0 +1,32 @@
+# Kustomize entry point, for teams that patch rather than template.
+#
+# The bundle is generated from the Helm chart (see ../README.md), so patch it
+# here rather than editing plumb.yaml — a regeneration would overwrite you.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: plumb
+
+resources:
+  - namespace.yaml
+  - plumb.yaml
+
+# Example: pin the image by digest for a production rollout.
+# images:
+#   - name: ghcr.io/tathagat22/plumb-mcp
+#     digest: sha256:...
+
+# Example: attach the Figma token you created out-of-band.
+# patches:
+#   - target:
+#       kind: Deployment
+#       name: plumb
+#     patch: |-
+#       - op: add
+#         path: /spec/template/spec/containers/0/env/-
+#         value:
+#           name: FIGMA_TOKEN
+#           valueFrom:
+#             secretKeyRef:
+#               name: plumb-figma
+#               key: FIGMA_TOKEN

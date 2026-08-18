@@ -26,3 +26,12 @@ bench/report.json
 # Local MCP client config — machine-specific paths and tokens.
 .mcp.json
 coverage/
+
+# Terraform / OpenTofu working state — never committed.
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+crash.log
+*.tfvars
+!*.tfvars.example

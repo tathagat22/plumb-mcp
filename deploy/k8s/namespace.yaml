@@ -1,0 +1,12 @@
+# Not part of the generated bundle: a namespace is a cluster-scoped decision,
+# and most teams already have one (or manage it with their own tooling).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: plumb
+  labels:
+    app.kubernetes.io/part-of: plumb
+    # Plumb runs unprivileged, non-root, with a read-only root filesystem and
+    # no capabilities, so it satisfies the strictest Pod Security Standard.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest

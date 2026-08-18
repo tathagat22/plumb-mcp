@@ -1,0 +1,253 @@
+# Default values for the plumb chart.
+#
+# The defaults deploy a bridge that is reachable ONLY from inside the cluster,
+# by pods you explicitly allow. That is deliberate: plumb-mcp's bridge has no
+# authentication of its own — its security model is "this is on loopback, and a
+# human clicked Pair in the Figma plugin". Every switch that widens that
+# (`service.type`, `ingress.enabled`, `networkPolicy.enabled: false`) is opt-in,
+# and deploy/README.md explains what each one actually exposes.
+
+# -----------------------------------------------------------------------------
+# Image
+# -----------------------------------------------------------------------------
+image:
+  repository: ghcr.io/tathagat22/plumb-mcp
+  # Defaults to the chart's appVersion. Pin a digest in production.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# -----------------------------------------------------------------------------
+# Bridge deployment
+# -----------------------------------------------------------------------------
+bridge:
+  enabled: true
+
+  # The bridge holds per-session pairing state and a node cache in memory, and
+  # only one plugin may pair with a given process. More than one replica means
+  # a plugin's requests can land on a pod that never saw its pairing, so this
+  # is intentionally not a knob you should turn up without reading
+  # deploy/README.md § "Why one replica".
+  replicaCount: 1
+
+  # Port the bridge binds inside the pod, and the one the Service publishes.
+  # A container must publish a port it knows, so this replaces the 31337-31346
+  # scan the local binary does.
+  port: 31337
+
+  # Label the pod shows as in the Figma plugin panel when several agents pair.
+  sessionName: ""
+
+  logLevel: info
+  # `json` emits one JSON object per line for a log shipper; anything else is
+  # the human-readable format. Logs always go to stderr — stdout carries MCP
+  # JSON-RPC framing and must stay clean.
+  logFormat: json
+
+  # Extra environment variables, verbatim.
+  extraEnv: []
+  #  - name: PLUMB_CACHE_TTL_MS
+  #    value: "600000"
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      # No CPU limit by default — CPU throttling on a latency-sensitive request
+      # path buys nothing that the request floor above doesn't already give you.
+      memory: 512Mi
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  podAnnotations: {}
+  podLabels: {}
+  priorityClassName: ""
+  terminationGracePeriodSeconds: 30
+
+# -----------------------------------------------------------------------------
+# Figma credentials
+# -----------------------------------------------------------------------------
+# Only the REST tools (plumb_fig_outline / plumb_fig_node) and the verify/fit
+# CLIs need a token. The plugin path needs none — leave this empty and the
+# bridge still serves Studio and answers a paired plugin.
+figma:
+  # Point at a Secret you manage yourself (sealed-secrets, external-secrets,
+  # SOPS, your cloud's secret store). Strongly preferred.
+  existingSecret: ""
+  existingSecretKey: FIGMA_TOKEN
+
+  # Or let the chart create the Secret from this value. Convenient for a quick
+  # trial; it puts the token in your Helm release history, so don't use it for
+  # anything you'd mind leaking.
+  token: ""
+
+# Optional, free-tier asset providers used only by the prompt→design direction.
+# Same rules as `figma` above: prefer an existing Secret.
+assetProviders:
+  existingSecret: ""
+  unsplashAccessKey: ""
+  pexelsApiKey: ""
+  pixabayApiKey: ""
+  googleFontsApiKey: ""
+
+# -----------------------------------------------------------------------------
+# Persistence — exported assets, screenshots, and the response cache
+# -----------------------------------------------------------------------------
+# All three are caches: everything under /data can be regenerated from Figma.
+# `emptyDir` is therefore a perfectly good default, and a PVC is only worth it
+# if you want the cache to survive a restart.
+persistence:
+  enabled: false
+  existingClaim: ""
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 5Gi
+  annotations: {}
+
+# -----------------------------------------------------------------------------
+# Service
+# -----------------------------------------------------------------------------
+service:
+  # ClusterIP by default. See the warning at the top of this file before
+  # changing this to NodePort or LoadBalancer.
+  type: ClusterIP
+  port: 31337
+  annotations: {}
+
+# -----------------------------------------------------------------------------
+# Ingress — exposes Plumb Studio (and, unavoidably, the bridge) to whoever can
+# reach the ingress controller.
+# -----------------------------------------------------------------------------
+# Studio resolves its WebSocket from `location.host`, so it works correctly
+# behind an ingress. The bridge itself has no auth, so if you enable this you
+# MUST put authentication in front of it — the annotations below show the
+# nginx basic-auth form. Read deploy/README.md § Security first.
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  #  nginx.ingress.kubernetes.io/auth-type: basic
+  #  nginx.ingress.kubernetes.io/auth-secret: plumb-basic-auth
+  #  nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"   # long-lived WS
+  hosts:
+    - host: plumb.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: plumb-tls
+  #    hosts: [plumb.example.com]
+
+# -----------------------------------------------------------------------------
+# NetworkPolicy
+# -----------------------------------------------------------------------------
+# Default-deny ingress, then allow only pods carrying `allowFromPodSelector`.
+# With the default empty selector, NOTHING in the cluster can reach the bridge
+# and you connect with `kubectl port-forward` — which is also the only way the
+# Figma plugin can reach it at all (it scans 127.0.0.1). Egress is allowed
+# because the REST path talks to api.figma.com.
+networkPolicy:
+  enabled: true
+  allowFromNamespaceSelector: {}
+  allowFromPodSelector: {}
+  #  matchLabels:
+  #    plumb.dev/client: "true"
+  # Set false only if you have a cluster-wide egress policy of your own.
+  allowEgress: true
+
+# -----------------------------------------------------------------------------
+# Continuous design verification
+# -----------------------------------------------------------------------------
+# A CronJob that renders a URL you already run and diffs it against the Figma
+# design it was built from, failing when the two drift apart. This is the whole
+# reason Plumb is worth putting in a cluster rather than only on a laptop:
+# design regressions get caught on a schedule, like any other test.
+#
+# Needs the `verifier` image (the base image ships no browser) and a
+# FIGMA_TOKEN. See deploy/README.md § Continuous design verification.
+verify:
+  enabled: false
+
+  image:
+    repository: ghcr.io/tathagat22/plumb-mcp
+    # The Chromium-bearing variant, built from the Dockerfile's `verifier`
+    # target. The default image cannot render a page.
+    tag: ""
+    suffix: "-verifier"
+    pullPolicy: IfNotPresent
+
+  schedule: "0 * * * *"
+  timeZone: ""
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  backoffLimit: 1
+  activeDeadlineSeconds: 900
+  restartPolicy: Never
+
+  # One entry per screen you want watched. `url` is your running app; `node` is
+  # the Figma node id it was built from (use ':' not '-').
+  targets: []
+  #  - name: dashboard
+  #    url: http://my-app.default.svc.cluster.local/dashboard
+  #    node: "190:109884"
+  #    fileKey: ""          # defaults to figma.fileKey
+  #    selector: "[data-plumb-id]"
+  #    waitMs: 1500
+
+  # Default Figma file key for targets that don't set their own.
+  fileKey: ""
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      memory: 3Gi
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# -----------------------------------------------------------------------------
+# Pod-level plumbing
+# -----------------------------------------------------------------------------
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  # Plumb never calls the Kubernetes API.
+  automountServiceAccountToken: false
+
+# The image already runs as a non-root user; these make that explicit and
+# enforced, rather than a property of the image that a rebuild could lose.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  privileged: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+# Extra labels applied to every object the chart renders.
+commonLabels: {}
+commonAnnotations: {}

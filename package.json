@@ -103,7 +103,9 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "demo": "tsx src/demo/cli.ts",
-    "bench": "tsx bench/run.ts"
+    "bench": "tsx bench/run.ts",
+    "deploy:manifests": "bash scripts/gen-manifests.sh",
+    "deploy:lint": "helm lint deploy/helm/plumb && helm template plumb deploy/helm/plumb | kubeconform -strict -summary -"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.0",

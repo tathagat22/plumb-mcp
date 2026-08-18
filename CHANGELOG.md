@@ -35,6 +35,27 @@ are summarized only briefly.
   and `PLUMB_BRIDGE_HOST`. Needed for more than ten concurrent sessions on one
   machine, for containers that must publish a known port, and to stop the test
   suite depending on which ports happen to be free.
+- **Kubernetes deployment** under `deploy/` — a Helm chart, plain manifests,
+  and a Terraform module, all producing the same locked-down deployment:
+  ClusterIP, a deny-all NetworkPolicy, non-root with a read-only root
+  filesystem and no capabilities, and the `restricted` Pod Security Standard
+  enforced on the namespace. The bridge has no authentication of its own, so
+  nothing is exposed by default and `deploy/README.md` states plainly what each
+  switch opens up — and what does not work in a cluster (the Figma plugin scans
+  `127.0.0.1`, so it pairs through `kubectl port-forward`).
+- **Continuous design verification** — an opt-in CronJob that renders a URL you
+  already serve, diffs it against the Figma node it was built from, and fails
+  the Job when they drift. `plumb-mcp verify` already exits non-zero on drift;
+  this puts it on a schedule.
+- **A `verifier` image target** carrying Chromium and the fonts it needs, for
+  the workloads that must render a page. Declared before `runner` in the
+  Dockerfile so a plain `docker build .` still produces the slim server image.
+- **An IaC CI workflow** — `helm lint` on defaults and on an everything-enabled
+  values file, `kubeconform -strict` against real Kubernetes schemas on two
+  versions, assertions that the values schema still *rejects* bad input,
+  `terraform fmt`/`validate`, both image targets building, Chromium proven to
+  render under the chart's exact securityContext, and a regenerate-and-diff so
+  the plain manifests can never drift from the chart.
 - **Dependabot** across all four npm manifests plus the GitHub Actions, and an
   `npm audit --omit=dev --audit-level=high` gate in CI.
 - **Coverage reporting with an enforced floor** (`npm run test:coverage`), and
@@ -59,6 +80,9 @@ are summarized only briefly.
   `emit/`. `src/assets/search.ts` follows. No file is over 600 code lines.
 - `.env.example` documents all 20 environment variables the source reads;
   README gains a full environment-variable table.
+- The container user's UID/GID are pinned to 65532 rather than left to Alpine's
+  allocator, so a base-image bump cannot move them out from under a Kubernetes
+  `runAsUser` or the `/data` ownership.
 - Test files 20 → 35, tests 208 → 621, line coverage 30% → 41%.
 
 ### Earlier in this cycle

@@ -1,0 +1,33 @@
+apiVersion: v2
+name: plumb
+description: >-
+  Plumb — the AI-native design engineering platform. Deploys the bridge and the
+  Plumb Studio cockpit as a shared team service, plus an optional CronJob that
+  continuously verifies a running site against its Figma design.
+type: application
+
+# Chart version tracks the chart; appVersion tracks plumb-mcp.
+version: 0.1.0
+appVersion: "0.13.2"
+
+home: https://tathagat22.github.io/plumb-mcp/
+sources:
+  - https://github.com/tathagat22/plumb-mcp
+icon: https://raw.githubusercontent.com/tathagat22/plumb-mcp/main/figma-plugin/icon.png
+
+keywords:
+  - figma
+  - design-to-code
+  - design-system
+  - mcp
+  - model-context-protocol
+  - design-qa
+  - visual-regression
+
+maintainers:
+  - name: Tathagat Maitray
+    url: https://github.com/tathagat22
+
+annotations:
+  artifacthub.io/license: MIT
+  artifacthub.io/containsSecurityUpdates: "false"

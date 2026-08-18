@@ -1,0 +1,46 @@
+{{- if and .Values.bridge.enabled .Values.ingress.enabled }}
+{{- /*
+  Exposing this puts the bridge on the network, and the bridge has NO
+  authentication of its own — anyone who can reach the host can drive it and
+  read whatever the paired plugin has streamed. Put auth in front of it. The
+  nginx basic-auth annotations in values.yaml are the minimum; SSO at the
+  ingress controller is better.
+
+  Studio resolves its WebSocket from `location.host`, so it works correctly
+  through an ingress — but that connection is long-lived, and most controllers
+  time it out after 60s unless you raise the read timeout.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "plumb.fullname" . }}
+  labels:
+    {{- include "plumb.labels" . | nindent 4 }}
+  {{- with (merge (dict) .Values.ingress.annotations .Values.commonAnnotations) }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "plumb.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.port }}
+          {{- end }}
+    {{- end }}
+{{- end }}

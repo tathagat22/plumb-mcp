@@ -1,0 +1,21 @@
+{{- if .Values.bridge.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "plumb.fullname" . }}
+  labels:
+    {{- include "plumb.labels" . | nindent 4 }}
+  {{- with (merge (dict) .Values.service.annotations .Values.commonAnnotations) }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: bridge
+      port: {{ .Values.service.port }}
+      targetPort: bridge
+      protocol: TCP
+  selector:
+    {{- include "plumb.selectorLabels" . | nindent 4 }}
+{{- end }}
