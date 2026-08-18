@@ -232,6 +232,11 @@ Not just present — checked, on every push, by
 - `deploy/k8s/plumb.yaml` regenerated and diffed — the plain manifests cannot
   drift from the chart.
 - `terraform fmt -check`, `init`, and `validate` on the module and the example.
+- **A negative test on the policy gate itself**: CI feeds the scanners a
+  manifest carrying the exact misconfigurations this chart avoids —
+  privileged, host-networked, running as root, writable root filesystem,
+  `SYS_ADMIN` added — and fails if either scanner accepts it. A gate nobody has
+  watched fail is a gate nobody knows works.
 - **Policy scanning** with two tools that disagree usefully: **Trivy** gates on
   HIGH/CRITICAL across the Dockerfile, the Kubernetes manifests and the
   Terraform module (it is tfsec's maintained successor), and **Checkov** gates

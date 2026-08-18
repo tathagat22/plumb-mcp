@@ -189,6 +189,58 @@ jobs:
       - name: Scan
         run: npm run deploy:scan
 
+      # A gate nobody has watched fail is a gate nobody knows works. Feed the
+      # scanners a manifest with the exact misconfigurations this chart takes
+      # care to avoid, and require them to reject it. Runs against a temp
+      # directory so nothing bad is ever committed.
+      - name: The gate rejects a bad manifest
+        run: |
+          set +e
+          bad="$(mktemp -d)"
+          cat > "$bad/bad.yaml" <<'YAML'
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: deliberately-insecure
+            namespace: default
+          spec:
+            replicas: 1
+            selector:
+              matchLabels: { app: bad }
+            template:
+              metadata:
+                labels: { app: bad }
+              spec:
+                hostNetwork: true
+                hostPID: true
+                containers:
+                  - name: bad
+                    image: nginx:latest
+                    securityContext:
+                      privileged: true
+                      runAsUser: 0
+                      allowPrivilegeEscalation: true
+                      readOnlyRootFilesystem: false
+                      capabilities:
+                        add: ["SYS_ADMIN"]
+          YAML
+
+          fail=0
+          if trivy config "$bad" --severity HIGH,CRITICAL --exit-code 1 --disable-telemetry >/dev/null 2>&1; then
+            echo "✗ Trivy accepted a privileged, host-networked, root container"
+            fail=1
+          else
+            echo "✓ Trivy rejected it"
+          fi
+          if checkov --quiet --compact -d "$bad" >/dev/null 2>&1; then
+            echo "✗ Checkov accepted a privileged, host-networked, root container"
+            fail=1
+          else
+            echo "✓ Checkov rejected it"
+          fi
+          rm -rf "$bad"
+          exit $fail
+
       # The same scan again as SARIF, so findings land in the Security tab
       # rather than only in a failed job's log. Never gates — the run above
       # already did.

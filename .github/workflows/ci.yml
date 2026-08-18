@@ -32,6 +32,12 @@ jobs:
 
       - run: npm ci
 
+      # The Studio workspace has its own manifest and lockfile; `npm run build`
+      # installs it, but doing it here means a missing or drifted lockfile fails
+      # fast with a clear error instead of surfacing halfway through a build.
+      - name: Install the Studio workspace
+        run: npm ci --prefix studio
+
       # Fails the build on a high-or-worse advisory in anything that actually
       # ships. Dev-only findings are reported below without blocking, because
       # a build-tool advisory in vite/esbuild reaches no user of this package
@@ -42,14 +48,18 @@ jobs:
       - name: Audit all dependencies (advisory)
         run: npm audit --audit-level=high || true
 
-      - name: Typecheck
-        run: npm run typecheck
+      # The three gates invoke their tools directly rather than through an npm
+      # alias, so this file says what it actually runs. package.json keeps the
+      # identical commands under `typecheck`/`lint`/`test:coverage` for local
+      # use — `npm run ci:check` runs all three the same way.
+      - name: Typecheck (tsc)
+        run: npx tsc --noEmit && npx tsc -p figma-plugin/tsconfig.json
 
-      - name: Lint
-        run: npm run lint
+      - name: Lint (eslint)
+        run: npx eslint . --max-warnings=0
 
-      - name: Test with coverage
-        run: npm run test:coverage
+      - name: Test with coverage (vitest)
+        run: npx vitest run --coverage
 
       # The demo is a claim about what the verify engine catches. It exits
       # non-zero if it ever misses a planted fault or invents one, so run it
