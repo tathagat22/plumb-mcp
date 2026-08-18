@@ -68,7 +68,6 @@ spec:
       ports:
         - port: 443
           protocol: TCP
-
 ---
 # Source: plumb/templates/serviceaccount.yaml
 apiVersion: v1
@@ -84,7 +83,6 @@ metadata:
     app.kubernetes.io/part-of: plumb
 # Plumb never calls the Kubernetes API, so it has no use for a mounted token.
 automountServiceAccountToken: false
-
 ---
 # Source: plumb/templates/service.yaml
 apiVersion: v1
@@ -109,7 +107,6 @@ spec:
     app.kubernetes.io/name: plumb
     app.kubernetes.io/instance: plumb
     app.kubernetes.io/component: bridge
-
 ---
 # Source: plumb/templates/deployment.yaml
 apiVersion: apps/v1

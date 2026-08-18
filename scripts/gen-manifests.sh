@@ -30,13 +30,25 @@ fi
 #
 # See deploy/README.md for what this does and does not expose.
 HEADER
-  # `helm template` emits its test hook too; a static apply shouldn't create a
-  # Pod that runs once and exits, so it is filtered out here.
+  # Two filters, both load-bearing:
+  #
+  #   1. `helm template` emits the test hook too. A static apply should not
+  #      create a Pod that runs once and exits, so it is dropped.
+  #   2. Blank lines immediately before a `---` are squeezed. Helm 3 and Helm 4
+  #      disagree about whether to emit one, which made the checked-in file
+  #      depend on whichever version the committer happened to have — the drift
+  #      check then failed for a reason that had nothing to do with the chart.
   helm template plumb "$chart" \
     --namespace plumb \
     --values "$root/deploy/k8s/values.yaml" \
     --api-versions networking.k8s.io/v1 \
-    | awk '/^# Source: plumb\/templates\/tests\//{skip=1} /^---$/{skip=0} !skip'
+    | awk '/^# Source: plumb\/templates\/tests\//{skip=1} /^---$/{skip=0} !skip' \
+    | awk '
+        /^[[:space:]]*$/ { blanks = blanks $0 "\n"; next }
+        /^---$/          { blanks = ""; print; next }
+                         { printf "%s", blanks; blanks = ""; print }
+        END              { printf "%s", blanks }
+      '
 } > "$out"
 
 echo "✓ wrote $out"
