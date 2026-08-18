@@ -103,6 +103,18 @@ VOLUME ["/data"]
 
 USER plumb
 
+# One process per container, so pin the bridge port instead of scanning the
+# 31337-31346 pool. That also gives the healthcheck below a port it can count
+# on. The bind address stays loopback by default — compose and the Helm chart
+# set PLUMB_BRIDGE_HOST=0.0.0.0 when the port is genuinely published.
+ENV PLUMB_BRIDGE_PORT=31337
+
+# The bridge serves /healthz (liveness plus whether a plugin is paired), so
+# `docker ps` and compose can report real health rather than "the process has
+# not exited yet". Uses node's own fetch — no curl in the image.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PLUMB_BRIDGE_PORT||31337)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
 # stdio is the default MCP transport — the AI client spawns this process and
 # talks to it over stdin/stdout. Pass `demo` to run the offline walkthrough
 # instead, or `--help` for the full command list.

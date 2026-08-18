@@ -1,0 +1,61 @@
+# Checkov configuration.
+#
+# CI gates on ZERO failed checks rather than on a severity threshold, because
+# open-source Checkov has no severities without a Prisma subscription. That
+# makes every skip below a decision someone has to justify in review, which is
+# the point — a suppression list is only honest if it is short and reasoned.
+#
+# Trivy runs alongside this and gates separately on HIGH/CRITICAL; it currently
+# reports zero across the Dockerfile, the Helm chart, the Kubernetes manifests,
+# and the Terraform module.
+
+# No `directory` or `file` key on purpose. Checkov's config file OVERRIDES the
+# CLI, so pinning a target here silently swallows `checkov -f Dockerfile` and
+# reports a clean scan of something else entirely — which is exactly how the
+# Dockerfile went unscanned until a deliberate check caught it. Targets are
+# always passed on the command line; see `npm run deploy:scan`.
+
+framework:
+  - terraform
+  - kubernetes
+  - helm
+  - dockerfile
+
+# Terraform working directories, which hold vendored provider copies.
+skip-path:
+  - .*/\.terraform/.*
+
+skip-check:
+  # "The default namespace should not be used."
+  # False positive on a Helm chart. Checkov renders templates with no
+  # `--namespace`, so every object appears to be in `default`. The chart is
+  # deliberately namespace-agnostic — Helm sets the namespace at install time,
+  # and deploy/k8s/namespace.yaml + the Terraform module both create a
+  # dedicated one.
+  - CKV_K8S_21
+
+  # "Image should use digest."
+  # Correct advice for a deployment, wrong for a distributable chart: hard-coding
+  # a digest here would pin every user to one build. values.yaml tells operators
+  # to pin a digest in production, and `image.tag` accepts one.
+  - CKV_K8S_43
+
+  # "Image Pull Policy should be Always."
+  # `Always` exists to defend against mutable tags. Since we recommend pinning
+  # by digest, IfNotPresent is the better default — it avoids a registry
+  # round-trip on every pod start. Overridable via `image.pullPolicy`.
+  - CKV_K8S_15
+
+  # "CPU limits should be set."
+  # Deliberate. A CPU limit throttles a latency-sensitive request path in
+  # exchange for nothing the CPU *request* doesn't already guarantee, and is a
+  # common cause of mysterious tail latency. Memory limits ARE set, because
+  # memory is the resource that actually needs a hard ceiling.
+  - CKV_K8S_11
+
+  # "Liveness/Readiness Probe Should be Configured."
+  # Applies to the `helm test` pod only, which runs one check and exits. A
+  # liveness probe on a pod designed to terminate is meaningless. The bridge
+  # Deployment has startup, readiness, and liveness probes on /healthz.
+  - CKV_K8S_8
+  - CKV_K8S_9

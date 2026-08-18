@@ -28,6 +28,16 @@ spec:
       imagePullPolicy: {{ .Values.image.pullPolicy }}
       securityContext:
         {{- toYaml .Values.securityContext | nindent 8 }}
+      # A one-shot pod still gets a resource floor: without one it lands in the
+      # BestEffort QoS class and is first to be evicted under node pressure,
+      # which would fail `helm test` for reasons that have nothing to do with
+      # the release being healthy.
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          memory: 128Mi
       command:
         - node
         - -e

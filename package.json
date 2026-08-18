@@ -105,6 +105,7 @@
     "demo": "tsx src/demo/cli.ts",
     "bench": "tsx bench/run.ts",
     "deploy:manifests": "bash scripts/gen-manifests.sh",
+    "deploy:scan": "bash scripts/scan-iac.sh",
     "deploy:lint": "helm lint deploy/helm/plumb && helm template plumb deploy/helm/plumb | kubeconform -strict -summary -"
   },
   "dependencies": {

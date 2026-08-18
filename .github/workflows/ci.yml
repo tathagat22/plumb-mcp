@@ -1,9 +1,10 @@
 name: CI
 
 # Runs on every push and pull request — typecheck, lint, test (with a coverage
-# floor), the offline demo, a production dependency audit, and a full build must
-# all pass before code reaches `main`. Unlike release.yml (which only fires on a
-# version tag), this is the check that gates day-to-day changes.
+# floor), the offline demo, a production dependency audit, a full build, a
+# container build, and the whole Terraform/Helm/Kubernetes surface must all pass
+# before code reaches `main`. Unlike release.yml (which only fires on a version
+# tag), this is the check that gates day-to-day changes.
 
 on:
   push:
@@ -66,6 +67,17 @@ jobs:
           name: coverage
           path: coverage/
           retention-days: 7
+
+  # Terraform, the Helm chart, the generated Kubernetes manifests, both image
+  # targets, and the policy scanners. Kept in its own file because it is a
+  # sizeable workflow in its own right, but invoked from here so that one
+  # status check covers everything a change can break.
+  iac:
+    name: Infrastructure
+    uses: ./.github/workflows/iac.yml
+    permissions:
+      contents: read
+      security-events: write
 
   # A container image nobody builds is a container image that has stopped
   # working. This proves a fresh clone comes up in isolation — and that the

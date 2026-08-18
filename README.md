@@ -311,7 +311,7 @@ helm test plumb --namespace plumb
 kubectl -n plumb port-forward svc/plumb 31337:31337   # Studio + plugin pairing
 ```
 
-A [Helm chart](./deploy/helm/plumb), [plain manifests](./deploy/k8s), and a [Terraform module](./deploy/terraform) — all three producing the same locked-down deployment, all validated in CI (`helm lint`, `kubeconform -strict` against real API schemas on two Kubernetes versions, `terraform validate`, and a regenerate-and-diff so the plain manifests can't drift from the chart).
+A [Helm chart](./deploy/helm/plumb), [plain manifests](./deploy/k8s), and a [Terraform module](./deploy/terraform) — all three producing the same locked-down deployment, all validated in CI (`helm lint`, `kubeconform -strict` against real API schemas on two Kubernetes versions, `terraform validate`, Trivy and Checkov policy scans, and a regenerate-and-diff so the plain manifests can't drift from the chart).
 
 The reason to put Plumb in a cluster rather than only on a laptop is **continuous design verification**: a CronJob renders a URL you already serve, diffs every `[data-plumb-id]` element against the Figma node it was built from, and **fails when they drift**.
 

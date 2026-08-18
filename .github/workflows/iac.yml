@@ -1,29 +1,19 @@
 name: IaC
 
 # Infrastructure that nobody validates is infrastructure that has already
-# stopped working. Every artifact under deploy/ is linted, rendered, and
-# schema-checked here on each push — and the plain manifests are regenerated
-# from the chart and diffed, so the two copies can never drift apart.
+# stopped working. Every artifact under deploy/ is linted, rendered,
+# schema-checked, and policy-scanned here — and the plain manifests are
+# regenerated from the chart and diffed, so the two copies can never drift
+# apart.
+#
+# Called by ci.yml on every push and pull request rather than triggered
+# separately, so there is one entry point that gates a change and `ci.yml`
+# visibly covers the Terraform and Kubernetes code. It stays independently
+# dispatchable for a manual re-run.
 
 on:
-  push:
-    branches: ["**"]
-    paths:
-      - "deploy/**"
-      - "Dockerfile"
-      - "scripts/gen-manifests.sh"
-      - ".github/workflows/iac.yml"
-  pull_request:
-    paths:
-      - "deploy/**"
-      - "Dockerfile"
-      - "scripts/gen-manifests.sh"
-      - ".github/workflows/iac.yml"
+  workflow_call:
   workflow_dispatch:
-
-concurrency:
-  group: iac-${{ github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -162,6 +152,70 @@ jobs:
 
       - name: Validate the kustomize build
         run: kubectl kustomize deploy/k8s | kubeconform -strict -summary -kubernetes-version 1.31.0 -
+
+  # Policy scanning. Two tools because they disagree usefully: Trivy gates on
+  # HIGH/CRITICAL across the Dockerfile, the Kubernetes manifests and the
+  # Terraform module in one pass (it is tfsec's maintained successor); Checkov
+  # gates on ANY failed check, since open-source Checkov has no severities.
+  # Every Checkov suppression is listed and justified in .checkov.yaml.
+  policy:
+    name: Policy scan (Trivy + Checkov)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Trivy — Dockerfile, Kubernetes, Terraform
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          skip-dirs: "**/node_modules,**/.terraform"
+
+      # Same scan again, as SARIF, so findings land in the Security tab rather
+      # than only in a failed job's log. Never gates — the run above already did.
+      - name: Trivy — SARIF for code scanning
+        if: always()
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: sarif
+          output: trivy.sarif
+          exit-code: "0"
+          skip-dirs: "**/node_modules,**/.terraform"
+
+      - name: Upload Trivy SARIF
+        if: always() && hashFiles('trivy.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-config
+
+      - name: Checkov — deploy/
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: deploy
+          config_file: .checkov.yaml
+          quiet: true
+          soft_fail: false
+          output_format: cli
+
+      # The Dockerfile sits outside deploy/, and widening the scan to `.` would
+      # drag in node_modules. Kept as its own step for that reason.
+      - name: Checkov — Dockerfile
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          file: Dockerfile
+          config_file: .checkov.yaml
+          quiet: true
+          soft_fail: false
+          output_format: cli
 
   terraform:
     name: Terraform module

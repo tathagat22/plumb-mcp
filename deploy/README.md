@@ -232,6 +232,14 @@ Not just present — checked, on every push, by
 - `deploy/k8s/plumb.yaml` regenerated and diffed — the plain manifests cannot
   drift from the chart.
 - `terraform fmt -check`, `init`, and `validate` on the module and the example.
+- **Policy scanning** with two tools that disagree usefully: **Trivy** gates on
+  HIGH/CRITICAL across the Dockerfile, the Kubernetes manifests and the
+  Terraform module (it is tfsec's maintained successor), and **Checkov** gates
+  on *any* failed check, since open-source Checkov has no severities. Both are
+  currently clean — 83 Kubernetes, 165 Helm, and 9 Dockerfile checks passing.
+  Every Checkov suppression is listed with its reason in
+  [`.checkov.yaml`](../.checkov.yaml); there are six, and each is a considered
+  decision rather than a silenced finding.
 - Both image targets built, the offline demo run inside the default image, and
   Chromium proven to render a page under the chart's exact securityContext —
   non-root, read-only root filesystem, all capabilities dropped.
@@ -247,9 +255,13 @@ Reproduce it locally:
 
 ```bash
 npm run deploy:lint          # helm lint + kubeconform
+npm run deploy:scan          # trivy + checkov, exactly as CI runs them
 npm run deploy:manifests     # regenerate deploy/k8s/plumb.yaml
 git diff --exit-code deploy/k8s
 ```
+
+`deploy:scan` needs `brew install trivy checkov` (or the equivalent) locally;
+CI installs them itself.
 
 ---
 
