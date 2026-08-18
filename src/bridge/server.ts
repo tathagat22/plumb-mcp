@@ -4,6 +4,16 @@ import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { WebSocketServer, type WebSocket } from "ws";
 import { resolveBridgeHost, resolveBridgePorts } from "./ports";
+import {
+  clearProgressListener,
+  heartbeat,
+  openRequest,
+  pendingCount,
+  rejectAllPending,
+  resetRequestQueue,
+  resolvePending,
+  setProgressListener,
+} from "./requestQueue";
 import { bridge } from "./store";
 import { PlumbError } from "../errors";
 import {
@@ -40,23 +50,8 @@ import type {
 } from "./protocol";
 
 let pairedSocket: WebSocket | null = null;
-let reqCounter = 0;
 
 let sweepTimer: ReturnType<typeof setInterval> | undefined;
-
-interface Pending {
-  resolve: (value: unknown) => void;
-  reject: (error: Error) => void;
-  /** Reassignable: an apply-progress heartbeat resets the watchdog in place. */
-  timer: ReturnType<typeof setTimeout>;
-  /** ms — the timeout to re-arm on each heartbeat (write ops only). */
-  timeoutMs: number;
-  label: string;
-}
-const pending = new Map<string, Pending>();
-
-/** Non-terminal apply-progress listeners, keyed by reqId (write ops only). */
-const progressListeners = new Map<string, (p: ApplyProgressMessage) => void>();
 
 function send(ws: WebSocket, msg: ServerMessage): void {
   try {
@@ -69,64 +64,22 @@ function send(ws: WebSocket, msg: ServerMessage): void {
 /** stdout is the MCP protocol channel — `createLogger` writes only to stderr. */
 const log = createLogger("bridge");
 
-function resolvePending(reqId: string, value: unknown): void {
-  const p = pending.get(reqId);
-  if (!p) {
-    // Reply arrived after we already timed out — surface it so we can tell
-    // a slow-but-eventual reply from a genuine hang during debugging.
-    log.warn("late reply — already timed out or unknown", { reqId });
-    return;
-  }
-  clearTimeout(p.timer);
-  pending.delete(reqId);
-  p.resolve(value);
-}
-
-function rejectAllPending(error: Error): void {
-  for (const p of pending.values()) {
-    clearTimeout(p.timer);
-    p.reject(error);
-  }
-  pending.clear();
-  progressListeners.clear();
-}
-
 /** Send a request to the paired plugin and await its matching reply. */
 function request<T>(
   build: (reqId: string) => ServerMessage,
   timeoutMs: number,
   label: string,
 ): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    if (!pairedSocket) {
-      reject(
-        new PlumbError(
-          "No Figma plugin is paired.",
-          "Open your file in Figma, run the Plumb plugin, and click 'Pair with Plumb'.",
-        ),
-      );
-      return;
-    }
-    const reqId = `r${++reqCounter}`;
-    const timer = setTimeout(() => {
-      pending.delete(reqId);
-      progressListeners.delete(reqId);
-      reject(
-        new PlumbError(
-          `The Plumb plugin did not answer the ${label} request in time.`,
-          "Make sure the plugin is still running and paired in Figma, then retry.",
-        ),
-      );
-    }, timeoutMs);
-    pending.set(reqId, {
-      resolve: resolve as (v: unknown) => void,
-      reject,
-      timer,
-      timeoutMs,
-      label,
-    });
-    send(pairedSocket, build(reqId));
-  });
+  const socket = pairedSocket;
+  if (!socket) {
+    return Promise.reject(
+      new PlumbError(
+        "No Figma plugin is paired.",
+        "Open your file in Figma, run the Plumb plugin, and click 'Pair with Plumb'.",
+      ),
+    );
+  }
+  return openRequest<T>(label, timeoutMs, (reqId) => send(socket, build(reqId)));
 }
 
 /**
@@ -255,7 +208,7 @@ export function requestApplyDesign(
   return new Promise((resolve, reject) => {
     request<{ result: EmitResult | null; error: string | null }>(
       (reqId) => {
-        if (onProgress) progressListeners.set(reqId, onProgress);
+        if (onProgress) setProgressListener(reqId, onProgress);
         return { t: "apply-design", reqId, plan };
       },
       600_000,
@@ -330,7 +283,7 @@ export function healthReport(): HealthReport {
     pluginVersion: bridge.pluginVersion,
     uptimeSec: Math.round(process.uptime()),
     lastSeenMsAgo: bridge.lastSeen ? Date.now() - bridge.lastSeen : null,
-    pending: pending.size,
+    pending: pendingCount(),
     staging: stagingStats(),
     studio: studioAvailable(),
   };
@@ -466,6 +419,7 @@ export async function stopBridge(): Promise<void> {
   // answer now. Dropping them here also stops one test's staging leaking into
   // the next, since the maps are module state.
   resetStaging();
+  resetRequestQueue();
   bridge.reset();
   bridge.port = null;
 }
@@ -632,26 +586,11 @@ export async function startBridge(): Promise<void> {
             error: msg.error,
           });
           break;
-        case "apply-progress": {
-          // NON-TERMINAL heartbeat: reset the 600s watchdog in place, notify the
-          // listener (drives Studio), and DO NOT resolve the pending request.
-          const p = pending.get(msg.reqId);
-          if (p) {
-            clearTimeout(p.timer);
-            p.timer = setTimeout(() => {
-              pending.delete(msg.reqId);
-              progressListeners.delete(msg.reqId);
-              p.reject(
-                new PlumbError(
-                  `The Plumb plugin did not answer the ${p.label} request in time.`,
-                  "Make sure the plugin is still running and paired in Figma, then retry.",
-                ),
-              );
-            }, p.timeoutMs);
-          }
-          progressListeners.get(msg.reqId)?.(msg);
+        case "apply-progress":
+          // NON-TERMINAL: re-arms the watchdog and notifies the listener that
+          // drives Studio, without settling the request.
+          heartbeat(msg);
           break;
-        }
         case "applied":
           // A write just changed the document — invalidate the read cache NOW so
           // a follow-up plumb_review / plumb_node re-serializes the fresh nodes,
@@ -659,7 +598,7 @@ export async function startBridge(): Promise<void> {
           // otherwise lets review read stale geometry/colours right after a build).
           bridge.fileVersion += 1;
           if (bridge.nodeCache.size > 0) bridge.nodeCache.clear();
-          progressListeners.delete(msg.reqId);
+          clearProgressListener(msg.reqId);
           resolvePending(msg.reqId, { result: msg.result, error: msg.error });
           break;
         case "foundations":
