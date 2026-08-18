@@ -30,23 +30,33 @@ fi
 #
 # See deploy/README.md for what this does and does not expose.
 HEADER
-  # Two filters, both load-bearing:
+  # Two passes, both load-bearing:
   #
-  #   1. `helm template` emits the test hook too. A static apply should not
-  #      create a Pod that runs once and exits, so it is dropped.
-  #   2. Blank lines immediately before a `---` are squeezed. Helm 3 and Helm 4
-  #      disagree about whether to emit one, which made the checked-in file
-  #      depend on whichever version the committer happened to have — the drift
-  #      check then failed for a reason that had nothing to do with the chart.
+  #   1. Drop the test-hook templates. A static `kubectl apply` should not
+  #      create a Pod that runs once and exits, nor the NetworkPolicy that
+  #      exists only for it.
+  #   2. Tidy the separators that leaves behind. Skipping a document strands
+  #      its leading `---`, and Helm 3 and Helm 4 disagree about emitting a
+  #      blank line before one — which made the checked-in file depend on
+  #      whichever version the committer happened to have, and the drift check
+  #      fail for reasons that had nothing to do with the chart.
+  #
+  #      So: hold each `---` until a real line proves a document follows it,
+  #      squeeze the blanks in between, and drop any separator still pending at
+  #      EOF.
   helm template plumb "$chart" \
     --namespace plumb \
     --values "$root/deploy/k8s/values.yaml" \
     --api-versions networking.k8s.io/v1 \
     | awk '/^# Source: plumb\/templates\/tests\//{skip=1} /^---$/{skip=0} !skip' \
     | awk '
+        /^---$/          { pending = 1; blanks = ""; next }
         /^[[:space:]]*$/ { blanks = blanks $0 "\n"; next }
-        /^---$/          { blanks = ""; print; next }
-                         { printf "%s", blanks; blanks = ""; print }
+                         {
+                           if (pending) { print "---"; pending = 0; blanks = "" }
+                           printf "%s", blanks; blanks = ""
+                           print
+                         }
         END              { printf "%s", blanks }
       '
 } > "$out"

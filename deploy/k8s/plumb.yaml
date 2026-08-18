@@ -215,4 +215,3 @@ spec:
           emptyDir: {}
         - name: tmp
           emptyDir: {}
----
