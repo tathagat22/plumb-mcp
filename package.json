@@ -113,7 +113,7 @@
     "@modelcontextprotocol/sdk": "^1.11.0",
     "openfig-core": "^0.3.7",
     "ws": "^8.21.0",
-    "zod": "^3.25.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@figma/plugin-typings": "^1.127.0",
