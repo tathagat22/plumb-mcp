@@ -1,15 +1,22 @@
 name: CI
 
-# Runs on every push and pull request — typecheck, test, lint, and build must
-# all pass before code reaches `main`. Unlike release.yml (which only fires
-# on a version tag and previously stopped at typecheck+build+smoke, never
-# running the Vitest suite at all), this is the check that actually gates
-# day-to-day changes.
+# Runs on every push and pull request — typecheck, lint, test (with a coverage
+# floor), the offline demo, a production dependency audit, and a full build must
+# all pass before code reaches `main`. Unlike release.yml (which only fires on a
+# version tag), this is the check that gates day-to-day changes.
 
 on:
   push:
     branches: ["**"]
   pull_request:
+
+# A new push to the same branch makes the in-flight run obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   ci:
@@ -24,14 +31,52 @@ jobs:
 
       - run: npm ci
 
+      # Fails the build on a high-or-worse advisory in anything that actually
+      # ships. Dev-only findings are reported below without blocking, because
+      # a build-tool advisory in vite/esbuild reaches no user of this package
+      # and shouldn't be able to stop a release.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit all dependencies (advisory)
+        run: npm audit --audit-level=high || true
+
       - name: Typecheck
         run: npm run typecheck
 
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm test
+      - name: Test with coverage
+        run: npm run test:coverage
 
-      - name: Build (server + plugin)
+      # The demo is a claim about what the verify engine catches. It exits
+      # non-zero if it ever misses a planted fault or invents one, so run it
+      # here rather than trusting the README.
+      - name: Offline demo (self-check)
+        run: npm run demo -- --json
+
+      - name: Build (server + plugin + studio)
         run: npm run build
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+  # A container image nobody builds is a container image that has stopped
+  # working. This proves a fresh clone comes up in isolation — and that the
+  # demo passes with networking switched off entirely.
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build the image
+        run: docker compose build demo
+
+      - name: Run the demo with no network access
+        run: docker compose up --exit-code-from demo demo

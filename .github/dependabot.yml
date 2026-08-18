@@ -1,0 +1,47 @@
+# Weekly dependency updates. The repo has four npm manifests (root server,
+# Studio, the playground, and the Actions workflows themselves) — an update
+# policy that only covers the root leaves the two Vite apps drifting.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      # One PR for the dev toolchain instead of six. Runtime deps stay
+      # individual so a breaking change is easy to attribute and revert.
+      dev-tooling:
+        dependency-type: development
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: npm
+    directory: "/studio"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "studio"]
+    groups:
+      studio-deps:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: npm
+    directory: "/playground"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    labels: ["dependencies", "playground"]
+    groups:
+      playground-deps:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    labels: ["dependencies", "ci"]

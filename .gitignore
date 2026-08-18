@@ -25,3 +25,4 @@ bench/report.json
 
 # Local MCP client config — machine-specific paths and tokens.
 .mcp.json
+coverage/

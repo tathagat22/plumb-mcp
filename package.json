@@ -101,6 +101,7 @@
     "docs:preview": "vitepress preview docs",
     "build:studio": "npm --prefix studio ci && npm --prefix studio run build",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "demo": "tsx src/demo/cli.ts",
     "bench": "tsx bench/run.ts"
   },
@@ -114,6 +115,7 @@
     "@figma/plugin-typings": "^1.127.0",
     "@types/node": "^20.14.0",
     "@types/ws": "^8.18.1",
+    "@vitest/coverage-v8": "^4.1.11",
     "esbuild": "^0.28.0",
     "eslint": "^9.39.5",
     "tsup": "^8.3.0",
