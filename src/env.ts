@@ -36,8 +36,18 @@ function applyDotEnvFile(path: string): void {
     ) {
       value = value.slice(1, -1);
     }
+    if (!key) continue;
+    // An empty value means "not set", not "set to the empty string".
+    //
+    // This matters because `.env.example` lists every variable with a blank
+    // value so a fresh clone can copy it and see the full surface. Assigning
+    // "" from that would be worse than useless: `process.env.X ?? default` is
+    // nullish-coalescing, so an empty string SATISFIES it and silently
+    // replaces every default with nothing — a cache in "", assets written to
+    // "", Chrome looked up at "".
+    if (!value) continue;
     // Existing env always wins, so a client's explicit `env` block overrides.
-    if (key && process.env[key] === undefined) process.env[key] = value;
+    if (process.env[key] === undefined) process.env[key] = value;
   }
 }
 
