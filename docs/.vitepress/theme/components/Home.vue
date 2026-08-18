@@ -150,7 +150,7 @@ onMounted(async () => {
           <pre><code><span class="ph-prompt">$</span> npx plumb-mcp init
 <span class="ph-dim">→ found Claude Code, Cursor</span>
 <span class="ph-dim">→ wrote .mcp.json (2 servers)</span>
-<span class="ph-ok">✓ plumb ready — 24 tools, one semantic graph</span></code></pre>
+<span class="ph-ok">✓ plumb ready — 28 tools, one semantic graph</span></code></pre>
         </div>
       </div>
       <div class="ph-hero-visual" aria-hidden="true">
@@ -379,7 +379,7 @@ onMounted(async () => {
         <div class="ph-trust-card">
           <h3>Open source</h3>
           <p>
-            MIT-licensed. Twenty-four focused tools on one semantic graph,
+            MIT-licensed. Twenty-eight focused tools on one semantic graph,
             plus an offline <code>.fig</code> parser. Issues and roadmap on
             GitHub.
           </p>

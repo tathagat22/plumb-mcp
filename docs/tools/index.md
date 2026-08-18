@@ -1,11 +1,11 @@
 ---
 title: "MCP tool reference — Plumb, the AI-native design engineering platform"
-description: "Twenty-four Model Context Protocol tools built on one shared semantic design graph. Read direction — Figma or the live web to code: outline, node, query, describe, assets, screenshot, verify, the self-healing fit loop, semantic diff, accessibility audit, live webpage import, and a deterministic React generator. Write direction — prompt to design: studio, brand, design, review, source. The AI design director, no extra API key."
+description: "Twenty-eight Model Context Protocol tools built on one shared semantic design graph. Read direction — Figma or the live web to code: outline, node, query, describe, assets, screenshot, verify, the self-healing fit loop, semantic diff, accessibility audit, live webpage import, live reference scanning, and a deterministic React generator. Write direction — prompt to design: studio (one-call or three watchable steps), brand, design, review, source. The AI design director, no extra API key (as MCP tools)."
 ---
 
 # Tools
 
-Plumb exposes **twenty-five** MCP tools, all reading from or writing to one shared **semantic design graph** — split across the two directions it plumbs — **design → code** (Figma or the live web, read) and **prompt → design** (write). Each tool has a focused, single responsibility; the agent composes them.
+Plumb exposes **twenty-eight** MCP tools, all reading from or writing to one shared **semantic design graph** — split across the two directions it plumbs — **design → code** (Figma or the live web, read) and **prompt → design** (write). Each tool has a focused, single responsibility; the agent composes them.
 
 ## Read — Figma → code
 
@@ -41,6 +41,7 @@ Turn a one-line brief into a full, on-brand Figma design: research real referenc
 | Tool | What it does |
 |---|---|
 | [`plumb_studio`](/tools/plumb_studio) | **The design director.** One brief → researched references → extracted brand → a full composed Figma page (nav, hero, features, gallery, CTA, footer). Returns the node ids + authored spec so you can critique and refine. |
+| [`plumb_studio_start`](/tools/plumb_studio_start) / [`plumb_studio_kit`](/tools/plumb_studio_kit) / [`plumb_studio_page`](/tools/plumb_studio_page) | The same director flow, split into three watchable steps — open a session with a brand + references, build the reusable component library, then compose one or more product pages (landing / features / pricing / dashboard) against it — instead of one opaque call. |
 | [`plumb_brand`](/tools/plumb_brand) | Brief → live-screenshots best-in-class reference sites + a synthesized brand palette / type board (real Figma Variables + text styles) on the canvas. |
 | [`plumb_design`](/tools/plumb_design) | Author a design from Plumb's high-level Design DSL and build it into Figma — full control over pages, sections, blocks, and brand tokens. The refine step of the loop (`mode:"sync"`). |
 | [`plumb_review`](/tools/plumb_review) | The critique loop — the mirror of `plumb_fit`. Blends a structural diff, a deterministic design rubric, and the calling agent's own vision verdict into one score + ranked fixes. |
@@ -72,4 +73,4 @@ Read tools that need design data auto-pick between the **plugin path** (instant,
 
 The plugin-path tools — `plumb_outline`, `plumb_selection`, `plumb_assets`, `plumb_screenshot`, `plumb_search`, `plumb_components` — require the plugin paired and won't fall back to REST. The other read tools (`plumb_node`, `plumb_query`, `plumb_describe`, `plumb_tokens`, `plumb_verify`, `plumb_fit`) work on both paths. `plumb_diff`, `plumb_audit`, and `plumb_emit_react` are a third category — they touch neither Figma path at all, operating only on documents you already have (pass the raw JSON from a prior `plumb_node`/`plumb_outline`/`plumb_query`/`plumb_import_web` call). `plumb_import_web` is a fourth category on its own — it needs no Figma connection whatsoever, driving its own headless Chrome against any URL instead.
 
-**Every write tool builds through the plugin path** — `plumb_studio`, `plumb_brand`, and `plumb_design` all require the Plumb plugin paired to write to Figma (`plumb_design` can `dryRun` to compile + validate without it). `plumb_review` is read-only — it grades the emitted result — and `plumb_source` needs no Figma connection at all.
+**Every write tool builds through the plugin path** — `plumb_studio`, `plumb_studio_start`/`plumb_studio_kit`/`plumb_studio_page`, `plumb_brand`, and `plumb_design` all require the Plumb plugin paired to write to Figma (`plumb_design` can `dryRun` to compile + validate without it). `plumb_review` is read-only — it grades the emitted result — and `plumb_source` needs no Figma connection at all.

@@ -62,7 +62,7 @@
 1. **研究参考** —— 为你的简报找出业界一流的网站（Linear、Stripe、Mercury……），并**实时截图**放到 References 页面上。
 2. **提取品牌** —— 读取它们的计算后 CSS，凝练成一套连贯的调色板 + 字号阶梯，铺陈为一块 Brand board。
 3. **生成设计** —— 从一套高层次的 design DSL 组合出一个完整、贴合品牌的页面（导航、hero、功能区、图库、CTA、页脚），构建为真实的 Figma 节点。
-4. **批判自己的渲染** —— 调用方代理（Claude Code / 任何具备视觉能力的 MCP 客户端 —— **无需额外 API key**）为截图打分；Plumb 把这个评分与一套确定性的设计评分标准以及一次结构对比融合，交回一份排好序的修正清单，并不断迭代，直到越过及格线。
+4. **批判自己的渲染** —— 调用方代理（Claude Code / 任何具备视觉能力的 MCP 客户端 —— **作为 MCP 工具运行时无需额外 API key**；唯一的例外是独立的 `plumb-mcp fit` CLI，见下文的[独立 CLI](#独立-cli)）为截图打分；Plumb 把这个评分与一套确定性的设计评分标准以及一次结构对比融合，交回一份排好序的修正清单，并不断迭代，直到越过及格线。
 
 这就是 **prompt-to-Figma 设计生成，配上一个自我改进的设计总监循环** —— 而不是一次性的样机。
 
@@ -78,7 +78,7 @@
 
 而在 MCP 世界之外，更广义的 design-to-code / AI UI 生成器这一类别 —— 例如 html.to.design、Anima、Locofy，或者 v0、Builder.io 的 Visual Copilot 这类 prompt 优先的生成器 —— 通常也只朝一个方向移动（设计进、代码出，或者 prompt 进、代码出），没有贯穿两端的共享模型，事后也没有内建步骤去核对输出是否忠于来源。
 
-Plumb 是唯一一台既**在代码侧闭环**、*又*能**指挥全新设计生成**的方案，而这一切都建立在**一份不关心来源是 Figma 还是 URL 的语义图**之上。`plumb_verify` 告诉你交付的代码是否真的匹配设计（或参考页面）；`plumb_fit` 把它变成一个自愈循环。`plumb_import_web` + `plumb_emit_react` 证明了这份图是可迁移的：同一套角色分类器、同一个代码生成器，在完全不涉及 Figma 的情况下对一个实时网站照常运行。而在写方向上，`plumb_studio` / `plumb_brand` / `plumb_design` / `plumb_review` 把一个 prompt 变成一份已设计、已批判的 Figma 文件 —— 无需设计技能，无需另一个设计工具，无需额外的模型 key。
+Plumb 是唯一一台既**在代码侧闭环**、*又*能**指挥全新设计生成**的方案，而这一切都建立在**一份不关心来源是 Figma 还是 URL 的语义图**之上。`plumb_verify` 告诉你交付的代码是否真的匹配设计（或参考页面）；`plumb_fit` 把它变成一个自愈循环。`plumb_import_web` + `plumb_emit_react` 证明了这份图是可迁移的：同一套角色分类器、同一个代码生成器，在完全不涉及 Figma 的情况下对一个实时网站照常运行。而在写方向上，`plumb_studio` / `plumb_brand` / `plumb_design` / `plumb_review` 把一个 prompt 变成一份已设计、已批判的 Figma 文件 —— 无需设计技能，无需另一个设计工具，无需额外的模型 key（作为 MCP 工具而言；唯一需要 key 的命令见[独立 CLI](#独立-cli)）。
 
 ---
 
@@ -134,7 +134,7 @@ echo "$(npm root -g)/plumb-mcp/figma-plugin/manifest.json"
 
 ---
 
-## 二十四个工具，一份语义图
+## 二十八个工具，一份语义图
 
 下面的每一个工具，都读取或写入上文所述的同一份语义设计图 —— 这正是为什么新增一个来源（网页）或一个目标（React）只是增量扩展，而不是推倒重来。
 
@@ -160,12 +160,14 @@ echo "$(npm root -g)/plumb-mcp/figma-plugin/manifest.json"
 | `plumb_audit` | 启发式无障碍检查 —— 文本对比度、按钮触控目标尺寸。 |
 | `plumb_import_web` | 导入一个实时网页的结构与语义 —— 无需连接 Figma。使用与 Figma 设计相同的角色分类器。 |
 | `plumb_emit_react` | 从一份 PDS 或一次 `plumb_import_web` 结果生成确定性的 React/JSX —— 同一个生成器，任一来源皆可。 |
+| `plumb_scan_references` | 扫描 N 个实时参考 URL，提取按角色划分的风格摘要（典型 hero 高度、卡片网格密度、导航风格）—— 供你手动整合进 `plumb_design` DSL 或 `plumb_studio` 简报;它本身并不组合或构建任何东西。 |
 
 ### 写 —— prompt → design（设计总监）
 
 | 工具 | 作用 |
 |---|---|
 | `plumb_studio` | **设计总监。** 一句简报 → 研究好的参考 → 提取的品牌 → 一个完整组合的 Figma 页面。返回节点 ids + 编写的规范，以便你批判和打磨。 |
+| `plumb_studio_start` / `plumb_studio_kit` / `plumb_studio_page` | 同一套设计总监流程，拆分为三个可逐步查看的步骤（品牌+参考 → 组件套件 → 产品页面），让你在每一步之间审阅，而不是一次不透明的调用；分别构建在独立命名的 Figma 页面上。 |
 | `plumb_brand` | 简报 → 对业界一流参考站点实时截图 + 在画布上合成一块品牌调色板／字体 board。 |
 | `plumb_design` | 用 Plumb 的高层次 Design DSL 编写设计，并构建进 Figma（完全掌控：页面、区块、组件、动效）。 |
 | `plumb_review` | 批判循环：把一次结构对比、一套确定性的设计评分标准、以及调用方代理自己的视觉裁决融合成一个分数 + 排好序的修正清单。**无需 API key** —— 驱动 MCP 服务器的那个代理*就是*创意总监。 |
@@ -213,11 +215,40 @@ PIXABAY_API_KEY=…
 
 ---
 
+## 独立 CLI
+
+有两个命令可以脱离任何 MCP 客户端、直接在终端里运行 —— 适用于 CI，或者在没有代理参与的情况下驱动 Plumb：
+
+```bash
+plumb-mcp verify <dev-url> --node <figma-node-id>   # 对比一个正在运行的页面与设计稿
+plumb-mcp fit <figma-url>                           # 生成并自我修正一个 HTML 构建，直到匹配为止
+```
+
+`plumb-mcp verify` 只需要 `FIGMA_TOKEN`（或已配对的插件）—— 它只做对比、不做生成，所以不需要模型 key。`plumb-mcp fit` 是本项目中唯一一个直接调用外部模型的命令：它自己生成 HTML 构建（没有代理来替它做这件事），所以除了 `FIGMA_TOKEN` 之外还需要 `ANTHROPIC_API_KEY`。每一个 MCP 工具，包括 `plumb_fit` 和 `plumb_review`，都始终无需 key —— 因为生成/裁决的工作由调用方代理承担。
+
+---
+
+## 网络出站请求
+
+| 调用点 | 访问对象 | 何时发生 |
+|---|---|---|
+| Figma 插件桥接 | 仅 `localhost`（WebSocket） | 插件已配对时 |
+| Figma REST（`FIGMA_TOKEN` 路径） | `api.figma.com` | 仅在插件未配对，或用于无头/CI 场景时 |
+| `plumb_import_web` / `plumb_scan_references` / 无头 CLI | 你传入的目标 URL，通过 headless Chrome（CDP） | 仅在你调用这些工具时 |
+| `plumb_studio` / `plumb_brand` 的参考研究 | Plumb 为你的简报挑选的参考站点 | 仅在 prompt→design 写方向中 |
+| Google Fonts | `fonts.googleapis.com` / `fonts.gstatic.com` | 仅当捕获的设计/导入引用了某个 Google Font 时 |
+| `UNSPLASH_ACCESS_KEY` / `PEXELS_API_KEY` / `PIXABAY_API_KEY` 提供方 | 对应的图片 API | 仅在写方向中，且设置了对应 key 时 |
+| `plumb-mcp fit` CLI | `api.anthropic.com` | 仅这一个独立 CLI 命令（见[独立 CLI](#独立-cli)） |
+
+以上没有任何一项会自行触发 —— 每一次网络请求都是你调用某个工具或 CLI 命令的直接结果，没有后台轮询、遥测，或任何形式的自动上报。
+
+---
+
 ## 安全
 
 - 仅回环（loopback）的 WebSocket 桥接；同一时间只有一个已配对的插件（一次刻意的点击）。
 - 零遥测。插件路径无需任何个人访问 token。
-- 写方向从不调用任何外部模型 —— 由已经驱动 MCP 服务器的那个 AI 代理来做设计判断。
+- 写方向从不调用任何外部模型 —— 由已经驱动 MCP 服务器的那个 AI 代理来做设计判断（唯一的例外是独立的 `plumb-mcp fit` CLI，见[独立 CLI](#独立-cli)）。
 
 ---
 

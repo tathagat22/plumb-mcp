@@ -31,7 +31,7 @@ Plumb MCP server  (`npx plumb-mcp` / `node dist/index.js`)
   │    plumb_query's select:"role" / plumb_node's collapseRoles — see
   │    "Semantic layer" below
   │  Version-keyed cache with fit-to-budget normalisation
-  │  Twenty-four MCP tools exposed over stdio
+  │  Twenty-eight MCP tools exposed over stdio
   ▼
   stdio MCP
   ▼

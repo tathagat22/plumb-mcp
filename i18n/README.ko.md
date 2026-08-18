@@ -60,7 +60,7 @@ Plumb 에게 한 줄짜리 브리프 — *"프리미엄 핀테크 대시보드"*
 1. **레퍼런스 리서치** — 브리프에 맞는 업계 최고 수준의 사이트(Linear, Stripe, Mercury…)를 찾아 **실시간으로 스크린샷** 을 찍어 References 페이지에 올립니다.
 2. **브랜드 추출** — 그들의 computed CSS 를 읽어 일관된 팔레트 + 타입 스케일로 정리하고, Brand 보드로 배치합니다.
 3. **디자인 생성** — 고수준 디자인 DSL 로 완성된 온브랜드 페이지(nav, hero, features, gallery, CTA, footer)를 구성하며, 실제 Figma 노드로 빌드합니다.
-4. **자신의 렌더를 비평** — 호출 중인 에이전트(Claude Code / 비전을 지원하는 모든 MCP 클라이언트 — **추가 API 키 불필요**)가 스크린샷을 채점하고, Plumb 는 이를 결정론적 디자인 루브릭 및 구조 비교와 결합해 순위가 매겨진 수정 목록을 돌려주며 기준을 통과할 때까지 반복합니다.
+4. **자신의 렌더를 비평** — 호출 중인 에이전트(Claude Code / 비전을 지원하는 모든 MCP 클라이언트 — **MCP 도구로 실행할 때는 추가 API 키 불필요**; 독립 실행형 `plumb-mcp fit` CLI 만 유일한 예외입니다. 아래 [독립 실행형 CLI](#독립-실행형-cli) 참고)가 스크린샷을 채점하고, Plumb 는 이를 결정론적 디자인 루브릭 및 구조 비교와 결합해 순위가 매겨진 수정 목록을 돌려주며 기준을 통과할 때까지 반복합니다.
 
 이것이 바로 **자가 개선 디렉터 루프를 갖춘 prompt-to-Figma 디자인 생성** — 일회성 목업이 아닙니다.
 
@@ -76,7 +76,7 @@ Plumb 에게 한 줄짜리 브리프 — *"프리미엄 핀테크 대시보드"*
 
 그리고 MCP 세계를 넘어, html.to.design, Anima, Locofy 같은 도구나 v0, Builder.io 의 Visual Copilot 같은 프롬프트 우선 생성기를 포함하는 더 넓은 design-to-code / AI UI 생성기 카테고리는 대체로 한 방향으로만 움직입니다(디자인이 들어가면 코드가 나오거나, 프롬프트가 들어가면 코드가 나오는 식) — 두 방향을 아우르는 공유 모델도 없고, 이후에 출력을 소스와 대조하는 내장 단계도 없습니다.
 
-Plumb 는 **소스가 Figma 든 URL 이든 상관하지 않는 하나의 시맨틱 그래프** 위에서, **코드 쪽에서 루프를 닫는 것** *과* **새로운 디자인 생성을 디렉팅하는 것**을 동시에 해내는 유일한 도구입니다. `plumb_verify` 는 배포한 코드가 실제로 디자인(또는 레퍼런스 페이지)과 일치하는지 알려주고, `plumb_fit` 은 이를 자가 치유 루프로 바꿉니다. `plumb_import_web` + `plumb_emit_react` 는 이 그래프가 실제로 이식 가능함을 증명합니다: 동일한 역할 분류기와 동일한 코드 생성기가 Figma 없이도 실제 웹사이트에 대해 그대로 동작합니다. 그리고 쓰기 쪽에서는 `plumb_studio` / `plumb_brand` / `plumb_design` / `plumb_review` 가 프롬프트를 디자인되고 비평된 Figma 파일로 바꿉니다 — 디자인 스킬 불필요, 별도 디자인 도구 불필요, 추가 모델 키 불필요.
+Plumb 는 **소스가 Figma 든 URL 이든 상관하지 않는 하나의 시맨틱 그래프** 위에서, **코드 쪽에서 루프를 닫는 것** *과* **새로운 디자인 생성을 디렉팅하는 것**을 동시에 해내는 유일한 도구입니다. `plumb_verify` 는 배포한 코드가 실제로 디자인(또는 레퍼런스 페이지)과 일치하는지 알려주고, `plumb_fit` 은 이를 자가 치유 루프로 바꿉니다. `plumb_import_web` + `plumb_emit_react` 는 이 그래프가 실제로 이식 가능함을 증명합니다: 동일한 역할 분류기와 동일한 코드 생성기가 Figma 없이도 실제 웹사이트에 대해 그대로 동작합니다. 그리고 쓰기 쪽에서는 `plumb_studio` / `plumb_brand` / `plumb_design` / `plumb_review` 가 프롬프트를 디자인되고 비평된 Figma 파일로 바꿉니다 — 디자인 스킬 불필요, 별도 디자인 도구 불필요, 추가 모델 키 불필요(MCP 도구 기준이며, 키가 필요한 유일한 명령은 [독립 실행형 CLI](#독립-실행형-cli) 참고).
 
 ---
 
@@ -132,7 +132,7 @@ echo "$(npm root -g)/plumb-mcp/figma-plugin/manifest.json"
 
 ---
 
-## 24 개의 도구, 하나의 시맨틱 그래프
+## 28 개의 도구, 하나의 시맨틱 그래프
 
 아래의 모든 도구는 앞서 설명한 동일한 시맨틱 디자인 그래프를 읽거나 씁니다 — 그래서 새로운 소스(웹)나 새로운 타깃(React)을 추가하는 일이 다시 쓰는 게 아니라 더하는 일이 됩니다.
 
@@ -158,12 +158,14 @@ echo "$(npm root -g)/plumb-mcp/figma-plugin/manifest.json"
 | `plumb_audit` | 휴리스틱 접근성 검사 — 텍스트 대비, 버튼 터치 타깃 크기. |
 | `plumb_import_web` | 실제 웹페이지의 구조와 시맨틱을 임포트 — Figma 연결이 필요 없습니다. Figma 디자인에 쓰이는 것과 동일한 역할 분류기를 사용합니다. |
 | `plumb_emit_react` | PDS 또는 `plumb_import_web` 결과로부터 결정론적 React/JSX 를 생성 — 소스가 무엇이든 동일한 생성기. |
+| `plumb_scan_references` | 실제 레퍼런스 URL N 개를 스캔해 역할별 스타일 다이제스트(전형적인 hero 높이, 카드 그리드 밀도, nav 스타일)를 추출 — 직접 `plumb_design` DSL 이나 `plumb_studio` 브리프에 녹여 넣기 위한 것이며, 이 도구 자체는 아무것도 구성하지 않습니다. |
 
 ### 쓰기 — prompt → design (디렉터)
 
 | 도구 | 역할 |
 |---|---|
 | `plumb_studio` | **디자인 디렉터.** 하나의 브리프 → 리서치된 레퍼런스 → 추출된 브랜드 → 완성된 Figma 페이지. 노드 id + 작성된 스펙을 돌려주어 비평·개선할 수 있게 함. |
+| `plumb_studio_start` / `plumb_studio_kit` / `plumb_studio_page` | 동일한 디렉터 플로우를 세 개의 지켜볼 수 있는 단계(브랜드+레퍼런스 → 컴포넌트 키트 → 제품 페이지)로 나눈 것 — 한 번의 불투명한 호출 대신 각 단계 사이에서 검토할 수 있고, 각각 별도의 이름을 가진 Figma 페이지에 만들어집니다. |
 | `plumb_brand` | 브리프 → 업계 최고 수준 레퍼런스 사이트의 실시간 스크린샷 + 캔버스 위에 합성된 브랜드 팔레트/타입 보드. |
 | `plumb_design` | Plumb 의 고수준 디자인 DSL 로 디자인을 작성하고 Figma 로 빌드(페이지, 섹션, 컴포넌트, 모션까지 완전 제어). |
 | `plumb_review` | 비평 루프: 구조 비교, 결정론적 디자인 루브릭, 그리고 호출 중인 에이전트 자신의 비전 판정을 하나의 점수 + 순위가 매겨진 수정으로 결합. **API 키 불필요** — MCP 서버를 구동하는 에이전트가 *바로* 크리에이티브 디렉터. |
@@ -211,11 +213,40 @@ PIXABAY_API_KEY=…
 
 ---
 
+## 독립 실행형 CLI
+
+MCP 클라이언트 없이 터미널에서 바로 실행되는 두 개의 명령 — CI 에서, 또는 에이전트 없이 Plumb 를 직접 구동할 때 유용합니다:
+
+```bash
+plumb-mcp verify <dev-url> --node <figma-node-id>   # 실행 중인 페이지를 디자인과 비교
+plumb-mcp fit <figma-url>                           # HTML 빌드를 생성하고 일치할 때까지 스스로 교정
+```
+
+`plumb-mcp verify` 는 `FIGMA_TOKEN`(또는 페어링된 플러그인)만 있으면 됩니다 — 비교만 할 뿐 생성하지 않으므로 모델 키가 필요 없습니다. `plumb-mcp fit` 은 이 프로젝트 전체에서 외부 모델을 직접 호출하는 유일한 명령입니다: HTML 빌드 자체를 생성해야 하고(대신 그 일을 해줄 에이전트가 없으므로) `FIGMA_TOKEN` 외에 `ANTHROPIC_API_KEY` 가 필요합니다. `plumb_fit`, `plumb_review` 를 포함한 모든 MCP 도구는 호출하는 에이전트가 생성/판단을 대신 제공하기 때문에 키 없이 동작합니다.
+
+---
+
+## 네트워크 송신(egress)
+
+| 호출 지점 | 통신 대상 | 시점 |
+|---|---|---|
+| Figma 플러그인 브리지 | `localhost` 전용(WebSocket) | 플러그인이 페어링되어 있을 때 항상 |
+| Figma REST(`FIGMA_TOKEN` 경로) | `api.figma.com` | 플러그인이 페어링되지 않았거나 헤드리스/CI 용도일 때만 |
+| `plumb_import_web` / `plumb_scan_references` / 헤드리스 CLI | 여러분이 전달한 대상 URL, 헤드리스 Chrome(CDP) 경유 | 이 도구들을 호출할 때만 |
+| `plumb_studio` / `plumb_brand` 의 레퍼런스 리서치 | Plumb 가 브리프에 맞춰 고른 레퍼런스 사이트 | prompt→design 쓰기 방향에서만 |
+| Google Fonts | `fonts.googleapis.com` / `fonts.gstatic.com` | 캡처된 디자인/임포트가 Google Font 를 참조할 때만 |
+| `UNSPLASH_ACCESS_KEY` / `PEXELS_API_KEY` / `PIXABAY_API_KEY` 제공자 | 각 사진 API | 쓰기 방향에서, 키가 설정된 경우에만 |
+| `plumb-mcp fit` CLI | `api.anthropic.com` | 이 독립 실행형 CLI 명령을 사용할 때만([독립 실행형 CLI](#독립-실행형-cli) 참고) |
+
+위 표의 어떤 항목도 스스로 발생하지 않습니다 — 모든 네트워크 호출은 여러분이 호출한 도구나 CLI 명령의 직접적인 결과입니다. 백그라운드 폴링, 텔레메트리, 무단 통신은 없습니다.
+
+---
+
 ## 보안
 
 - 루프백 전용 WebSocket 브리지; 한 번에 하나의 페어링된 플러그인만(의도적인 클릭 한 번).
 - 텔레메트리 없음. 플러그인 경로에는 개인 액세스 토큰이 필요 없음.
-- 쓰기 방향은 외부 모델을 절대 호출하지 않습니다 — 이미 MCP 서버를 구동 중인 AI 에이전트가 디자인 판단을 담당합니다.
+- 쓰기 방향은 외부 모델을 절대 호출하지 않습니다 — 이미 MCP 서버를 구동 중인 AI 에이전트가 디자인 판단을 담당합니다(독립 실행형 `plumb-mcp fit` CLI 만 유일한 예외입니다; [독립 실행형 CLI](#독립-실행형-cli) 참고).
 
 ---
 

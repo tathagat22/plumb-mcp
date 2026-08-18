@@ -127,6 +127,9 @@ export default defineConfig({
         text: "Tools · prompt → design",
         items: [
           { text: "plumb_studio", link: "/tools/plumb_studio" },
+          { text: "plumb_studio_start", link: "/tools/plumb_studio_start" },
+          { text: "plumb_studio_kit", link: "/tools/plumb_studio_kit" },
+          { text: "plumb_studio_page", link: "/tools/plumb_studio_page" },
           { text: "plumb_brand", link: "/tools/plumb_brand" },
           { text: "plumb_design", link: "/tools/plumb_design" },
           { text: "plumb_review", link: "/tools/plumb_review" },

@@ -30,6 +30,27 @@
           "isRequired": false,
           "isSecret": false,
           "format": "string"
+        },
+        {
+          "name": "UNSPLASH_ACCESS_KEY",
+          "description": "Optional, free. Lets plumb_source / plumb_design resolve on-brief photos from Unsplash for prompt-to-design generation. Falls back to a keyless Picsum provider when unset.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "PEXELS_API_KEY",
+          "description": "Optional, free. Lets plumb_source / plumb_design resolve on-brief photos from Pexels for prompt-to-design generation. Falls back to a keyless Picsum provider when unset.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "PIXABAY_API_KEY",
+          "description": "Optional, free. Lets plumb_source / plumb_design resolve on-brief photos/illustrations from Pixabay for prompt-to-design generation. Falls back to a keyless Picsum provider when unset.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
         }
       ]
     }

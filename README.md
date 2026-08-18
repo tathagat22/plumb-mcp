@@ -58,7 +58,7 @@ Give Plumb a one-line brief — *"a premium fintech dashboard"* — and it acts 
 1. **Researches references** — finds best-in-class sites for your brief (Linear, Stripe, Mercury…) and **screenshots them live** onto a References page.
 2. **Extracts a brand** — reads their computed CSS into a coherent palette + type scale, laid down as a Brand board.
 3. **Generates the design** — composes a full, on-brand page (nav, hero, features, gallery, CTA, footer) from a high-level design DSL, built as real Figma nodes.
-4. **Critiques its own render** — the calling agent (Claude Code / any MCP client with vision — **no extra API key**) grades the screenshot; Plumb blends that with a deterministic design rubric and a structural diff, then hands back a ranked fix list and iterates until it clears the bar.
+4. **Critiques its own render** — the calling agent (Claude Code / any MCP client with vision — **no extra API key** when run as an MCP tool; the standalone `plumb-mcp fit` CLI is the one exception, see [Standalone CLI](#standalone-cli) below) grades the screenshot; Plumb blends that with a deterministic design rubric and a structural diff, then hands back a ranked fix list and iterates until it clears the bar.
 
 That's **prompt-to-Figma design generation with a self-improving director loop** — not a one-shot mockup.
 
@@ -74,7 +74,7 @@ Other Figma MCP servers you may know:
 
 And beyond the MCP world, the broader design-to-code / AI-UI-generator category — tools like html.to.design, Anima, Locofy, or prompt-first generators like v0 and Builder.io's Visual Copilot — typically move in one direction only (design in, code out, or prompt in, code out) with no shared model spanning both, and no built-in step that checks the output against the source afterward.
 
-Plumb is the only one that both **closes the loop on code** *and* **directs new design generation**, on top of **one semantic graph that doesn't care whether the source was Figma or a URL**. `plumb_verify` tells you whether shipped code actually matches the design (or the reference page); `plumb_fit` turns that into a self-healing loop. `plumb_import_web` + `plumb_emit_react` prove the graph travels: the same role classifier and the same code generator run against a live website with zero Figma involved. And on the write side, `plumb_studio` / `plumb_brand` / `plumb_design` / `plumb_review` turn a prompt into a designed, critiqued Figma file — no design skills, no separate design tool, no extra model key.
+Plumb is the only one that both **closes the loop on code** *and* **directs new design generation**, on top of **one semantic graph that doesn't care whether the source was Figma or a URL**. `plumb_verify` tells you whether shipped code actually matches the design (or the reference page); `plumb_fit` turns that into a self-healing loop. `plumb_import_web` + `plumb_emit_react` prove the graph travels: the same role classifier and the same code generator run against a live website with zero Figma involved. And on the write side, `plumb_studio` / `plumb_brand` / `plumb_design` / `plumb_review` turn a prompt into a designed, critiqued Figma file — no design skills, no separate design tool, no extra model key (as MCP tools; see [Standalone CLI](#standalone-cli) for the one command that needs one).
 
 ---
 
@@ -130,7 +130,7 @@ Other install paths: `npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/p
 
 ---
 
-## Twenty-four tools, one semantic graph
+## Twenty-eight tools, one semantic graph
 
 Every tool below reads from or writes to the same semantic design graph described above — that's what makes adding a new source (the web) or a new target (React) additive, not a rewrite.
 
@@ -156,12 +156,14 @@ Every tool below reads from or writes to the same semantic design graph describe
 | `plumb_audit` | Heuristic accessibility checks — text contrast, button touch-target size. |
 | `plumb_import_web` | Import a live webpage's structure and semantics — no Figma connection needed. Same role classifier Figma designs use. |
 | `plumb_emit_react` | Deterministic React/JSX generator from a PDS or a `plumb_import_web` result — same emitter, either source. |
+| `plumb_scan_references` | Scan N live reference URLs and extract a per-role style digest (typical hero height, card-grid density, nav style) — for folding into a `plumb_design` DSL or `plumb_studio` brief by hand; it doesn't compose anything itself. |
 
 ### Write — prompt → design (the director)
 
 | Tool | What it does |
 |---|---|
 | `plumb_studio` | **The design director.** One brief → researched references → extracted brand → a full composed Figma page. Returns the node ids + authored spec so you can critique and refine. |
+| `plumb_studio_start` / `plumb_studio_kit` / `plumb_studio_page` | The same director flow, split into three watchable steps (brand+references → component kit → product page) so you can review between each one, on separate named Figma pages, instead of one opaque call. |
 | `plumb_brand` | Brief → live-screenshots best-in-class reference sites + a synthesized brand palette/type board on the canvas. |
 | `plumb_design` | Author a design from Plumb's high-level Design DSL and build it into Figma (full control: pages, sections, components, motion). |
 | `plumb_review` | The critique loop: blends a structural diff, a deterministic design rubric, and the calling agent's own vision verdict into one score + ranked fixes. **No API key** — the agent that drives the MCP server *is* the creative director. |
@@ -209,11 +211,40 @@ PIXABAY_API_KEY=…
 
 ---
 
+## Standalone CLI
+
+Two commands run outside any MCP client, straight from a terminal — useful for CI or for driving Plumb without an agent in the loop:
+
+```bash
+plumb-mcp verify <dev-url> --node <figma-node-id>   # diff a running page against the design
+plumb-mcp fit <figma-url>                           # generate + self-correct an HTML build until it matches
+```
+
+`plumb-mcp verify` needs only `FIGMA_TOKEN` (or the plugin, if paired) — it diffs, it doesn't generate, so no model key. `plumb-mcp fit` is the one command in this whole project that calls an external model directly: it generates the HTML build itself (no agent to do that job for it), so it needs `ANTHROPIC_API_KEY` in addition to `FIGMA_TOKEN`. Every MCP tool, including `plumb_fit` and `plumb_review`, stays key-free because the calling agent supplies the generation/judgment instead.
+
+---
+
+## Network egress
+
+| Call site | Talks to | When |
+|---|---|---|
+| Figma plugin bridge | `localhost` only (WebSocket) | Whenever the plugin is paired |
+| Figma REST (`FIGMA_TOKEN` path) | `api.figma.com` | Only if the plugin isn't paired, or for headless/CI use |
+| `plumb_import_web` / `plumb_scan_references` / headless CLIs | The target URL(s) you pass in, via headless Chrome (CDP) | Only when you call these |
+| `plumb_studio` / `plumb_brand` reference research | The reference sites Plumb picks for your brief | Only in the prompt→design write direction |
+| Google Fonts | `fonts.googleapis.com` / `fonts.gstatic.com` | Only when a captured design/import references a Google Font |
+| `UNSPLASH_ACCESS_KEY` / `PEXELS_API_KEY` / `PIXABAY_API_KEY` providers | The respective photo API | Only in the write direction, only if a key is set |
+| `plumb-mcp fit` CLI | `api.anthropic.com` | Only for this one standalone CLI command (see [Standalone CLI](#standalone-cli)) |
+
+Nothing above fires on its own — every network call is a direct consequence of a tool or CLI command you invoked. There's no background polling, telemetry, or phone-home.
+
+---
+
 ## Security
 
 - Loopback-only WebSocket bridge; a single paired plugin at a time (one deliberate click).
 - Zero telemetry. No personal-access token needed for the plugin path.
-- The write direction never calls an external model — the AI agent already driving the MCP server does the design judgment.
+- The write direction never calls an external model — the AI agent already driving the MCP server does the design judgment (the standalone `plumb-mcp fit` CLI is the sole exception; see [Standalone CLI](#standalone-cli)).
 
 ---
 
