@@ -12,32 +12,61 @@ account** thanks to the bundled offline fixtures.
 
 ## Prerequisites
 
-- **Node.js 18+** and npm.
+- **Node.js 20+** and npm (`package.json` sets `engines.node >= 20`).
 - A Figma account is **optional**. The offline fixtures (`scripts/fixtures/`)
   let you build and test the normalizer and verify engine with no credentials.
   You only need a Figma personal-access token for the *live* scripts below.
 
 ## Set up
 
+From an empty directory, this is the whole thing — no credentials, no Figma
+account, no network beyond the install:
+
 ```bash
 git clone https://github.com/<your-username>/plumb-mcp
 cd plumb-mcp
-npm install
-npm run typecheck   # strict TS — should pass on a clean checkout
+npm ci              # `npm ci`, not `install` — the lockfile is the contract
+npm run demo        # the design→code→verify loop, offline. Start here.
+npm test            # 600+ specs
+npm run typecheck   # strict TS (server + plugin)
+npm run lint
+npm run build       # bundle server + plugin + studio
 ```
+
+If any of those fails on a clean checkout, that's a bug — please open an issue.
+
+Prefer a container? `docker compose up demo` does the same walkthrough with
+networking disabled, and `.devcontainer/` sets up a full environment.
 
 ## Develop & test
 
 Everything below runs offline unless noted:
 
 ```bash
+npm test            # the vitest suite
+npm run test:coverage  # …with the coverage floor CI enforces
+npm run demo        # the scored offline walkthrough (exits non-zero on a miss)
 npm run typecheck   # strict TS (server + plugin) — run this before every push
+npm run lint        # eslint, including the 600-code-line-per-file cap
 npm run build       # bundle server + plugin + studio
 npm run check       # offline regression: fit-to-budget + cache
 npm run prove       # normalizer depth/token curve (uses the bundled fixture)
 npm run bridge      # simulated plugin + every tool, offline
 npm run smoke       # MCP handshake; expects the full tool count
 ```
+
+### House rules for changes
+
+- **Ship the test with the change.** A new verify check, a new delta kind, a
+  new DSL block — each lands with the spec that pins it. The coverage floor in
+  `vitest.config.ts` is a ratchet: raise it as you add, never lower it to make
+  a red build green.
+- **Files stay under 600 code lines** (ESLint `max-lines`, comments and blanks
+  excluded). Hitting the cap means extracting a module, not raising the number.
+- **Adding a new verify check?** `src/demo/faults.ts` is the place to prove it:
+  add the mistake an agent would make, declare the delta it must produce, and
+  `npm run demo` will tell you whether the engine catches it — and whether it
+  started inventing findings elsewhere.
 
 Live scripts (need a `.env` with `FIGMA_TOKEN` + `PLUMB_FILE_KEY`; `.env` is
 git-ignored — never commit it):
@@ -57,8 +86,13 @@ The [README "Layout" section](./README.md#layout) maps the tree. The pieces
 contributors touch most:
 
 - `src/normalize/` — raw Figma → Plumb Design Spec (PDS).
-- `src/verify.ts` — the `plumb_verify` comparison engine.
+- `src/verify.ts` + `src/verify/` — the `plumb_verify` comparison engine.
+- `src/fit.ts` — the 0–100 convergence score the self-healing loop climbs.
+- `src/dsl/schema.ts` + `src/dsl/schema/` — the authoring DSL, layered.
 - `src/tools/` — one file per MCP tool.
+- `src/demo/` — the offline walkthrough and its fault catalogue.
+- `figma-plugin/` — the plugin main thread (`code.ts` + siblings) and the
+  write-path executor (`emit.ts` + `emit/`).
 - `scripts/` — the offline + live check scripts above.
 - `docs/` — the VitePress site (`npm run docs:dev`).
 
@@ -66,8 +100,10 @@ contributors touch most:
 
 1. **Branch** off `main` (`fix/...`, `feat/...`, `docs/...`).
 2. Keep PRs **focused** — one logical change. Smaller is easier to review.
-3. Run `npm run typecheck` (and `npm run check` if you touched normalize/verify)
-   before pushing.
+3. Run `npm test`, `npm run typecheck`, and `npm run lint` before pushing (add
+   `npm run check` if you touched normalize/verify). CI runs all of them plus
+   the coverage floor, a production dependency audit, the offline demo, and a
+   container build.
 4. Use **conventional-commit** subjects, matching the existing history:
    `fix(normalize): …`, `feat(verify): …`, `docs: …`. Keep the message short.
 5. Open the PR with a sentence or two on **what** changed and **why**. Link the

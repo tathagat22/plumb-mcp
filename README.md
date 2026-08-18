@@ -159,7 +159,31 @@ echo "$(npm root -g)/plumb-mcp/figma-plugin/manifest.json"
  run plumb_review as the director until the score clears 90."
 ```
 
-Other install paths: `npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/plumb-mcp:latest` · [build from source](https://github.com/tathagat22/plumb-mcp).
+Other install paths: `npx plumb-mcp` · `docker run --rm -i ghcr.io/tathagat22/plumb-mcp:latest`.
+
+<details>
+<summary><b>Build from source</b></summary>
+
+Requires Node 20+. Nothing below needs a credential or a Figma account:
+
+```bash
+git clone https://github.com/tathagat22/plumb-mcp
+cd plumb-mcp
+npm ci
+npm run demo        # the offline walkthrough — proves the checkout works
+npm test            # 600+ specs
+npm run typecheck   # strict TS, server + plugin
+npm run lint
+npm run build       # bundles the server, the Figma plugin, and Studio into dist/
+node dist/index.js --help
+```
+
+`npm run build` produces `dist/index.js` (the MCP server), `dist/studio/` (the
+live cockpit the bridge serves), and `figma-plugin/code.js` (the plugin main
+thread you sideload). If any step fails on a clean checkout, that's a bug —
+[open an issue](https://github.com/tathagat22/plumb-mcp/issues).
+
+</details>
 
 ---
 

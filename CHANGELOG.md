@@ -12,6 +12,57 @@ are summarized only briefly.
 
 ## [Unreleased]
 
+### Added
+
+- **`plumb-mcp demo`** — the whole design→code→verify loop offline, in one
+  command. Runs the real comparison engine over a bundled Plumb Design Spec
+  with 13 planted mistakes and prints what it caught, with no Figma token, no
+  plugin, no browser and no network. `--json` emits the results for scripting;
+  `--pds` prints the design spec it runs against. The 13/13 recall, zero false
+  positives, and 71.0 → 96.2 → 100.0 convergence are asserted in
+  `src/demo/demo.test.ts`, so the demo fails CI if it stops being true.
+- **`docker-compose.yml`** — `docker compose up demo` runs that walkthrough in
+  an isolated container with `network_mode: none`; `up bridge` serves the
+  bridge and Plumb Studio on a published port; `run --rm mcp` is the stdio MCP
+  server. Plus a `.devcontainer` that installs both workspaces and runs the
+  demo on attach.
+- **`GET /healthz`** on the bridge — liveness plus whether a plugin is actually
+  paired, in-flight request count, and uptime. Used as the Compose healthcheck.
+- **Structured logging** (`src/logger.ts`) — levelled, zero-dependency, always
+  to stderr so stdout stays reserved for MCP framing. `PLUMB_LOG_LEVEL` and
+  `PLUMB_LOG_FORMAT=json` control it.
+- **Configurable bridge ports** — `PLUMB_BRIDGE_PORT`, `PLUMB_BRIDGE_PORTS`,
+  and `PLUMB_BRIDGE_HOST`. Needed for more than ten concurrent sessions on one
+  machine, for containers that must publish a known port, and to stop the test
+  suite depending on which ports happen to be free.
+- **Dependabot** across all four npm manifests plus the GitHub Actions, and an
+  `npm audit --omit=dev --audit-level=high` gate in CI.
+- **Coverage reporting with an enforced floor** (`npm run test:coverage`), and
+  an enforced 600-code-line cap per file via ESLint `max-lines`.
+
+### Fixed
+
+- `computeLineHeightRatio` treated a unit-less (`"1.5"`) or percentage
+  (`"150%"`) line-height as pixels and divided by the font size, reporting a
+  9.4× line-height for a 150% one. Both are now classified before conversion.
+- `bridge.reset()` left `lastSeen` set after a plugin disconnected, so health
+  and status reported a recent heartbeat for a dead session.
+- Every high-severity advisory in the shipped dependency tree (all transitive
+  through the MCP SDK) is resolved.
+
+### Changed
+
+- The five files over 1000 lines are split by concern, behind unchanged public
+  surfaces: `src/dsl/schema.ts` → a layered `schema/` barrel,
+  `src/verify.ts` → `verify/`, `src/normalize/normalize.ts` → five focused
+  modules, `figma-plugin/code.ts` → five, and `figma-plugin/emit.ts` →
+  `emit/`. `src/assets/search.ts` follows. No file is over 600 code lines.
+- `.env.example` documents all 20 environment variables the source reads;
+  README gains a full environment-variable table.
+- Test files 20 → 35, tests 208 → 621, line coverage 30% → 41%.
+
+### Earlier in this cycle
+
 Production-hardening pass — crash/security fixes, resource-leak fixes, and
 CI/lint infrastructure, none of which change the tool contract:
 
