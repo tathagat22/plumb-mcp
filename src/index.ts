@@ -2,6 +2,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { startBridge } from "./bridge/server";
 import { closeAllBrowsers } from "./cli/cdp";
 import { loadEnv } from "./env";
+import { runDemoCli } from "./demo/run";
 import { runFitCli } from "./cli/fit";
 import { runInit } from "./cli/init";
 import { runStudioCli } from "./cli/studio";
@@ -15,6 +16,11 @@ Usage:
   plumb-mcp                  Run the stdio MCP server (+ the local plugin bridge).
                              This is what your MCP client (Claude Code, Cursor,
                              Windsurf, etc.) spawns.
+
+  plumb-mcp demo             Run the whole design→code→verify loop offline on a
+                             bundled design: no Figma token, no plugin, no
+                             browser, no network. Prints what the engine caught
+                             and the score climbing to 100. Start here.
 
   plumb-mcp init             Detect your installed editor(s) and write the
                              correct MCP config block into each — Claude Code,
@@ -110,6 +116,10 @@ async function main(): Promise<void> {
   if (arg === "init") {
     runInit();
     return;
+  }
+  if (arg === "demo") {
+    const code = await runDemoCli(process.argv.slice(3));
+    process.exit(code);
   }
   if (arg === "verify") {
     const code = await runVerifyCli(process.argv.slice(3));
