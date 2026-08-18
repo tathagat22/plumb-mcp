@@ -107,6 +107,24 @@ jobs:
           else
             echo "✓ rejected: verify.enabled with no Figma token"
           fi
+          # `plumb-mcp verify` resolves a node against a file key. A target
+          # without one produces a CronJob that can never succeed — found by
+          # actually running it on a cluster, not by reading the template.
+          if helm template plumb deploy/helm/plumb \
+               --set figma.token=t --set verify.enabled=true \
+               --set-json 'verify.targets=[{"name":"x","url":"http://a/","node":"1:2"}]' >/dev/null 2>&1; then
+            echo "✗ a verify target with no Figma file key should fail"; fail=1
+          else
+            echo "✓ rejected: a verify target with no Figma file key"
+          fi
+          # …and the same config WITH a file key must still render.
+          if helm template plumb deploy/helm/plumb \
+               --set figma.token=t --set verify.enabled=true --set verify.fileKey=abc \
+               --set-json 'verify.targets=[{"name":"x","url":"http://a/","node":"1:2"}]' >/dev/null 2>&1; then
+            echo "✓ accepted: a complete verify target"
+          else
+            echo "✗ a complete verify target should render"; fail=1
+          fi
           exit $fail
 
   manifests:

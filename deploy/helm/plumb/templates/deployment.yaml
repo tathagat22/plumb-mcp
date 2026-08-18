@@ -21,11 +21,11 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      {{- include "plumb.selectorLabels" . | nindent 6 }}
+      {{- include "plumb.bridgeSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "plumb.selectorLabels" . | nindent 8 }}
+        {{- include "plumb.bridgeSelectorLabels" . | nindent 8 }}
         {{- with .Values.bridge.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

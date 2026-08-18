@@ -29,7 +29,8 @@ So the defaults are deliberately closed:
 
 - `service.type: ClusterIP` — nothing outside the cluster.
 - `networkPolicy.enabled: true` with **empty** selectors — nothing *inside* the
-  cluster either. `ingress: []` is the explicit deny-all form.
+  cluster either. The only ingress rule by default is a narrow one for this
+  release's own `helm test` pod.
 - `ingress.enabled: false`.
 
 Which leaves `kubectl port-forward` as the way in. That is not a workaround; it
@@ -78,6 +79,23 @@ Now `127.0.0.1:31337` on the designer's machine *is* the in-cluster bridge, the
 plugin finds it on its normal scan, and pairing behaves exactly as it does
 locally. **Keep the local side of the forward on 31337** — that's the port the
 plugin looks for.
+
+### Why verify pods sit outside the NetworkPolicy
+
+The bridge's egress rule allows public IPs on 443 and excludes RFC1918 — right
+for the bridge, which only ever calls `api.figma.com`. But verify targets are
+usually in-cluster Services, whose ClusterIPs live in exactly that excluded
+range. So the policy is scoped by `app.kubernetes.io/component: bridge`, and
+verify Jobs deliberately fall outside it.
+
+That component label is load-bearing in two more places. Without it the Service
+selector and the Deployment selector match *any* pod in the release — so a
+running verify Job would be enrolled as a Service endpoint and handed bridge
+traffic it cannot answer. The `helm test` pod has its own narrow ingress
+allowance, and nothing else gets in.
+
+If your namespace has its own default-deny egress policy, verify Jobs will need
+a rule of their own to reach their targets.
 
 ### ⚠️ One replica, on purpose
 
@@ -214,6 +232,16 @@ Not just present — checked, on every push, by
 - `deploy/k8s/plumb.yaml` regenerated and diffed — the plain manifests cannot
   drift from the chart.
 - `terraform fmt -check`, `init`, and `validate` on the module and the example.
+- Both image targets built, the offline demo run inside the default image, and
+  Chromium proven to render a page under the chart's exact securityContext —
+  non-root, read-only root filesystem, all capabilities dropped.
+
+Beyond CI, the chart has been installed on a real cluster (kind, with
+NetworkPolicy enforced and the `restricted` Pod Security Standard on the
+namespace): `helm test` passes, an unauthorised pod is genuinely blocked, only
+the bridge is a Service endpoint, `port-forward` serves Studio, and a
+`verify` CronJob schedules and runs. Three bugs in this chart were found that
+way rather than by reading it.
 
 Reproduce it locally:
 

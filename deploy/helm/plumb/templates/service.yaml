@@ -16,6 +16,10 @@ spec:
       port: {{ .Values.service.port }}
       targetPort: bridge
       protocol: TCP
+  {{- /*
+    Selects the bridge only. Without the component label this would also match
+    the `helm test` pod and every verify Job pod, enrolling them as endpoints.
+  */}}
   selector:
-    {{- include "plumb.selectorLabels" . | nindent 4 }}
+    {{- include "plumb.bridgeSelectorLabels" . | nindent 4 }}
 {{- end }}

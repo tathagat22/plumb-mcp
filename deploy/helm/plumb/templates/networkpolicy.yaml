@@ -17,16 +17,35 @@ metadata:
   labels:
     {{- include "plumb.labels" . | nindent 4 }}
 spec:
+  {{- /*
+    Scoped to the bridge. Verify Job pods deliberately fall outside this policy:
+    their whole job is to fetch an in-cluster URL, which lives in the RFC1918
+    range the egress rule below excludes, so applying this to them would block
+    exactly the traffic they exist to make.
+  */}}
   podSelector:
     matchLabels:
-      {{- include "plumb.selectorLabels" . | nindent 6 }}
+      {{- include "plumb.bridgeSelectorLabels" . | nindent 6 }}
   policyTypes:
     - Ingress
     {{- if .Values.networkPolicy.allowEgress }}
     - Egress
     {{- end }}
-  {{- if or .Values.networkPolicy.allowFromPodSelector .Values.networkPolicy.allowFromNamespaceSelector }}
   ingress:
+    {{- /*
+      `helm test` runs a pod that curls the Service, so a deny-all policy would
+      fail the chart's own test — and that failure taught us this rule exists.
+      Scoped to this release's test pod in this namespace, nothing wider.
+    */}}
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "plumb.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: test
+      ports:
+        - port: {{ .Values.bridge.port }}
+          protocol: TCP
+    {{- if or .Values.networkPolicy.allowFromPodSelector .Values.networkPolicy.allowFromNamespaceSelector }}
     - from:
         {{- with .Values.networkPolicy.allowFromNamespaceSelector }}
         - namespaceSelector:
@@ -39,12 +58,12 @@ spec:
       ports:
         - port: {{ .Values.bridge.port }}
           protocol: TCP
-  {{- else }}
-  # An empty rule list is the explicit "deny every ingress connection" form.
-  # `kubectl port-forward` still works: it tunnels through the API server, not
-  # the pod network, so it never meets this policy.
-  ingress: []
-  {{- end }}
+    {{- else }}
+    # Nothing else is allowed in. Reach the bridge with `kubectl port-forward`,
+    # which tunnels through the API server rather than the pod network and so
+    # never meets this policy — and which is the only route the Figma plugin
+    # has anyway, since it scans 127.0.0.1.
+    {{- end }}
   {{- if .Values.networkPolicy.allowEgress }}
   egress:
     # DNS.

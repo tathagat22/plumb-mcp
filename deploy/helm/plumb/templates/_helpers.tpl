@@ -35,9 +35,26 @@ app.kubernetes.io/part-of: plumb
 {{- end }}
 {{- end -}}
 
+{{/*
+Release-wide identity. Every object the chart makes carries these.
+*/}}
 {{- define "plumb.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "plumb.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end -}}
+
+{{/*
+The bridge specifically.
+
+The component label is load-bearing, not decoration. Without it the Service
+selector, the Deployment selector, and the NetworkPolicy podSelector all match
+"any pod in this release" — which silently includes the `helm test` pod and
+every verify Job pod. A running verify Job would then be enrolled as a Service
+endpoint and receive bridge traffic it cannot answer.
+*/}}
+{{- define "plumb.bridgeSelectorLabels" -}}
+{{ include "plumb.selectorLabels" . }}
+app.kubernetes.io/component: bridge
 {{- end -}}
 
 {{- define "plumb.serviceAccountName" -}}

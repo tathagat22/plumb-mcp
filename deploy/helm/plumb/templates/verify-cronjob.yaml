@@ -8,6 +8,14 @@
 {{- range $i, $target := .Values.verify.targets }}
 {{- if not $target.url }}{{ fail (printf "verify.targets[%d] is missing `url`." $i) }}{{ end }}
 {{- if not $target.node }}{{ fail (printf "verify.targets[%d] is missing `node` (the Figma node id, using ':' not '-')." $i) }}{{ end }}
+{{- /*
+  `plumb-mcp verify` resolves a node against a file, so without a key it exits
+  before it renders anything. Caught here rather than hourly at 3am by a
+  CronJob that could never have succeeded.
+*/}}
+{{- if not (default $.Values.verify.fileKey $target.fileKey) }}
+{{- fail (printf "verify.targets[%d] has no Figma file key: set verify.fileKey, or fileKey on the target." $i) }}
+{{- end }}
 {{- $name := default (printf "%d" $i) $target.name }}
 ---
 {{- /*
