@@ -3,7 +3,7 @@ import { createWriteStream, unlink } from "node:fs";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { WebSocketServer, type WebSocket } from "ws";
-import { BRIDGE_PORTS } from "./protocol";
+import { resolveBridgeHost, resolveBridgePorts } from "./ports";
 import { bridge } from "./store";
 import { PlumbError } from "../errors";
 import { SERVER_VERSION } from "../meta";
@@ -429,7 +429,9 @@ function handleStudioClient(ws: WebSocket): void {
   ws.on("error", unsubscribe);
 }
 
-function bindPort(port: number): Promise<{ wss: WebSocketServer; http: Server } | null> {
+function bindPort(
+  port: number,
+): Promise<{ wss: WebSocketServer; http: Server; port: number } | null> {
   return new Promise((resolve) => {
     const http = createServer(handleHttp);
     const wss = new WebSocketServer({ server: http });
@@ -438,9 +440,14 @@ function bindPort(port: number): Promise<{ wss: WebSocketServer; http: Server } 
     // server). Without this swallow the wss error propagates as uncaught and
     // crashes the new server before it can fall through to the next port.
     wss.on("error", () => undefined);
-    http.once("listening", () => resolve({ wss, http }));
+    http.once("listening", () => {
+      // Port 0 asks the OS for an ephemeral port — read back what it actually
+      // gave us, so `bridge.port` is always the port a client can dial.
+      const addr = http.address();
+      resolve({ wss, http, port: typeof addr === "object" && addr ? addr.port : port });
+    });
     http.once("error", () => resolve(null));
-    http.listen(port, "127.0.0.1");
+    http.listen(port, resolveBridgeHost());
   });
 }
 
@@ -474,12 +481,12 @@ export async function startBridge(): Promise<void> {
   let wss: WebSocketServer | null = null;
   let http: Server | null = null;
   let chosen = 0;
-  for (const port of BRIDGE_PORTS) {
+  for (const port of resolveBridgePorts()) {
     const bound = await bindPort(port);
     if (bound) {
       wss = bound.wss;
       http = bound.http;
-      chosen = port;
+      chosen = bound.port;
       break;
     }
   }
@@ -491,9 +498,11 @@ export async function startBridge(): Promise<void> {
   activeWss = wss;
   activeHttp = http;
   const sessionLabel = process.env.PLUMB_SESSION_NAME?.trim() || basename(process.cwd());
-  log(`listening on 127.0.0.1:${chosen} as "${sessionLabel}"`);
+  log(`listening on ${resolveBridgeHost()}:${chosen} as "${sessionLabel}"`);
   if (studioAvailable()) {
-    log(`Plumb Studio (live cockpit): http://127.0.0.1:${chosen}/  ·  run \`plumb-mcp studio\` to open it`);
+    log(
+      `Plumb Studio (live cockpit): http://${resolveBridgeHost()}:${chosen}/  ·  run \`plumb-mcp studio\` to open it`,
+    );
   }
 
   if (!sweepTimer) {

@@ -22,3 +22,6 @@ docs/ROADMAP-*.md
 
 # Generated benchmark report — regenerate with `npm run bench`, not tracked.
 bench/report.json
+
+# Local MCP client config — machine-specific paths and tokens.
+.mcp.json

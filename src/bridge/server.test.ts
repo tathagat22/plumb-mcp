@@ -3,7 +3,36 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bridge } from "./store";
 import { requestAssets, startBridge, stopBridge } from "./server";
-import { BRIDGE_PORTS } from "./protocol";
+
+/**
+ * Reserve two ports the OS confirms are free right now and pin the bridge to
+ * them for the duration of a test.
+ *
+ * The default pool (31337–31346) is what real `plumb-mcp` sessions bind, so a
+ * developer with a live editor session — or a CI runner with a leftover
+ * process — has no free port in it, and these tests used to fail for reasons
+ * that have nothing to do with the code under test. `PLUMB_BRIDGE_PORTS` makes
+ * the pool an input instead of an ambient assumption.
+ */
+async function reserveFreePorts(count: number): Promise<number[]> {
+  const servers = await Promise.all(
+    Array.from({ length: count }, () =>
+      new Promise<HttpServer>((resolve) => {
+        const s = createNetServer();
+        s.listen(0, "127.0.0.1", () => resolve(s));
+      }),
+    ),
+  );
+  const ports = servers.map((s) => {
+    const addr = s.address();
+    if (typeof addr !== "object" || !addr) throw new Error("no address for reserved port");
+    return addr.port;
+  });
+  // Release them immediately — we only needed the OS to name ports nothing
+  // else on this machine is using.
+  await Promise.all(servers.map((s) => new Promise<void>((r) => s.close(() => r()))));
+  return ports;
+}
 
 /**
  * Real-socket integration tests for the bridge — the message-handling switch
@@ -40,41 +69,67 @@ function nextMessage(ws: WebSocket): Promise<any> {
 
 describe("bridge port-pool fallback", () => {
   let occupied: HttpServer | undefined;
+  const previousPool = process.env.PLUMB_BRIDGE_PORTS;
 
   afterAll(async () => {
     await stopBridge();
     if (occupied) await new Promise<void>((resolve) => occupied!.close(() => resolve()));
+    if (previousPool === undefined) delete process.env.PLUMB_BRIDGE_PORTS;
+    else process.env.PLUMB_BRIDGE_PORTS = previousPool;
   });
 
-  it("skips a port that's already taken", async () => {
-    // Don't assume which port is free in this environment (a real `plumb-mcp`
-    // may already be running, e.g. this very session) — discover what
-    // startBridge picks naturally first, then force a collision on exactly
-    // that port and confirm it falls through to a different one. This is
-    // the same situation a second concurrent `plumb-mcp` session hits in
-    // real multi-agent use.
-    await startBridge();
-    const firstPort = bridge.port;
-    expect(firstPort).not.toBeNull();
-    await stopBridge();
+  it("skips a port that's already taken and binds the next one in the pool", async () => {
+    const [first, second] = await reserveFreePorts(2);
+    process.env.PLUMB_BRIDGE_PORTS = `${first},${second}`;
 
+    // Hold the first port so the bridge has to fall through — this is exactly
+    // what a second concurrent `plumb-mcp` session hits in multi-agent use.
     occupied = createNetServer();
     await new Promise<void>((resolve, reject) => {
       occupied!.once("error", reject);
-      occupied!.listen(firstPort!, "127.0.0.1", resolve);
+      occupied!.listen(first!, "127.0.0.1", resolve);
     });
 
     await startBridge();
-    expect(bridge.port).not.toBeNull();
-    expect(bridge.port).not.toBe(firstPort);
-    expect(BRIDGE_PORTS).toContain(bridge.port);
+    expect(bridge.port).toBe(second);
+  });
+
+  it("reports no port when every port in the pool is taken", async () => {
+    await stopBridge();
+    const [only] = await reserveFreePorts(1);
+    process.env.PLUMB_BRIDGE_PORTS = String(only);
+
+    const blocker = createNetServer();
+    await new Promise<void>((resolve, reject) => {
+      blocker.once("error", reject);
+      blocker.listen(only!, "127.0.0.1", resolve);
+    });
+
+    // The REST path still works with no bridge, so this must degrade to
+    // `port === null`, never throw.
+    await expect(startBridge()).resolves.toBeUndefined();
+    expect(bridge.port).toBeNull();
+
+    await new Promise<void>((resolve) => blocker.close(() => resolve()));
+  });
+
+  it("binds an OS-assigned port when the pool is set to 0", async () => {
+    await stopBridge();
+    process.env.PLUMB_BRIDGE_PORTS = "0";
+    await startBridge();
+    // Port 0 means "any free port" — `bridge.port` must report the port that
+    // was actually bound, not the literal 0 that was requested.
+    expect(bridge.port).toBeGreaterThan(0);
+    await stopBridge();
   });
 });
 
 describe("bridge message-handling robustness (Phase A2)", () => {
   let ws: WebSocket;
+  const previousPool = process.env.PLUMB_BRIDGE_PORTS;
 
   beforeAll(async () => {
+    process.env.PLUMB_BRIDGE_PORTS = "0"; // any free port — never collide with a real session
     await startBridge();
     if (!bridge.port) throw new Error("bridge failed to bind a port for the test");
     ws = await connectAndPair(bridge.port);
@@ -83,6 +138,8 @@ describe("bridge message-handling robustness (Phase A2)", () => {
   afterAll(async () => {
     ws.close();
     await stopBridge();
+    if (previousPool === undefined) delete process.env.PLUMB_BRIDGE_PORTS;
+    else process.env.PLUMB_BRIDGE_PORTS = previousPool;
   });
 
   it("drops a malformed `inventory` message (missing `pages`) without crashing the connection", async () => {

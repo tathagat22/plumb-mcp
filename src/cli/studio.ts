@@ -6,7 +6,7 @@
  * a separate terminal while your agent works.
  */
 import { spawn } from "node:child_process";
-import { BRIDGE_PORTS } from "../bridge/protocol";
+import { resolveBridgeHost, resolveBridgePorts } from "../bridge/ports";
 
 const HELP = `plumb-mcp studio — open the live Plumb Studio cockpit
 
@@ -21,11 +21,11 @@ own self-healing loop with in-UI approvals.
 
 /** First loopback bridge port that answers — that's the live Plumb server. */
 async function findRunningPort(): Promise<number | null> {
-  for (const port of BRIDGE_PORTS) {
+  for (const port of resolveBridgePorts()) {
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 500);
-      await fetch(`http://127.0.0.1:${port}/`, { signal: ctrl.signal });
+      await fetch(`http://${resolveBridgeHost()}:${port}/`, { signal: ctrl.signal });
       clearTimeout(timer);
       return port; // any HTTP response means a server is listening
     } catch {
@@ -58,12 +58,13 @@ export async function runStudioCli(argv: string[]): Promise<number> {
   const port = await findRunningPort();
   if (!port) {
     process.stderr.write(
-      `plumb-mcp studio: no running Plumb server found on 127.0.0.1 (ports ${BRIDGE_PORTS[0]}–${BRIDGE_PORTS[BRIDGE_PORTS.length - 1]}).\n` +
+      `plumb-mcp studio: no running Plumb server found on ${resolveBridgeHost()} ` +
+        `(ports ${resolveBridgePorts().join(", ")}).\n` +
         "Start your MCP client (Claude Code / Cursor / Windsurf) so it launches plumb-mcp, then re-run this.\n",
     );
     return 1;
   }
-  const url = `http://127.0.0.1:${port}/`;
+  const url = `http://${resolveBridgeHost()}:${port}/`;
   process.stdout.write(`Plumb Studio → ${url}\n`);
   if (!argv.includes("--print")) openBrowser(url);
   return 0;
