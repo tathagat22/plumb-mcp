@@ -158,6 +158,12 @@ jobs:
   # Terraform module in one pass (it is tfsec's maintained successor); Checkov
   # gates on ANY failed check, since open-source Checkov has no severities.
   # Every Checkov suppression is listed and justified in .checkov.yaml.
+  #
+  # Both are installed as pinned CLIs and driven through `npm run deploy:scan`
+  # — the same script a developer runs locally, so a clean local scan means a
+  # clean CI scan. Deliberately not using the vendors' marketplace actions: a
+  # security job should not pull unpinned third-party code to do its scanning,
+  # and the two code paths would drift.
   policy:
     name: Policy scan (Trivy + Checkov)
     runs-on: ubuntu-latest
@@ -167,55 +173,40 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Trivy — Dockerfile, Kubernetes, Terraform
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: config
-          scan-ref: .
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          skip-dirs: "**/node_modules,**/.terraform"
+      - name: Install Trivy
+        env:
+          TRIVY_VERSION: "0.74.0"
+        run: |
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin trivy
+          trivy --version
 
-      # Same scan again, as SARIF, so findings land in the Security tab rather
-      # than only in a failed job's log. Never gates — the run above already did.
-      - name: Trivy — SARIF for code scanning
+      - name: Install Checkov
+        run: |
+          pipx install checkov==3.3.11
+          checkov --version
+
+      - name: Scan
+        run: npm run deploy:scan
+
+      # The same scan again as SARIF, so findings land in the Security tab
+      # rather than only in a failed job's log. Never gates — the run above
+      # already did.
+      - name: Trivy SARIF for code scanning
         if: always()
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: config
-          scan-ref: .
-          format: sarif
-          output: trivy.sarif
-          exit-code: "0"
-          skip-dirs: "**/node_modules,**/.terraform"
+        run: |
+          trivy config . \
+            --format sarif --output trivy.sarif \
+            --exit-code 0 --disable-telemetry \
+            --skip-dirs '**/node_modules' --skip-dirs '**/.terraform'
 
-      - name: Upload Trivy SARIF
+      - name: Upload SARIF
         if: always() && hashFiles('trivy.sarif') != ''
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy.sarif
           category: trivy-config
-
-      - name: Checkov — deploy/
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          directory: deploy
-          config_file: .checkov.yaml
-          quiet: true
-          soft_fail: false
-          output_format: cli
-
-      # The Dockerfile sits outside deploy/, and widening the scan to `.` would
-      # drag in node_modules. Kept as its own step for that reason.
-      - name: Checkov — Dockerfile
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          file: Dockerfile
-          config_file: .checkov.yaml
-          quiet: true
-          soft_fail: false
-          output_format: cli
 
   terraform:
     name: Terraform module

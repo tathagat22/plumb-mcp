@@ -260,8 +260,11 @@ npm run deploy:manifests     # regenerate deploy/k8s/plumb.yaml
 git diff --exit-code deploy/k8s
 ```
 
-`deploy:scan` needs `brew install trivy checkov` (or the equivalent) locally;
-CI installs them itself.
+`deploy:scan` needs `brew install trivy checkov` (or the equivalent) locally.
+CI installs pinned versions of the same two CLIs and runs the same script —
+deliberately not the vendors' marketplace actions, because a security job
+should not pull unpinned third-party code to do its scanning, and two code
+paths would drift. A clean local scan means a clean CI scan.
 
 ---
 
