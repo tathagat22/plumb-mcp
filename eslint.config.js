@@ -30,6 +30,27 @@ export default tseslint.config(
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", ignoreRestSiblings: true },
       ],
       "no-empty": ["warn", { allowEmptyCatch: true }],
+
+      // Enforced ceiling on file size, counting code only — this codebase is
+      // comment-dense on purpose and a long explanation is not the problem a
+      // size cap exists to catch.
+      //
+      // 600 is a real limit, not an aspiration: the five 1000+ LOC files that
+      // used to live here (figma-plugin/code.ts, src/normalize/normalize.ts,
+      // src/dsl/schema.ts, figma-plugin/emit.ts, src/verify.ts) are all split
+      // now, and this is what stops them growing back. Hitting it means
+      // extracting a module, not raising the number.
+      "max-lines": [
+        "error",
+        { max: 600, skipBlankLines: true, skipComments: true },
+      ],
     },
+  },
+  {
+    // Test files earn more room: a table-driven spec is mostly data, and
+    // splitting one to satisfy a line count makes the suite harder to read,
+    // not easier.
+    files: ["**/*.test.ts"],
+    rules: { "max-lines": "off" },
   },
 );
