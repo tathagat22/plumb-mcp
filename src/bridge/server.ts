@@ -274,6 +274,38 @@ export interface HealthReport {
   studio: boolean;
 }
 
+/**
+ * The health document, in Prometheus text exposition format.
+ *
+ * Deliberately hand-rolled rather than pulling in a metrics client: there are
+ * six numbers, the format is a documented one-liner per sample, and a
+ * dependency to emit it would be larger than the server's entire runtime tree.
+ */
+export function renderMetrics(): string {
+  const h = healthReport();
+  const lines = [
+    "# HELP plumb_up Whether the bridge is serving.",
+    "# TYPE plumb_up gauge",
+    "plumb_up 1",
+    "# HELP plumb_plugin_paired Whether a Figma plugin has completed pairing.",
+    "# TYPE plumb_plugin_paired gauge",
+    `plumb_plugin_paired ${h.paired ? 1 : 0}`,
+    "# HELP plumb_uptime_seconds Seconds since the process started.",
+    "# TYPE plumb_uptime_seconds counter",
+    `plumb_uptime_seconds ${h.uptimeSec}`,
+    "# HELP plumb_requests_in_flight Plugin requests awaiting a reply.",
+    "# TYPE plumb_requests_in_flight gauge",
+    `plumb_requests_in_flight ${h.pending}`,
+    "# HELP plumb_staged_uploads Uploaded files awaiting their matching reply.",
+    "# TYPE plumb_staged_uploads gauge",
+    `plumb_staged_uploads ${h.staging.uploads}`,
+    "# HELP plumb_staged_inbound Byte payloads staged for the plugin to pull.",
+    "# TYPE plumb_staged_inbound gauge",
+    `plumb_staged_inbound ${h.staging.inbound}`,
+  ];
+  return lines.join("\n") + "\n";
+}
+
 export function healthReport(): HealthReport {
   return {
     ok: true,
@@ -303,10 +335,26 @@ function handleHttp(req: IncomingMessage, res: ServerResponse): void {
     // alive"; `paired` answers "can the plugin path actually serve a request
     // right now" — a container orchestrator wants the first, a human
     // debugging "why did plumb_node time out" wants the second.
-    if (req.url === "/healthz") {
+    // `/healthz` is the Kubernetes convention; `/health` is what most other
+    // probes and uptime checkers reach for. Same document either way — an
+    // operator should not have to guess which spelling this server picked.
+    if (req.url === "/healthz" || req.url === "/health") {
       const body = JSON.stringify(healthReport());
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
+        "Content-Length": Buffer.byteLength(body),
+        "Cache-Control": "no-store",
+      });
+      res.end(body);
+      return;
+    }
+    // Prometheus text exposition. The counters that actually indicate trouble
+    // are the two that should return to zero and don't when something is
+    // wedged: in-flight plugin requests, and staged bytes waiting for a reply.
+    if (req.url === "/metrics") {
+      const body = renderMetrics();
+      res.writeHead(200, {
+        "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
         "Content-Length": Buffer.byteLength(body),
         "Cache-Control": "no-store",
       });

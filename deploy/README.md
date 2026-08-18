@@ -209,6 +209,7 @@ What the chart does by default, and why:
 | Service account token | not mounted | Plumb never calls the Kubernetes API |
 | Pod Security Standard | `restricted` enforced on the namespace | The workload already satisfies it; enforcing means a regression is rejected by the API server rather than shipped |
 | Ingress | deny-all NetworkPolicy | The bridge authenticates nobody |
+| Observability | `GET /healthz` (and `/health`), `GET /metrics` | Liveness, pairing state, and the two counters that should return to zero: in-flight requests and staged bytes |
 | Egress | 443 to public IPs, plus DNS; RFC1918 excluded | `api.figma.com`, Google Fonts, and the asset providers, without giving it the cluster network |
 
 Plain `NetworkPolicy` cannot express hostnames, so the egress rule is

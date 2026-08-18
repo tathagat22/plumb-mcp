@@ -295,7 +295,7 @@ docker compose up bridge    # bridge + Plumb Studio on http://127.0.0.1:31337
 docker compose run --rm mcp # the stdio MCP server, for an editor to attach to
 ```
 
-The bridge serves `GET /healthz` — liveness plus whether a plugin is actually paired — which is what the Compose healthcheck probes.
+The bridge serves `GET /healthz` (aliased as `/health`) — liveness plus whether a plugin is actually paired — which is what the Compose healthcheck probes, and `GET /metrics` in Prometheus text format.
 
 `bridge` publishes a single fixed port (containers can only publish ports they know, so `PLUMB_BRIDGE_PORT` replaces the scan) and maps it to the host's loopback only — no more reachable than running natively. Exported assets, screenshots, and the cache land in the `plumb-data` volume.
 

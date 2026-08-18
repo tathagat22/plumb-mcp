@@ -235,4 +235,75 @@ describe("GET /healthz", () => {
   it("exposes the same snapshot to in-process callers", () => {
     expect(healthReport()).toMatchObject({ ok: true, port, paired: false });
   });
+
+  it("answers on /health too, so a probe need not guess the spelling", async () => {
+    const [healthz, health] = await Promise.all([
+      fetch(`http://127.0.0.1:${port}/healthz`).then((r) => r.json()),
+      fetch(`http://127.0.0.1:${port}/health`).then((r) => r.json()),
+    ]);
+    expect((healthz as { ok: boolean }).ok).toBe(true);
+    expect((health as { ok: boolean }).ok).toBe(true);
+  });
+
+  it("reports how much is staged, so a leak is visible before it is fatal", async () => {
+    const body = (await (await fetch(`http://127.0.0.1:${port}/healthz`)).json()) as {
+      staging: { uploads: number; assetRequests: number; inbound: number };
+    };
+    expect(body.staging).toEqual({ uploads: 0, assetRequests: 0, inbound: 0 });
+  });
+});
+
+describe("GET /metrics", () => {
+  let port: number;
+  const previousPool = process.env.PLUMB_BRIDGE_PORTS;
+
+  beforeAll(async () => {
+    process.env.PLUMB_BRIDGE_PORTS = "0";
+    await startBridge();
+    if (!bridge.port) throw new Error("bridge failed to bind a port for the test");
+    port = bridge.port;
+  });
+
+  afterAll(async () => {
+    await stopBridge();
+    if (previousPool === undefined) delete process.env.PLUMB_BRIDGE_PORTS;
+    else process.env.PLUMB_BRIDGE_PORTS = previousPool;
+  });
+
+  it("serves Prometheus text exposition", async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/metrics`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/plain");
+    expect(res.headers.get("content-type")).toContain("version=0.0.4");
+  });
+
+  it("gives every sample a HELP and a TYPE line", async () => {
+    // A metric with no type is one a scraper has to guess about.
+    const body = await (await fetch(`http://127.0.0.1:${port}/metrics`)).text();
+    const samples = body
+      .split("\n")
+      .filter((l) => l && !l.startsWith("#"))
+      .map((l) => l.split(" ")[0]!);
+    expect(samples.length).toBeGreaterThan(3);
+    for (const name of samples) {
+      expect(body, name).toContain(`# HELP ${name} `);
+      expect(body, name).toContain(`# TYPE ${name} `);
+    }
+  });
+
+  it("reports a numeric value for every sample", async () => {
+    const body = await (await fetch(`http://127.0.0.1:${port}/metrics`)).text();
+    for (const line of body.split("\n").filter((l) => l && !l.startsWith("#"))) {
+      const value = line.split(" ")[1];
+      expect(Number.isFinite(Number(value)), line).toBe(true);
+    }
+  });
+
+  it("reports the counters that indicate a wedged bridge", async () => {
+    const body = await (await fetch(`http://127.0.0.1:${port}/metrics`)).text();
+    expect(body).toContain("plumb_up 1");
+    expect(body).toContain("plumb_plugin_paired 0");
+    expect(body).toContain("plumb_requests_in_flight 0");
+    expect(body).toContain("plumb_staged_uploads 0");
+  });
 });
