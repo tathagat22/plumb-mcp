@@ -31,10 +31,10 @@ export default defineConfig({
       // does. Raise these as the backfill lands — never lower them to make a
       // red build green.
       thresholds: {
-        lines: 29,
-        functions: 28,
-        statements: 28,
-        branches: 25,
+        lines: 40,
+        functions: 39,
+        statements: 39,
+        branches: 35,
       },
     },
   },
