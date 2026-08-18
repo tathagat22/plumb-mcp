@@ -20,6 +20,10 @@ const HELP = `plumb-mcp demo — run the design→code→verify loop offline
 Usage:
   plumb-mcp demo            Run the scored walkthrough and print the report.
   plumb-mcp demo --json     Emit the same results as JSON (for CI / scripting).
+                            Exit code is 0 only if every planted fault was
+                            caught and none were invented. From npm, use
+                            \`npm run --silent demo -- --json\` so npm's own
+                            banner stays out of the JSON.
   plumb-mcp demo --pds      Print the design spec the demo runs against.
 
 No Figma token, no plugin, no browser, no network. The engine that scores the

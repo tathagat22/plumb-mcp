@@ -126,7 +126,7 @@ It takes a real design spec, hands the verification engine a build of that same 
     Convergence           71.0% → 96.2% → 100.0%
 ```
 
-No Figma token, no plugin, no browser, no network — `docker compose up demo` even runs with `network_mode: none`. The engine scoring the demo is the same one behind `plumb_verify` and `plumb_fit`, and those numbers are asserted in [`src/demo/demo.test.ts`](./src/demo/demo.test.ts), so the demo fails CI if it ever stops being true. `plumb-mcp demo --pds` prints the design spec it runs against; `--json` emits the results for scripting.
+No Figma token, no plugin, no browser, no network — `docker compose up demo` even runs with `network_mode: none`. The engine scoring the demo is the same one behind `plumb_verify` and `plumb_fit`, and those numbers are asserted in [`src/demo/demo.test.ts`](./src/demo/demo.test.ts), so the demo fails CI if it ever stops being true. `plumb-mcp demo --pds` prints the design spec it runs against; `--json` emits the results for scripting and exits non-zero if the engine missed anything.
 
 ---
 
