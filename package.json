@@ -117,7 +117,7 @@
   },
   "devDependencies": {
     "@figma/plugin-typings": "^1.127.0",
-    "@types/node": "^20.14.0",
+    "@types/node": "^26.2.0",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.1.11",
     "esbuild": "^0.28.0",
