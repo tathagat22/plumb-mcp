@@ -271,6 +271,7 @@ Copy [`.env.example`](./.env.example) to `.env` (gitignored) for local use. Plum
 | `PLUMB_SESSION_NAME` | The label this session shows as in the plugin panel | The current directory name |
 | `PLUMB_LOG_LEVEL` | `debug` \| `info` \| `warn` \| `error` — logs always go to stderr, never stdout | `info` |
 | `PLUMB_LOG_FORMAT` | `json` for one JSON object per line, for a log shipper | Human-readable lines |
+| `NO_COLOR` / `TERM` | Honoured, never set — the standard conventions for disabling ANSI colour in `plumb-mcp demo` | Colour when stdout is a TTY |
 | `PLUMB_ASSETS_DIR` | Where `plumb_assets` writes exports | `./plumb-assets/` |
 | `PLUMB_SCREENSHOTS_DIR` | Where `plumb_screenshot` writes PNGs | `./plumb-screenshots/` |
 | `PLUMB_CACHE_DIR` | Response cache root | `~/.cache/plumb/` |
