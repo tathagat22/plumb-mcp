@@ -1,0 +1,51 @@
+{{- if and .Values.bridge.enabled .Values.networkPolicy.enabled }}
+{{- /*
+  The `helm test` pod's own NetworkPolicy.
+
+  The bridge's policy is scoped to `component: bridge`, which deliberately does
+  not select this pod — so without this it would be the one workload in the
+  release running with unrestricted egress. Short-lived is not the same as
+  harmless: it runs with the release's service account in the release's
+  namespace, and a namespace that enforces a deny-all default deserves a pod
+  that says what it needs rather than one nothing covers.
+
+  What it needs is exactly two things: DNS, and the bridge port. Created ahead
+  of the test pod via a lower hook weight, and torn down with it.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "plumb.fullname" . }}-test
+  labels:
+    {{- include "plumb.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "plumb.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: test
+  policyTypes:
+    - Ingress
+    - Egress
+  # Nothing needs to reach the test pod.
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "plumb.bridgeSelectorLabels" . | nindent 14 }}
+      ports:
+        - port: {{ .Values.bridge.port }}
+          protocol: TCP
+{{- end }}

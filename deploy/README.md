@@ -236,10 +236,12 @@ Not just present — checked, on every push, by
   HIGH/CRITICAL across the Dockerfile, the Kubernetes manifests and the
   Terraform module (it is tfsec's maintained successor), and **Checkov** gates
   on *any* failed check, since open-source Checkov has no severities. Both are
-  currently clean — 83 Kubernetes, 165 Helm, and 9 Dockerfile checks passing.
-  Every Checkov suppression is listed with its reason in
+  currently clean, across several hundred Kubernetes, Helm, and Dockerfile
+  checks. Every Checkov suppression is listed with its reason in
   [`.checkov.yaml`](../.checkov.yaml); there are six, and each is a considered
-  decision rather than a silenced finding.
+  decision rather than a silenced finding — the scanners have twice caught a
+  real gap here (a missing `HEALTHCHECK`, and a `helm test` pod that no
+  NetworkPolicy covered), and both were fixed rather than suppressed.
 - Both image targets built, the offline demo run inside the default image, and
   Chromium proven to render a page under the chart's exact securityContext —
   non-root, read-only root filesystem, all capabilities dropped.
