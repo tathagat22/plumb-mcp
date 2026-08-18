@@ -116,16 +116,16 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@figma/plugin-typings": "^1.127.0",
+    "@figma/plugin-typings": "^1.134.0",
     "@types/node": "^20.14.0",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.1.11",
     "esbuild": "^0.28.0",
     "eslint": "^9.39.5",
     "tsup": "^8.3.0",
-    "tsx": "^4.19.0",
+    "tsx": "^4.23.12",
     "typescript": "^5.6.0",
-    "typescript-eslint": "^8.65.0",
+    "typescript-eslint": "^8.67.0",
     "vitepress": "^1.6.4",
     "vitest": "^4.1.9"
   }
