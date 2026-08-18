@@ -30,11 +30,17 @@ export default defineConfig({
       // refactor doesn't trip it, but deleting or bypassing a tested path
       // does. Raise these as the backfill lands — never lower them to make a
       // red build green.
+      //
+      // 30% → 40% → 60% over three passes. The last jump came from testing the
+      // pipelines end to end rather than chasing files: compiling the shipped
+      // DSL examples down to PDS and on to an EmitPlan, and normalising a real
+      // Figma export through every downstream consumer, cover far more real
+      // behaviour per spec than unit tests on the same code would.
       thresholds: {
-        lines: 40,
-        functions: 39,
-        statements: 39,
-        branches: 35,
+        lines: 60,
+        functions: 57,
+        statements: 59,
+        branches: 52,
       },
     },
   },
