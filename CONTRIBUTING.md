@@ -5,10 +5,20 @@ it extracts Figma designs as compact specs for coding agents, then verifies what
 the agent built. Contributions of every size are welcome, from typo fixes to new
 verify checks.
 
-New here? Look for issues labelled
-[`good first issue`](https://github.com/tathagat22/plumb-mcp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
-— they're scoped to be self-contained, and most can be done **without a Figma
-account** thanks to the bundled offline fixtures.
+New here? Every one of these is self-contained, has a clear "done" test, and
+needs **no Figma account** — the bundled fixtures and `npm run demo` cover it.
+They are also genuinely wanted, not busywork:
+
+| Where to start | What "done" looks like |
+|---|---|
+| **Add a verify check.** Pick something Plumb doesn't grade yet — `letter-spacing`, `text-transform`, `object-fit` on images. | A new module in `src/verify/checks/`, wired into the `CHECKS` list in `compare.ts`, plus an entry in `src/demo/faults.ts` proving `npm run demo` catches it and invents nothing. |
+| **Split a long file.** `src/review/rubric.ts` (548) and `src/normalize/normalize.ts` (505) are the longest left; the cap is 600 code lines and falling. | Extraction lands with tests for the extracted piece, and `npm test` is green before and after. |
+| **Raise the coverage floor.** `src/tools/` is the thinnest area — `query.ts` and `screenshot.ts` have no direct specs. | New specs, then a *separate* commit raising the threshold in `vitest.config.ts`. It only ever goes up. |
+| **Teach the rubric something.** `src/review/rubric.ts` grades six dimensions; a seventh (icon-family consistency, say) is a self-contained addition. | A new dimension with its weight, plus specs that break exactly one thing and assert only that dimension reacts. |
+| **Tighten the egress NetworkPolicy.** `deploy/helm/plumb` allows public 443 because plain `NetworkPolicy` can't express hostnames. | A Cilium or Calico variant restricted to the hosts in the README's egress table, validated by `npm run deploy:scan`. |
+
+Also labelled on the tracker:
+[`good first issue`](https://github.com/tathagat22/plumb-mcp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
 
 ## Prerequisites
 
