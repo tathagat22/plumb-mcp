@@ -113,6 +113,32 @@ export async function requestNode(
   return result;
 }
 
+/**
+ * Asks the plugin to serialize whatever is currently selected. Shares
+ * `requestNode`'s cache, so repeat calls on an unchanged selection are
+ * free — only a cache miss actually asks the plugin.
+ */
+export async function requestSelection(): Promise<{
+  doc: FigmaNode | null;
+  nodeName: string | null;
+}> {
+  const nodeId = bridge.selection?.nodeId ?? null;
+  if (!nodeId) return { doc: null, nodeName: null };
+
+  const key = `${nodeId}:all`;
+  const cached = bridge.nodeCache.get(key);
+  if (cached && cached.fileVersion === bridge.fileVersion) {
+    return { doc: cached.doc, nodeName: cached.nodeName };
+  }
+  const result = await request<{ doc: FigmaNode | null; nodeName: string | null }>(
+    (reqId) => ({ t: "get-selection", reqId }),
+    60_000,
+    "selection",
+  );
+  bridge.nodeCache.set(key, { ...result, fileVersion: bridge.fileVersion });
+  return result;
+}
+
 export interface RequestAssetsOptions {
   /** Screen/node to scope the recursive export to. */
   nodeId?: string;
@@ -564,15 +590,18 @@ export async function startBridge(): Promise<void> {
 
       switch (msg.t) {
         case "selection":
-          bridge.selection = msg.doc
+          bridge.selection = msg.nodeId
             ? {
-                doc: msg.doc as FigmaNode,
+                nodeId: msg.nodeId,
                 fileName: msg.fileName,
                 pageName: msg.pageName,
                 nodeName: msg.nodeName ?? "",
                 receivedAt: Date.now(),
               }
             : null;
+          break;
+        case "selection-doc":
+          resolvePending(msg.reqId, { doc: msg.doc, nodeName: msg.nodeName });
           break;
         case "inventory": {
           if (!Array.isArray(msg.pages)) {

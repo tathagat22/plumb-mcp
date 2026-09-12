@@ -409,13 +409,14 @@ export type PluginMessage =
   | { t: "pair"; pluginVersion: string }
   | {
       t: "selection";
-      doc: FigmaNode | null;
+      nodeId: string | null;
       fileName: string;
       pageName: string;
       nodeName: string | null;
     }
   | { t: "inventory"; fileName: string; pages: InventoryPage[] }
   | { t: "node"; reqId: string; doc: FigmaNode | null; nodeName: string | null }
+  | { t: "selection-doc"; reqId: string; doc: FigmaNode | null; nodeName: string | null }
   | { t: "assets"; reqId: string; assets: WireAsset[]; error: string | null }
   | {
       t: "screenshot";
@@ -445,6 +446,7 @@ export type ServerMessage =
   | { t: "paired" }
   | { t: "pair-rejected"; reason: string }
   | { t: "get-node"; reqId: string; nodeId: string }
+  | { t: "get-selection"; reqId: string }
   | {
       t: "get-assets";
       reqId: string;

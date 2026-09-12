@@ -56,6 +56,7 @@ async function uploadAssetBytes(reqId: string, index: number): Promise<void> {
 const ws = new WebSocket(`ws://127.0.0.1:${bridge.port}`);
 let gotHello = false;
 let gotPaired = false;
+let getSelectionRequests = 0;
 ws.on("message", (raw) => {
   const msg = JSON.parse(String(raw)) as { t?: string; reqId?: string };
   if (msg.t === "plumb-hello") gotHello = true;
@@ -64,6 +65,17 @@ ws.on("message", (raw) => {
     ws.send(
       JSON.stringify({
         t: "node",
+        reqId: msg.reqId,
+        doc: fixture,
+        nodeName: "Export employees · dialog",
+      }),
+    );
+  }
+  if (msg.t === "get-selection") {
+    getSelectionRequests += 1;
+    ws.send(
+      JSON.stringify({
+        t: "selection-doc",
         reqId: msg.reqId,
         doc: fixture,
         nodeName: "Export employees · dialog",
@@ -169,7 +181,7 @@ ws.send(
 ws.send(
   JSON.stringify({
     t: "selection",
-    doc: fixture,
+    nodeId: "131:6950",
     fileName: "Test File",
     pageName: "Page 1",
     nodeName: "Export employees · dialog",
@@ -208,6 +220,28 @@ check(
   "plumb_node on a duplicate name returns all matches",
   dup.ambiguous === true && Array.isArray(dup.matches) && dup.matches.length === 2,
   `${dup.matches ? dup.matches.length : 0} matches`,
+);
+
+const selection = parse(
+  await client.callTool({ name: "plumb_selection", arguments: {} }),
+);
+check(
+  "plumb_selection pulls the doc on demand instead of reading a pre-pushed one",
+  selection.source === "plugin" &&
+    !selection.error &&
+    selection.selection === "Export employees · dialog",
+  `selection: ${selection.selection}`,
+);
+check("that pull actually hit the plugin", getSelectionRequests === 1);
+
+const selectionAgain = parse(
+  await client.callTool({ name: "plumb_selection", arguments: {} }),
+);
+check(
+  "a second call on the same, unchanged selection is served from cache — no repeat plugin round-trip",
+  getSelectionRequests === 1 &&
+    selectionAgain.selection === selection.selection,
+  `plugin hits: ${getSelectionRequests}`,
 );
 
 const assets = parse(

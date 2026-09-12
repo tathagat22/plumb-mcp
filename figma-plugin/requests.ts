@@ -250,6 +250,23 @@ export async function handleServerRequest(req: any): Promise<void> {
     return;
   }
 
+  if (req.t === "get-selection") {
+    const selection = figma.currentPage.selection;
+    const node = selection.length > 0 ? selection[0] : null;
+    if (!node) {
+      reply({ t: "selection-doc", reqId: req.reqId, doc: null, nodeName: null });
+      return;
+    }
+    const varMap = await buildVariableMap();
+    reply({
+      t: "selection-doc",
+      reqId: req.reqId,
+      doc: serialize(node, varMap),
+      nodeName: node.name,
+    });
+    return;
+  }
+
   if (req.t === "get-assets") {
     try {
       const list = req.list === true;

@@ -301,7 +301,7 @@
         }
         if (lastSelection) {
           sendRaw(s.ws, {
-            t: "selection", doc: lastSelection.doc, fileName: lastSelection.fileName,
+            t: "selection", nodeId: lastSelection.nodeId, fileName: lastSelection.fileName,
             pageName: lastSelection.pageName, nodeName: lastSelection.nodeName,
           });
         }
@@ -407,7 +407,7 @@
       lastSelection = msg;
       refreshHeader();
       fanout(function () {
-        return { t: "selection", doc: msg.doc, fileName: msg.fileName,
+        return { t: "selection", nodeId: msg.nodeId, fileName: msg.fileName,
           pageName: msg.pageName, nodeName: msg.nodeName };
       });
       return;

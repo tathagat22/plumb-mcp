@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { requestSelection } from "../bridge/server";
 import { bridge } from "../bridge/store";
 import { PlumbError } from "../errors";
 import { normalizeToBudget } from "../normalize/budget";
@@ -52,18 +53,26 @@ export function registerPlumbSelection(server: McpServer): void {
         if (!bridge.selection) {
           throw new PlumbError(
             "The Plumb plugin is paired, but nothing is selected in Figma.",
-            "Select a frame in Figma — the plugin streams your selection automatically.",
+            "Select a frame in Figma — the plugin reports it as soon as you do.",
+          );
+        }
+        const depth = args.depth ?? 3;
+        const { doc, nodeName } = await requestSelection();
+        if (!doc) {
+          throw new PlumbError(
+            "Nothing is selected in Figma anymore.",
+            "Select a frame in Figma, then call plumb_selection again.",
           );
         }
         const file: FigmaFileResult = {
-          document: bridge.selection.doc,
+          document: doc,
           fileName: bridge.selection.fileName,
-          version: `plugin-${bridge.selection.receivedAt}`,
+          version: `plugin-${Date.now()}`,
         };
-        const pds = normalizeToBudget(file, args.depth ?? 3, args.maxTokens, {
+        const pds = normalizeToBudget(file, depth, args.maxTokens, {
           notes: args.notes,
         });
-        return ok({ ...pds, source: "plugin", selection: bridge.selection.nodeName });
+        return ok({ ...pds, source: "plugin", selection: nodeName ?? bridge.selection.nodeName });
       } catch (e) {
         return fail(e);
       }

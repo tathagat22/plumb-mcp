@@ -9,9 +9,9 @@ export interface CachedNodeResult {
   fileVersion: number;
 }
 
-/** The current selection the paired plugin has streamed. */
+/** The current selection, as a lightweight notice from the paired plugin. */
 export interface BridgeSelection {
-  doc: FigmaNode;
+  nodeId: string | null;
   fileName: string;
   pageName: string;
   nodeName: string;
@@ -34,7 +34,7 @@ class BridgeStore {
   /** Whether a plugin has completed the one-time pairing. */
   paired = false;
   pluginVersion: string | null = null;
-  /** The latest selection streamed by the paired plugin. */
+  /** The latest selection notice from the paired plugin — id only, no doc. */
   selection: BridgeSelection | null = null;
   /** The file's screen inventory (all pages → top-level frames). */
   inventory: BridgeInventory | null = null;

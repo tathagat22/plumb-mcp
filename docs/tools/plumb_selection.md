@@ -28,4 +28,10 @@ If nothing is selected, `doc` is `null`.
 
 Plugin-path only — REST has no concept of "current selection."
 
-Updates push automatically when the user changes selection in Figma — the bridge tracks it without polling. Calling `plumb_selection` always returns the most recent snapshot.
+The plugin only reports *that* the selection changed (id and name) as the
+user clicks around Figma — it does not walk and serialize the selected
+subtree until `plumb_selection` is actually called. That pull is cached: a
+second call on a selection that hasn't changed, and hasn't been edited since,
+returns instantly instead of re-fetching. Selecting something, including
+something large, never blocks the Figma UI on its own — the cost of reading
+it is only paid when this tool is called.

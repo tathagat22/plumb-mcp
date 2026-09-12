@@ -8,7 +8,6 @@
  */
 
 import { PLUGIN_VERSION } from "./constants";
-import { serialize } from "./serialize";
 
 /* ------------------------------------------------------------------ */
 /* Inventory — every screen in the file                               */
@@ -57,7 +56,7 @@ export function pushSelection(): void {
   const node = selection.length > 0 ? selection[0] : null;
   figma.ui.postMessage({
     type: "selection",
-    doc: node ? serialize(node) : null,
+    nodeId: node ? node.id : null,
     fileName: figma.root.name,
     pageName: figma.currentPage.name,
     nodeName: node ? node.name : null,
