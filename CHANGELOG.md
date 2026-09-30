@@ -73,6 +73,23 @@ are summarized only briefly.
 
 ### Changed
 
+- **Lower memory in Figma.** The plugin no longer calls
+  `figma.loadAllPagesAsync()` on open, which pulled every page of the file
+  into Figma's memory. It watches only the page you're on (`nodechange`,
+  re-bound on page switch) and loads the rest only when a tool needs the whole
+  file: `plumb_outline`, a screen looked up by name, `plumb_search`, or
+  `plumb_components`. Unloaded pages arrive with `loaded: false`, and the
+  server fills them in with one `get-inventory` request. Lookups by id never
+  trigger it.
+- The plugin panel backs off reconnect attempts to ports with no server, from
+  1.5s to 10s, instead of opening a failing socket on every empty port every
+  1.5s for as long as it stays open.
+- **Bounded server memory.** The plugin node cache is an LRU of 24 subtrees
+  (it was unbounded until the next file edit). Staged inbound asset bytes are
+  now swept on expiry even if never re-read, and capped at 128 MB. The bundle
+  is built without comments or whitespace (550 KB → 416 KB, and no longer held
+  as two-byte source by V8). Headless Chrome skips extensions, sync, component
+  updates and background networking.
 - The five files over 1000 lines are split by concern, behind unchanged public
   surfaces: `src/dsl/schema.ts` → a layered `schema/` barrel,
   `src/verify.ts` → `verify/`, `src/normalize/normalize.ts` → five focused

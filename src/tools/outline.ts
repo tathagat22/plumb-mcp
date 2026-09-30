@@ -89,7 +89,7 @@ export function registerPlumbOutline(server: McpServer): void {
         if (bridge.paired && bridge.inventory && !fileKey) {
           return ok(
             filterByPage(
-              pluginOutline() as { pages?: unknown[]; meta?: Record<string, unknown> },
+              (await pluginOutline()) as { pages?: unknown[]; meta?: Record<string, unknown> },
               pageFilter,
             ),
           );

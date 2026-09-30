@@ -129,7 +129,7 @@ export function registerPlumbScreenshot(server: McpServer): void {
             "plumb_screenshot uses the plugin path — run the Plumb plugin in Figma and click 'Pair with Plumb'.",
           );
         }
-        const resolved = resolveScreen(args.id, args.name);
+        const resolved = await resolveScreen(args.id, args.name);
         if ("ambiguous" in resolved) {
           return ok({
             ambiguous: true,

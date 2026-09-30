@@ -101,7 +101,7 @@ export function registerPlumbQuery(server: McpServer): void {
         let pds: PdsDocument;
         let nodeName: string | null = null;
         if (bridge.paired && (id || args.name)) {
-          const resolved = resolveScreen(id, args.name);
+          const resolved = await resolveScreen(id, args.name);
           if ("ambiguous" in resolved) {
             return ok({
               ambiguous: true,

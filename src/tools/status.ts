@@ -29,6 +29,12 @@ export function registerPlumbStatus(server: McpServer): void {
         process.env.FIGMA_TOKEN ?? process.env.FIGMA_ACCESS_TOKEN,
       );
       const screenCount = bridge.inventory ? flatScreens().length : 0;
+      // Status stays cheap: it reports unloaded pages rather than loading them.
+      const unloadedPages = bridge.inventory?.pages.filter((p) => p.loaded === false).length ?? 0;
+      const screensNote =
+        unloadedPages > 0
+          ? `${screenCount} screen(s) on the loaded page(s); ${unloadedPages} more page(s) load on the first plumb_outline`
+          : `${screenCount} screen(s) available`;
       return ok({
         server: { name: SERVER_NAME, version: SERVER_VERSION, milestone: "M3" },
         plugin: {
@@ -37,9 +43,10 @@ export function registerPlumbStatus(server: McpServer): void {
           pluginVersion: bridge.pluginVersion,
           fileName: bridge.inventory?.fileName ?? null,
           screens: screenCount,
+          ...(unloadedPages > 0 ? { unloadedPages } : {}),
           selection: bridge.selection ? bridge.selection.nodeName : null,
           note: bridge.paired
-            ? `Plugin paired — ${screenCount} screen(s) available. Use plumb_outline to list them, then plumb_node / plumb_assets by id or name (no token, no rate limit).`
+            ? `Plugin paired — ${screensNote}. Use plumb_outline to list them, then plumb_node / plumb_assets by id or name (no token, no rate limit).`
             : bridge.port !== null
               ? "Bridge is listening, but no plugin has paired. In Figma, run the Plumb plugin and click 'Pair with Plumb'."
               : "The plugin bridge is not running; the REST tools still work.",

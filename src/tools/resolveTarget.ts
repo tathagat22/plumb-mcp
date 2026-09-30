@@ -48,7 +48,7 @@ export async function resolveVerifyTarget(
   const source: "plugin" | "rest" = bridge.paired && !fileKey ? "plugin" : "rest";
 
   if (source === "plugin") {
-    const resolved = resolveScreen(id, args.name);
+    const resolved = await resolveScreen(id, args.name);
     if ("ambiguous" in resolved) {
       return { kind: "ambiguous", matches: formatScreenMatches(resolved.ambiguous) };
     }

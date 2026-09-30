@@ -69,7 +69,7 @@ export function registerPlumbTokens(server: McpServer): void {
         // demands fileKey+id even though the plugin can serve the same data
         // for free.
         if (bridge.paired && (id || args.name)) {
-          const resolved = resolveScreen(id, args.name);
+          const resolved = await resolveScreen(id, args.name);
           if ("ambiguous" in resolved) {
             return ok({
               ambiguous: true,

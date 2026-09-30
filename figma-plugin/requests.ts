@@ -13,6 +13,7 @@ import { applyDesign } from "./emit";
 import { applyFoundations } from "./foundations";
 import { wireMotion } from "./motion-emit";
 import { collectAssets, collectSpecific } from "./assets";
+import { buildInventory, ensureAllPagesLoaded } from "./inventory";
 import { buildVariableMap, serialize } from "./serialize";
 
 /* ------------------------------------------------------------------ */
@@ -65,6 +66,7 @@ export async function handleGetSearch(
   type?: string,
 ): Promise<void> {
   try {
+    await ensureAllPagesLoaded(); // searches the whole file
     const q = (query ?? "").trim().toLowerCase();
     const t = (type ?? "").toUpperCase();
     const matches: any[] = [];
@@ -103,6 +105,7 @@ export async function handleGetSearch(
 
 export async function handleGetComponents(reqId: string): Promise<void> {
   try {
+    await ensureAllPagesLoaded(); // components can live on any page
     const components: any[] = [];
     const instanceNodes: any[] = []; // collect first, resolve mainComponent after
     const instanceCount = new Map<string, number>();
@@ -299,6 +302,16 @@ export async function handleServerRequest(req: any): Promise<void> {
 
   if (req.t === "get-screenshot") {
     await handleGetScreenshot(req.reqId, req.nodeId, req.scale, req.format);
+    return;
+  }
+
+  if (req.t === "get-inventory") {
+    try {
+      await ensureAllPagesLoaded();
+      reply({ t: "inventory-full", reqId: req.reqId, ...buildInventory(), error: null });
+    } catch (e) {
+      reply({ t: "inventory-full", reqId: req.reqId, fileName: "", pages: [], error: errMsg(e) });
+    }
     return;
   }
 

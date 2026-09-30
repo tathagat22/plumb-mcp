@@ -55,7 +55,7 @@ export function registerPlumbDescribe(server: McpServer): void {
         });
 
         if (!fileKey && bridge.paired) {
-          const resolved = resolveScreen(id, args.name);
+          const resolved = await resolveScreen(id, args.name);
           if ("ambiguous" in resolved) {
             return ok({
               ambiguous: true,

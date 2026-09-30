@@ -67,26 +67,38 @@ figma.ui.onmessage = (message: {
 };
 
 async function start(): Promise<void> {
-  // documentAccess "dynamic-page" requires all pages loaded before the
-  // document-wide change handler — and before reading other pages' children.
-  await figma.loadAllPagesAsync();
-
+  // No `loadAllPagesAsync()` here: under "dynamic-page" that pulls every page
+  // of the file into memory the moment the plugin opens. Plumb watches only the
+  // page you're on and loads others when a request needs them (see inventory).
   const wasPaired = (await figma.clientStorage.getAsync("plumb-paired")) === true;
   figma.ui.postMessage({ type: "init", autoPair: wasPaired });
 
   figma.on("selectionchange", pushSelection);
 
   let changeTimer: ReturnType<typeof setTimeout> | null = null;
-  figma.on("documentchange", () => {
-    // Drop the variable-map cache on every documentchange — cheap to rebuild
-    // and ensures variable renames/creates/deletes are picked up by the next
+  const onChange = () => {
+    // Drop the variable-map cache on every change — cheap to rebuild and
+    // ensures variable renames/creates/deletes are picked up by the next
     // `get-node`. Selection/inventory pushes are still debounced.
     invalidateVariableMapCache();
     if (changeTimer !== null) clearTimeout(changeTimer);
     changeTimer = setTimeout(() => {
+      changeTimer = null;
       pushSelection();
       pushInventory();
     }, 400);
+  };
+
+  // `documentchange` needs every page loaded, so listen per page instead and
+  // move the listener along with you. You can only edit the page you're on;
+  // Plumb's own writes bump the server's file version on their reply.
+  let watched: PageNode = figma.currentPage;
+  watched.on("nodechange", onChange);
+  figma.on("currentpagechange", () => {
+    watched.off("nodechange", onChange);
+    watched = figma.currentPage;
+    watched.on("nodechange", onChange);
+    onChange(); // a newly visited page is now loaded — list its screens
   });
 
   pushSelection();

@@ -1,7 +1,43 @@
 import { PlumbError } from "../errors";
 import { estimateTokens } from "../util/estimate";
 import { HandleMinter } from "../normalize/handles";
+import { requestFullInventory } from "./server";
 import { bridge } from "./store";
+
+/** Whether the pushed inventory leaves out pages the plugin hasn't loaded. */
+export function inventoryIsPartial(): boolean {
+  return !!bridge.inventory?.pages.some((p) => p.loaded === false);
+}
+
+let fullLoad: Promise<void> | null = null;
+
+/**
+ * Make sure every page's screens are known. The plugin only loads the page
+ * you're on (loading a whole large file costs Figma a lot of memory), so the
+ * first tool that needs the whole file — outline, or a screen looked up by
+ * name — asks for the rest here. Concurrent callers share one request, and a
+ * complete inventory is a no-op. On failure the partial inventory stands.
+ */
+export async function ensureFullInventory(): Promise<void> {
+  if (!bridge.paired || !inventoryIsPartial()) return;
+  if (!fullLoad) {
+    fullLoad = (async () => {
+      const { fileName, pages, error } = await requestFullInventory();
+      if (error) {
+        throw new PlumbError(
+          `The plugin could not load the file's pages: ${error}`,
+          "Retry; if it persists, re-run the Plumb plugin in Figma.",
+        );
+      }
+      // Loading pages doesn't change the file, so the fileVersion (and the
+      // node cache keyed on it) stays as is.
+      bridge.inventory = { fileName, pages };
+    })().finally(() => {
+      fullLoad = null;
+    });
+  }
+  return fullLoad;
+}
 
 /** One screen in a flattened, page-annotated list (internal shape). */
 export interface ScreenMatch {
@@ -53,10 +89,10 @@ export function screenName(id: string): string {
  * - name with several matches → `{ ambiguous }` so the agent can ask the user.
  * - no match / no input → a PlumbError.
  */
-export function resolveScreen(
+export async function resolveScreen(
   id: string | undefined,
   name: string | undefined,
-): { id: string } | { ambiguous: ScreenMatch[] } {
+): Promise<{ id: string } | { ambiguous: ScreenMatch[] }> {
   if (id) return { id };
   if (!name) {
     throw new PlumbError(
@@ -64,6 +100,8 @@ export function resolveScreen(
       "Call plumb_outline to list the available screen names and ids.",
     );
   }
+  // A name can match a screen on any page, so every page has to be known.
+  await ensureFullInventory();
   const q = name.trim().toLowerCase();
   const screens = flatScreens();
   let matches = screens.filter((s) => s.name.toLowerCase() === q);
@@ -81,7 +119,8 @@ export function resolveScreen(
 }
 
 /** The plugin-path equivalent of plumb_outline: the live screen inventory. */
-export function pluginOutline(): unknown {
+export async function pluginOutline(): Promise<unknown> {
+  await ensureFullInventory();
   const inv = bridge.inventory;
   if (!inv) {
     throw new PlumbError(

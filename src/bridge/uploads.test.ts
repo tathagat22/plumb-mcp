@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  INBOUND_MAX_BYTES,
   INBOUND_TTL_MS,
   PENDING_UPLOAD_TTL_MS,
   clearAllPendingUploads,
@@ -142,7 +143,7 @@ describe("the TTL sweep", () => {
   });
 
   it("is safe to run against empty maps", () => {
-    expect(sweepExpiredUploads()).toEqual({ uploads: 0, assetRequests: 0 });
+    expect(sweepExpiredUploads()).toEqual({ uploads: 0, assetRequests: 0, inbound: 0 });
   });
 
   it("is idempotent — a second sweep finds nothing left", () => {
@@ -220,6 +221,27 @@ describe("inbound staging", () => {
   it("is still readable one tick before it expires", () => {
     const key = stageInboundAsset(Buffer.from("x"), "png", 0);
     expect(readInboundAsset(key, INBOUND_TTL_MS - 1)).not.toBeNull();
+  });
+
+  it("is reclaimed by the sweep even if nobody ever reads it again", () => {
+    stageInboundAsset(Buffer.from("x"), "png", 0);
+    const fresh = stageInboundAsset(Buffer.from("y"), "png", INBOUND_TTL_MS);
+    expect(sweepExpiredUploads(INBOUND_TTL_MS + 1).inbound).toBe(1);
+    expect(stagingStats().inbound).toBe(1);
+    expect(readInboundAsset(fresh, INBOUND_TTL_MS + 1)).not.toBeNull();
+  });
+
+  it("evicts the oldest bytes once the byte ceiling is crossed", () => {
+    const half = Math.floor(INBOUND_MAX_BYTES / 2) + 1;
+    const first = stageInboundAsset(Buffer.alloc(half), "png");
+    const second = stageInboundAsset(Buffer.alloc(half), "png");
+    expect(readInboundAsset(first)).toBeNull();
+    expect(readInboundAsset(second)).not.toBeNull();
+  });
+
+  it("keeps a single asset larger than the ceiling rather than dropping it", () => {
+    const key = stageInboundAsset(Buffer.alloc(INBOUND_MAX_BYTES + 1), "png");
+    expect(readInboundAsset(key)).not.toBeNull();
   });
 });
 

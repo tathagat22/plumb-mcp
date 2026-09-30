@@ -307,3 +307,92 @@ describe("GET /metrics", () => {
     expect(body).toContain("plumb_staged_uploads 0");
   });
 });
+
+describe("lazy page loading (partial inventory)", () => {
+  let ws: WebSocket;
+  const previousPool = process.env.PLUMB_BRIDGE_PORTS;
+  const partial = {
+    t: "inventory",
+    fileName: "Big file",
+    pages: [
+      { id: "0:1", name: "Current", frames: [{ id: "1:1", name: "Home", w: 1440, h: 900 }] },
+      { id: "0:2", name: "Other", frames: [], loaded: false },
+    ],
+  };
+  const full = [
+    partial.pages[0],
+    { id: "0:2", name: "Other", frames: [{ id: "2:1", name: "Checkout", w: 390, h: 844 }] },
+  ];
+
+  /** Push the partial inventory and wait until the bridge has it. */
+  async function pushPartial(): Promise<void> {
+    const version = bridge.fileVersion;
+    ws.send(JSON.stringify(partial));
+    while (bridge.fileVersion === version) {
+      await new Promise((r) => setTimeout(r, 5));
+    }
+  }
+
+  /** Answer every get-inventory with the full inventory; count how many came. */
+  function answerFullInventory(): { count: number } {
+    const seen = { count: 0 };
+    ws.on("message", (raw) => {
+      const msg = JSON.parse(String(raw));
+      if (msg.t !== "get-inventory") return;
+      seen.count += 1;
+      ws.send(
+        JSON.stringify({ t: "inventory-full", reqId: msg.reqId, fileName: "Big file", pages: full, error: null }),
+      );
+    });
+    return seen;
+  }
+
+  beforeAll(async () => {
+    process.env.PLUMB_BRIDGE_PORTS = "0";
+    await startBridge();
+    if (!bridge.port) throw new Error("bridge failed to bind a port for the test");
+    ws = await connectAndPair(bridge.port);
+  });
+
+  afterAll(async () => {
+    ws.close();
+    await stopBridge();
+    if (previousPool === undefined) delete process.env.PLUMB_BRIDGE_PORTS;
+    else process.env.PLUMB_BRIDGE_PORTS = previousPool;
+  });
+
+  it("resolves a screen by id without loading any other page", async () => {
+    const { resolveScreen } = await import("./inventory");
+    await pushPartial();
+    const seen = answerFullInventory();
+    expect(await resolveScreen("2:1", undefined)).toEqual({ id: "2:1" });
+    expect(seen.count).toBe(0);
+    ws.removeAllListeners("message");
+  });
+
+  it("loads the remaining pages once when a name lookup needs them", async () => {
+    const { inventoryIsPartial, resolveScreen } = await import("./inventory");
+    await pushPartial();
+    const seen = answerFullInventory();
+    const versionBefore = bridge.fileVersion;
+    const [a, b] = await Promise.all([
+      resolveScreen(undefined, "Checkout"),
+      resolveScreen(undefined, "Home"),
+    ]);
+    expect(a).toEqual({ id: "2:1" });
+    expect(b).toEqual({ id: "1:1" });
+    expect(seen.count).toBe(1); // concurrent callers share one request
+    expect(inventoryIsPartial()).toBe(false);
+    expect(bridge.fileVersion).toBe(versionBefore); // loading pages isn't an edit
+    ws.removeAllListeners("message");
+  });
+
+  it("lists every page's screens in the outline", async () => {
+    const { pluginOutline } = await import("./inventory");
+    await pushPartial();
+    answerFullInventory();
+    const outline = (await pluginOutline()) as { meta: { screenCount: number } };
+    expect(outline.meta.screenCount).toBe(2);
+    ws.removeAllListeners("message");
+  });
+});

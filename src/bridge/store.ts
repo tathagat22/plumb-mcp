@@ -24,6 +24,45 @@ export interface BridgeInventory {
   pages: InventoryPage[];
 }
 
+/** Most node subtrees kept in {@link BridgeStore.nodeCache}. A full screen can
+ *  serialize to several MB, so an unbounded map grows with every distinct
+ *  node the agent ever asks for until the next file edit. */
+export const NODE_CACHE_MAX = 24;
+
+/**
+ * Insertion-ordered LRU: a hit is re-inserted at the tail, and a set past the
+ * cap evicts from the head. Same surface as the Map it replaces.
+ */
+export class LruCache<K, V> {
+  private readonly map = new Map<K, V>();
+  constructor(private readonly max: number) {}
+
+  get size(): number {
+    return this.map.size;
+  }
+
+  get(key: K): V | undefined {
+    const value = this.map.get(key);
+    if (value === undefined) return undefined;
+    this.map.delete(key);
+    this.map.set(key, value);
+    return value;
+  }
+
+  set(key: K, value: V): void {
+    this.map.delete(key);
+    this.map.set(key, value);
+    while (this.map.size > this.max) {
+      const oldest = this.map.keys().next().value as K;
+      this.map.delete(oldest);
+    }
+  }
+
+  clear(): void {
+    this.map.clear();
+  }
+}
+
 /**
  * In-memory bridge state, shared between the WebSocket bridge and the MCP
  * tools — one process, one module instance.
@@ -51,9 +90,10 @@ class BridgeStore {
    * Server-side cache of `requestNode` responses, keyed `${nodeId}:${depth}`.
    * Hit rate matters most during drill-down loops and verify cycles where
    * the agent re-asks for parent/sibling subtrees that haven't changed.
-   * Cleared wholesale on every fileVersion bump — simple, correct.
+   * Cleared wholesale on every fileVersion bump — simple, correct — and
+   * bounded to the most recent {@link NODE_CACHE_MAX} subtrees in between.
    */
-  nodeCache = new Map<string, CachedNodeResult>();
+  nodeCache = new LruCache<string, CachedNodeResult>(NODE_CACHE_MAX);
 
   /** Clear pairing-scoped state — called when the plugin disconnects. */
   reset(): void {

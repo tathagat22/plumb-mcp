@@ -41,6 +41,7 @@ import type {
   FoundationsPlan,
   FoundationsResult,
   InstanceInfo,
+  InventoryPage,
   MotionPlan,
   MotionResult,
   PluginMessage,
@@ -191,6 +192,16 @@ export function requestScreenshot(
     240_000,
     "screenshot",
   );
+}
+
+/** Ask the plugin to load every page and return the complete screen inventory.
+ *  Only needed when the pushed inventory has pages marked `loaded: false`. */
+export function requestFullInventory(): Promise<{
+  fileName: string;
+  pages: InventoryPage[];
+  error: string | null;
+}> {
+  return request((reqId) => ({ t: "get-inventory", reqId }), 120_000, "inventory");
 }
 
 /** Ask the plugin to find nodes by name and/or type. */
@@ -653,6 +664,13 @@ export async function startBridge(): Promise<void> {
           });
           break;
         }
+        case "inventory-full":
+          resolvePending(msg.reqId, {
+            fileName: msg.fileName,
+            pages: Array.isArray(msg.pages) ? msg.pages : [],
+            error: msg.error,
+          });
+          break;
         case "search":
           resolvePending(msg.reqId, { matches: msg.matches, error: msg.error });
           break;

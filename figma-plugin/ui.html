@@ -104,6 +104,7 @@
   </div>
   <div id="collapsed" title="Click to expand"><div id="bigdot"></div></div>
 <script>
+  var RETRY_MIN_MS = 1500, RETRY_MAX_MS = 10000;
   var PORTS = [31337, 31338, 31339, 31340, 31341, 31342, 31343, 31344, 31345, 31346];
   var PLUGIN_VERSION = "0.13.2";
   var autoPair = false;
@@ -260,7 +261,7 @@
     if (!s) {
       s = sessions[port] = {
         ws: null, paired: false, sessionLabel: "", serverVersion: "",
-        helloTimer: null, retryTimer: null, discovered: false,
+        helloTimer: null, retryTimer: null, discovered: false, retryDelay: RETRY_MIN_MS,
         pendingAssetUploads: Object.create(null),
       };
     }
@@ -284,6 +285,7 @@
       if (msg.t === "plumb-hello") {
         if (s.helloTimer) { clearTimeout(s.helloTimer); s.helloTimer = null; }
         s.discovered = true;
+        s.retryDelay = RETRY_MIN_MS; // a live server here — reconnect fast if it drops
         s.serverVersion = msg.serverVersion || "";
         s.sessionLabel = msg.sessionLabel || ("port " + port);
         renderSessions();
@@ -360,13 +362,19 @@
     s.ws.onerror = function () { try { s.ws.close(); } catch (e) {} };
   }
 
+  // Most of the ten ports have no server behind them. Retrying each every
+  // 1.5s forever piles up failed sockets and console errors in Figma's
+  // renderer, so empty ports back off to RETRY_MAX_MS; a port that had a live
+  // server keeps the fast retry (reset on plumb-hello).
   function scheduleRetry(port) {
     var s = sessions[port];
     if (!s || s.retryTimer) return;
+    var delay = s.retryDelay;
+    s.retryDelay = Math.min(delay * 2, RETRY_MAX_MS);
     s.retryTimer = setTimeout(function () {
       s.retryTimer = null;
       connectPort(port);
-    }, 1500);
+    }, delay);
   }
 
   function connectAll() {

@@ -23,6 +23,10 @@ export const PENDING_UPLOAD_TTL_MS = 10 * 60 * 1000;
 /** How long staged inbound bytes wait for the plugin to pull them. */
 export const INBOUND_TTL_MS = 10 * 60 * 1000;
 
+/** Ceiling on staged inbound bytes. Past it the oldest entries are dropped, so
+ *  a burst of large captures can't pin hundreds of MB until the TTL runs out. */
+export const INBOUND_MAX_BYTES = 128 * 1024 * 1024;
+
 const EXT_CONTENT_TYPE: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",
@@ -107,6 +111,7 @@ export function takeAssetRequestElapsed(reqId: string, now = Date.now()): number
 export function sweepExpiredUploads(now = Date.now()): {
   uploads: number;
   assetRequests: number;
+  inbound: number;
 } {
   let uploads = 0;
   for (const [reqId, upload] of uploadMap) {
@@ -122,7 +127,17 @@ export function sweepExpiredUploads(now = Date.now()): {
       assetRequests += 1;
     }
   }
-  return { uploads, assetRequests };
+  // Inbound keys are reusable across studio steps, so they are never dropped
+  // on read — only here, once expired. Without this pass a key nobody reads
+  // again holds its bytes for the life of the process.
+  let inboundDropped = 0;
+  for (const [key, staged] of inbound) {
+    if (staged.expires < now) {
+      dropInbound(key);
+      inboundDropped += 1;
+    }
+  }
+  return { uploads, assetRequests, inbound: inboundDropped };
 }
 
 /**
@@ -141,6 +156,14 @@ export function clearAllPendingUploads(): void {
 /** Staged inbound asset bytes the plugin pulls via GET /asset/:key.:ext. */
 const inbound = new Map<string, { bytes: Buffer; contentType: string; expires: number }>();
 let inboundCounter = 0;
+let inboundBytes = 0;
+
+function dropInbound(key: string): void {
+  const staged = inbound.get(key);
+  if (!staged) return;
+  inboundBytes -= staged.bytes.length;
+  inbound.delete(key);
+}
 
 export interface StagedAsset {
   bytes: Buffer;
@@ -158,11 +181,15 @@ export function stageInboundAsset(
   now = Date.now(),
 ): string {
   const key = `a${++inboundCounter}${now.toString(36)}`;
-  inbound.set(key, {
-    bytes: Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes),
-    contentType: contentTypeFor(ext),
-    expires: now + INBOUND_TTL_MS,
-  });
+  // Wrap a Uint8Array's memory rather than copying it.
+  const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  inbound.set(key, { bytes: buf, contentType: contentTypeFor(ext), expires: now + INBOUND_TTL_MS });
+  inboundBytes += buf.length;
+  // Evict oldest-first (Map is insertion-ordered), never the entry just staged.
+  for (const oldest of inbound.keys()) {
+    if (inboundBytes <= INBOUND_MAX_BYTES || oldest === key) break;
+    dropInbound(oldest);
+  }
   return key;
 }
 
@@ -176,7 +203,7 @@ export function readInboundAsset(key: string, now = Date.now()): StagedAsset | n
   const staged = inbound.get(key);
   if (!staged) return null;
   if (staged.expires < now) {
-    inbound.delete(key);
+    dropInbound(key);
     return null;
   }
   return { bytes: staged.bytes, contentType: staged.contentType };
@@ -192,4 +219,5 @@ export function stagingStats(): { uploads: number; assetRequests: number; inboun
 export function resetStaging(): void {
   clearAllPendingUploads();
   inbound.clear();
+  inboundBytes = 0;
 }

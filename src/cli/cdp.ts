@@ -69,6 +69,14 @@ export async function launchBrowser(opts: BrowserOpts): Promise<Browser> {
     // Locked-down sandboxes (CI, Docker) reject --enable-features without
     // --no-sandbox; users on a desktop don't need this but it's harmless.
     "--no-sandbox",
+    // Background services a one-shot capture never needs. Each is its own
+    // process or thread with its own memory; none affects how a page renders.
+    "--disable-extensions",
+    "--disable-component-update",
+    "--disable-background-networking",
+    "--disable-default-apps",
+    "--disable-sync",
+    "--mute-audio",
     ...(opts.extraFlags ?? []),
     "about:blank",
   ];

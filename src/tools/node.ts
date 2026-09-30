@@ -110,7 +110,7 @@ export function registerPlumbNode(server: McpServer): void {
         // this, a URL would force REST and 403 on Free-plan tokens even though
         // the plugin would have happily served the same node for free.
         if (bridge.paired && (id || args.name)) {
-          const resolved = resolveScreen(id, args.name);
+          const resolved = await resolveScreen(id, args.name);
           if ("ambiguous" in resolved) {
             return ok({
               ambiguous: true,

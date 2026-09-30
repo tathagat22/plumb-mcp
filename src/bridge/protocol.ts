@@ -17,6 +17,10 @@ export interface InventoryPage {
   id: string;
   name: string;
   frames: InventoryFrame[];
+  /** `false` when the plugin hasn't loaded this page yet, so `frames` is empty
+   *  rather than known-empty. Absent means loaded (and on older plugins, which
+   *  always load every page). Resolved on demand via `get-inventory`. */
+  loaded?: false;
 }
 
 /** One match returned from plumb_search. */
@@ -425,6 +429,13 @@ export type PluginMessage =
       nodeName: string | null;
       error: string | null;
     }
+  | {
+      t: "inventory-full";
+      reqId: string;
+      fileName: string;
+      pages: InventoryPage[];
+      error: string | null;
+    }
   | { t: "search"; reqId: string; matches: SearchMatch[]; error: string | null }
   | {
       t: "components";
@@ -464,6 +475,7 @@ export type ServerMessage =
       scale?: number;
       format?: "PNG" | "JPG";
     }
+  | { t: "get-inventory"; reqId: string }
   | { t: "get-search"; reqId: string; query?: string; type?: string }
   | { t: "get-components"; reqId: string }
   // ---- Write direction (three sequenced mutations) -------------------------
