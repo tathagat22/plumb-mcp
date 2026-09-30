@@ -90,6 +90,9 @@ are summarized only briefly.
   is built without comments or whitespace (550 KB → 416 KB, and no longer held
   as two-byte source by V8). Headless Chrome skips extensions, sync, component
   updates and background networking.
+- The server exits when its MCP client disconnects (stdin closes), after
+  answering any in-flight requests. Before, the bridge's listening socket kept
+  it running as an orphan for every closed editor session.
 - The five files over 1000 lines are split by concern, behind unchanged public
   surfaces: `src/dsl/schema.ts` → a layered `schema/` barrel,
   `src/verify.ts` → `verify/`, `src/normalize/normalize.ts` → five focused

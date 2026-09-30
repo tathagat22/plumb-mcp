@@ -1,5 +1,5 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { startBridge } from "./bridge/server";
+import { startBridge, stopBridge } from "./bridge/server";
 import { closeAllBrowsers } from "./cli/cdp";
 import { loadEnv } from "./env";
 import { createLogger } from "./logger";
@@ -80,18 +80,21 @@ function installProcessGuards(): void {
     log.error("unhandled rejection — server stays up", { err: asError(e) });
   });
 
-  // A killed/restarted MCP host (editor reload, host crash) must not leave a
-  // headless Chrome process running — plumb_verify/plumb_fit/plumb_import_web
-  // can each have one open at shutdown time.
-  let shuttingDown = false;
-  const shutdown = (signal: NodeJS.Signals) => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    log.info("shutting down — closing any open browsers", { signal });
-    closeAllBrowsers().finally(() => process.exit(0));
-  };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+}
+
+/**
+ * A killed/restarted MCP host (editor reload, host crash) must not leave a
+ * headless Chrome process running — plumb_verify/plumb_fit/plumb_import_web
+ * can each have one open at shutdown time.
+ */
+let shuttingDown = false;
+function shutdown(reason: string): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log.info("shutting down — closing any open browsers", { reason });
+  closeAllBrowsers().finally(() => process.exit(0));
 }
 
 /**
@@ -150,6 +153,21 @@ async function main(): Promise<void> {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  // stdin closing means the MCP client is gone. The bridge's listening socket
+  // would otherwise keep the process alive as an orphan, one per closed
+  // editor session. Stop the bridge and let the process exit on its own once
+  // in-flight replies are written; the unref'd backstop only fires if
+  // something is still holding the loop open.
+  let clientGone = false;
+  const onClientGone = () => {
+    if (clientGone) return;
+    clientGone = true;
+    log.info("client disconnected — exiting once in-flight work drains");
+    void stopBridge();
+    setTimeout(() => shutdown("stdin closed"), 30_000).unref();
+  };
+  process.stdin.once("end", onClientGone);
+  process.stdin.once("close", onClientGone);
   log.info("running", { version: SERVER_VERSION, transport: "stdio" });
 }
 
