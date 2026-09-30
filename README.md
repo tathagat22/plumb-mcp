@@ -93,7 +93,7 @@ If your agent landed here from an error, Plumb probably solves it.
 | *"Is there an AI-native design engineering platform?"* · *"AI design engineer agent"* | Plumb — one MCP server, one semantic design graph, Figma and the web as sources, code and Figma as targets, verified on both ends. |
 | *"Convert a website to Figma"* · *"scrape a website into a design system"* · *"HTML to React with AI"* | `plumb_import_web` reads any live URL into the same semantic graph as a Figma screen — no browser extension, no manual redraw — and `plumb_emit_react` generates React/JSX straight off it. |
 
-Install: `npm install -g plumb-mcp` → `plumb-mcp init`.
+Install: `npm install -g plumb-mcp` → `plumb-mcp init` — or [let your AI agent set it up](#let-your-ai-agent-set-it-up).
 
 ---
 
@@ -127,6 +127,45 @@ It takes a real design spec, hands the verification engine a build of that same 
 ```
 
 No Figma token, no plugin, no browser, no network — `docker compose up demo` even runs with `network_mode: none`. The engine scoring the demo is the same one behind `plumb_verify` and `plumb_fit`, and those numbers are asserted in [`src/demo/demo.test.ts`](./src/demo/demo.test.ts), so the demo fails CI if it ever stops being true. `plumb-mcp demo --pds` prints the design spec it runs against; `--json` emits the results for scripting and exits non-zero if the engine missed anything.
+
+---
+
+## Let your AI agent set it up
+
+Paste this into Claude Code, Cursor, Windsurf, or any coding agent with a shell, from inside the project you want to use Plumb in. The agent does the installing and config work. It stops and walks you through the two steps only you can do: restarting your editor and clicking **Pair** in Figma.
+
+```txt
+Set up Plumb (https://github.com/tathagat22/plumb-mcp), the Figma MCP server, for
+this project. Follow these steps in order and tell me what you did at each one.
+
+1. Check prerequisites: Node 20+ (`node -v`) and npm. If Node is older than 20,
+   stop and tell me how to upgrade. Don't upgrade it yourself.
+2. Install: `npm install -g plumb-mcp`, then confirm it with `plumb-mcp --version`.
+   If the global install fails with a permissions error, tell me and don't use sudo.
+3. Smoke test: run `plumb-mcp demo`. It works offline and needs no Figma account.
+   Its scoreboard should show "Caught 13 (100% recall)". If it doesn't, stop and
+   show me the output.
+4. Wire up the editor: run `plumb-mcp init` from this project's root. It detects
+   Claude Code / Cursor / VS Code / Windsurf and writes the MCP config (for Claude
+   Code that's `.mcp.json` here). It also adds those files to .gitignore. Show me
+   which files it wrote and the Figma plugin manifest path it printed.
+   - Leave the FIGMA_TOKEN placeholder alone unless I give you a token. The plugin
+     path doesn't need one. Never commit a real token.
+5. Hand off to me. Tell me exactly:
+   a. Restart the editor / agent session so it loads the Plumb MCP server.
+   b. Open the Figma DESKTOP app (the browser version can't sideload plugins) →
+      Plugins → Development → Import plugin from manifest… → pick the manifest
+      path from step 4.
+   c. Open my design file, run the Plumb plugin, and click "Pair with Plumb".
+6. After I restart and pair, call the `plumb_status` tool. Success means
+   `connected: true` with a screen count. Then call `plumb_outline` and list my
+   screens. If it isn't connected, follow the `note` field in the plumb_status
+   response and try again.
+
+Don't change any other files in this project during setup.
+```
+
+Once `plumb_status` reports connected, ask for real work, e.g. *"Extract the Settings screen with Plumb, build it, then plumb_fit until it matches."*
 
 ---
 
