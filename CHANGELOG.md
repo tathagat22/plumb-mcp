@@ -12,6 +12,8 @@ are summarized only briefly.
 
 ## [Unreleased]
 
+## [0.13.3]
+
 ### Added
 
 - **`plumb-mcp demo`** — the whole design→code→verify loop offline, in one
@@ -60,9 +62,22 @@ are summarized only briefly.
   `npm audit --omit=dev --audit-level=high` gate in CI.
 - **Coverage reporting with an enforced floor** (`npm run test:coverage`), and
   an enforced 600-code-line cap per file via ESLint `max-lines`.
+- **`cssVar` next to `var`** — when a bound variable defines Web code syntax in
+  Figma (`codeSyntax.WEB`, e.g. `var(--color-brand-primary)`), it now ships
+  verbatim as `cssVar` on solid fills, `strokeCssVar`, and `radiusCssVar`, so
+  agents can use the team's exact CSS token instead of guessing one from the
+  variable name.
+- **Stroke variables** — a stroke bound to a colour variable now carries
+  `strokeVar` (and `strokeCssVar`). Before, the plugin resolved the name but
+  the compact `stroke` ref dropped it.
 
 ### Fixed
 
+- Fills, strokes and corner radii bound to **team-library variables** came
+  back as bare hex with no `var` name — only variables defined in the open
+  file were resolved. Binding ids missing from the local map are now resolved
+  with `getVariableByIdAsync` and cached
+  ([#27](https://github.com/tathagat22/plumb-mcp/issues/27)).
 - `computeLineHeightRatio` treated a unit-less (`"1.5"`) or percentage
   (`"150%"`) line-height as pixels and divided by the font size, reporting a
   9.4× line-height for a 150% one. Both are now classified before conversion.
