@@ -239,15 +239,12 @@ export async function handleServerRequest(req: any): Promise<void> {
       return;
     }
     const scene = node as SceneNode;
-    const varMap = await buildVariableMap();
+    const depth = typeof req.depth === "number" ? req.depth : undefined;
+    const varMap = await buildVariableMap(scene, depth);
     reply({
       t: "node",
       reqId: req.reqId,
-      doc: serialize(
-        scene,
-        varMap,
-        typeof req.depth === "number" ? req.depth : undefined,
-      ),
+      doc: serialize(scene, varMap, depth),
       nodeName: scene.name,
     });
     return;
@@ -260,7 +257,7 @@ export async function handleServerRequest(req: any): Promise<void> {
       reply({ t: "selection-doc", reqId: req.reqId, doc: null, nodeName: null });
       return;
     }
-    const varMap = await buildVariableMap();
+    const varMap = await buildVariableMap(node);
     reply({
       t: "selection-doc",
       reqId: req.reqId,

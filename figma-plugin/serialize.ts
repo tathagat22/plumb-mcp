@@ -84,9 +84,11 @@ export function normalizePaint(p: unknown, varName?: string): unknown {
  * variables in the current document. Used by `serialize()` to resolve
  * `boundVariables` references without a per-node async lookup.
  *
- * Remote variables (imported from a library) aren't in `getLocalVariables`
- * — bindings to those resolve to undefined and the agent falls back to
- * the hex value. Acceptable for V1.
+ * Remote variables (bound from a team library) aren't in
+ * `getLocalVariables`. Pass the node being serialized and its depth limit and
+ * any binding ids in that subtree that miss the local map are resolved with
+ * `getVariableByIdAsync`, which works for bound library variables even when
+ * the file isn't subscribed to the library. Resolved names join the cache.
  *
  * Cached across calls — `getLocalVariablesAsync()` is non-trivial on large
  * design-system files (500+ vars) and `serialize()` is called once per
@@ -97,18 +99,70 @@ export function normalizePaint(p: unknown, varName?: string): unknown {
  */
 let variableMapCache: Map<string, string> | null = null;
 
-export async function buildVariableMap(): Promise<Map<string, string>> {
-  if (variableMapCache) return variableMapCache;
-  const map = new Map<string, string>();
-  try {
-    const vars = await figma.variables.getLocalVariablesAsync();
-    for (const v of vars) map.set(v.id, v.name);
-  } catch {
-    // File has no variables or the API is unavailable — return an empty
-    // map; bindings will silently no-op.
+export async function buildVariableMap(root?: SceneNode, depth?: number): Promise<Map<string, string>> {
+  if (!variableMapCache) {
+    const map = new Map<string, string>();
+    try {
+      const vars = await figma.variables.getLocalVariablesAsync();
+      for (const v of vars) map.set(v.id, v.name);
+    } catch {
+      // File has no variables or the API is unavailable — return an empty
+      // map; bindings will silently no-op.
+    }
+    variableMapCache = map;
   }
-  variableMapCache = map;
+  const map = variableMapCache;
+  if (root) {
+    const missing = new Set<string>();
+    collectBoundVariableIds(root, depth, map, missing);
+    await Promise.all(
+      [...missing].map(async (id) => {
+        try {
+          const v = await figma.variables.getVariableByIdAsync(id);
+          if (v) map.set(id, v.name);
+        } catch {
+          // Unresolvable (deleted / inaccessible library) — fall back to hex.
+        }
+      }),
+    );
+  }
   return map;
+}
+
+function aliasId(binding: unknown): string | undefined {
+  const id = (binding as { id?: unknown } | undefined)?.id;
+  return typeof id === "string" ? id : undefined;
+}
+
+/**
+ * Collect the variable ids `serialize()` will look up (fill / stroke /
+ * corner-radius bindings) that aren't in `known`. Mirrors serialize's
+ * depth semantics so we don't resolve bindings below the cut.
+ */
+function collectBoundVariableIds(
+  node: SceneNode,
+  remainingDepth: number | undefined,
+  known: Map<string, string>,
+  out: Set<string>,
+): void {
+  try {
+    const bv = (node as unknown as { boundVariables?: Record<string, unknown> }).boundVariables;
+    if (bv) {
+      const bindings: unknown[] = [];
+      if (Array.isArray(bv.fills)) bindings.push(...bv.fills);
+      if (Array.isArray(bv.strokes)) bindings.push(...bv.strokes);
+      bindings.push(bv.cornerRadius);
+      for (const b of bindings) {
+        const id = aliasId(b);
+        if (id && !known.has(id)) out.add(id);
+      }
+    }
+    if (remainingDepth === 0 || !("children" in node)) return;
+    const next = remainingDepth === undefined ? undefined : remainingDepth - 1;
+    for (const kid of (node as ChildrenMixin).children) collectBoundVariableIds(kid, next, known, out);
+  } catch {
+    // Broken node — serialize() stubs it too.
+  }
 }
 
 export function invalidateVariableMapCache(): void {
@@ -118,9 +172,8 @@ export function invalidateVariableMapCache(): void {
 /** Look up a variable binding entry's id and resolve it via the map. */
 export function varNameFor(binding: unknown, varMap: Map<string, string> | undefined): string | undefined {
   if (!binding || !varMap) return undefined;
-  const id = (binding as { id?: unknown }).id;
-  if (typeof id !== "string") return undefined;
-  return varMap.get(id);
+  const id = aliasId(binding);
+  return id === undefined ? undefined : varMap.get(id);
 }
 
 export function serializeReactions(node: SceneNode): unknown[] | undefined {
