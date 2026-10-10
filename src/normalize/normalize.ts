@@ -21,7 +21,7 @@ import {
 } from "./fidelity";
 import { HandleMinter } from "./handles";
 import { toLayout } from "./layout";
-import { backdropFilterCss, effectsToStack, paintsToFillStack } from "./paint";
+import { backdropFilterCss, effectsToStack, paintsToFillStack, topSolidVar } from "./paint";
 import { TokenInterner } from "./tokens";
 import { applySemanticEnrichers } from "../semantic";
 import { detectSuspiciousText } from "./typo";
@@ -250,6 +250,11 @@ export function normalize(
     const stroke = interner.internColor(fn.strokes);
     if (stroke) {
       node.stroke = stroke;
+      const strokeVar = topSolidVar(fn.strokes);
+      if (strokeVar) {
+        node.strokeVar = strokeVar.var;
+        if (strokeVar.cssVar) node.strokeCssVar = strokeVar.cssVar;
+      }
       if (fn.strokeWeight) {
         const w = cleanPx(fn.strokeWeight);
         if (w) node.strokeW = w;
@@ -272,6 +277,9 @@ export function normalize(
     }
     if (typeof fn.cornerRadiusVar === "string" && fn.cornerRadiusVar.length > 0) {
       node.radiusVar = fn.cornerRadiusVar;
+      if (typeof fn.cornerRadiusCssVar === "string" && fn.cornerRadiusCssVar.length > 0) {
+        node.radiusCssVar = fn.cornerRadiusCssVar;
+      }
     }
 
     const effects = effectsToStack(fn.effects);

@@ -34,6 +34,13 @@ export interface SolidFill {
    * IDs to names.
    */
   var?: string;
+  /**
+   * The bound variable's Web code syntax as the design system defined it in
+   * Figma (`codeSyntax.WEB`, e.g. `"var(--color-brand-primary)"`), verbatim.
+   * When present, use it as-is — it's the exact CSS token the team ships.
+   * Only emitted alongside `var`, and only when the variable defines one.
+   */
+  cssVar?: string;
 }
 
 /** Linear / radial / angular gradient with full stop data — no info loss. */

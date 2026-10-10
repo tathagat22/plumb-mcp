@@ -56,6 +56,16 @@ export function paintToCss(paints: FigmaPaint[] | undefined): string | undefined
   return undefined;
 }
 
+/**
+ * The paint `paintToCss` picks (first visible), when it's a solid bound to a
+ * variable — so a compact `stroke` ref can still carry its variable name.
+ */
+export function topSolidVar(paints: FigmaPaint[] | undefined): { var: string; cssVar?: string } | undefined {
+  const p = visiblePaints(paints)[0];
+  if (!p || p.type !== "SOLID" || !p.var) return undefined;
+  return p.cssVar ? { var: p.var, cssVar: p.cssVar } : { var: p.var };
+}
+
 /* ---------------------------------------------------------------------- */
 /* Structured fill stack                                                   */
 /* ---------------------------------------------------------------------- */
@@ -128,7 +138,10 @@ function fillOf(p: FigmaPaint): Fill | undefined {
       color: colorToHex({ r: p.color.r, g: p.color.g, b: p.color.b, a: p.color.a ?? 1 }),
     };
     if (p.opacity !== undefined && p.opacity < 1) out.opacity = round(p.opacity, 2);
-    if (p.var) out.var = p.var;
+    if (p.var) {
+      out.var = p.var;
+      if (p.cssVar) out.cssVar = p.cssVar;
+    }
     return out;
   }
   const grad = GRADIENT_KIND[p.type];

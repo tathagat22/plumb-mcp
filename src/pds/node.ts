@@ -72,6 +72,13 @@ export interface PdsNode {
    */
   inheritedFill?: string;
   stroke?: string;
+  /**
+   * Figma Variable name bound to the stroke colour (e.g. `"colors/border"`).
+   * Same semantics as `SolidFill.var`. Plugin path only.
+   */
+  strokeVar?: string;
+  /** Web code syntax of the stroke variable (`codeSyntax.WEB`), verbatim, when defined. */
+  strokeCssVar?: string;
   strokeW?: number;
   /**
    * Where the stroke sits relative to the geometry. CSS `border` is always
@@ -99,6 +106,8 @@ export interface PdsNode {
    * bindings aren't surfaced yet.
    */
   radiusVar?: string;
+  /** Web code syntax of the radius variable (`codeSyntax.WEB`), verbatim, when defined. */
+  radiusCssVar?: string;
   /**
    * Compact dominant shadow — CSS `box-shadow` string for back-compat.
    * Multi-shadow stacks and blur effects live in `effects`.

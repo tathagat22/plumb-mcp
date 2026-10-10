@@ -57,7 +57,7 @@ export function handlesFromTransform(
   return [inv(0, 0), inv(1, 0), inv(0, 1)];
 }
 
-export function normalizePaint(p: unknown, varName?: string): unknown {
+export function normalizePaint(p: unknown, v?: VarInfo): unknown {
   if (!p || typeof p !== "object") return p;
   const src = p as Record<string, unknown>;
   const out: Record<string, unknown> = { ...src };
@@ -75,7 +75,10 @@ export function normalizePaint(p: unknown, varName?: string): unknown {
   // Resolved Figma Variable name bound to this paint's color, if any. The
   // server propagates this to the PDS SolidFill so agents reach for a
   // design token instead of the resolved hex.
-  if (varName) out.var = varName;
+  if (v) {
+    out.var = v.name;
+    if (v.web) out.cssVar = v.web;
+  }
   return out;
 }
 
@@ -97,14 +100,29 @@ export function normalizePaint(p: unknown, varName?: string): unknown {
  * updates don't fire documentchange but those didn't surface in the cache
  * anyway.
  */
-let variableMapCache: Map<string, string> | null = null;
+/**
+ * A bound variable as the agent sees it: its Figma name plus, when the
+ * design system defines one, its Web code syntax (`codeSyntax.WEB`, e.g.
+ * `var(--color-brand-primary)`) so the agent can use the exact CSS token.
+ */
+export interface VarInfo {
+  name: string;
+  web?: string;
+}
 
-export async function buildVariableMap(root?: SceneNode, depth?: number): Promise<Map<string, string>> {
+function varInfoOf(v: Variable): VarInfo {
+  const web = v.codeSyntax?.WEB;
+  return typeof web === "string" && web.trim() ? { name: v.name, web: web.trim() } : { name: v.name };
+}
+
+let variableMapCache: Map<string, VarInfo> | null = null;
+
+export async function buildVariableMap(root?: SceneNode, depth?: number): Promise<Map<string, VarInfo>> {
   if (!variableMapCache) {
-    const map = new Map<string, string>();
+    const map = new Map<string, VarInfo>();
     try {
       const vars = await figma.variables.getLocalVariablesAsync();
-      for (const v of vars) map.set(v.id, v.name);
+      for (const v of vars) map.set(v.id, varInfoOf(v));
     } catch {
       // File has no variables or the API is unavailable — return an empty
       // map; bindings will silently no-op.
@@ -119,7 +137,7 @@ export async function buildVariableMap(root?: SceneNode, depth?: number): Promis
       [...missing].map(async (id) => {
         try {
           const v = await figma.variables.getVariableByIdAsync(id);
-          if (v) map.set(id, v.name);
+          if (v) map.set(id, varInfoOf(v));
         } catch {
           // Unresolvable (deleted / inaccessible library) — fall back to hex.
         }
@@ -142,7 +160,7 @@ function aliasId(binding: unknown): string | undefined {
 function collectBoundVariableIds(
   node: SceneNode,
   remainingDepth: number | undefined,
-  known: Map<string, string>,
+  known: Map<string, VarInfo>,
   out: Set<string>,
 ): void {
   try {
@@ -170,7 +188,7 @@ export function invalidateVariableMapCache(): void {
 }
 
 /** Look up a variable binding entry's id and resolve it via the map. */
-export function varNameFor(binding: unknown, varMap: Map<string, string> | undefined): string | undefined {
+export function varInfoFor(binding: unknown, varMap: Map<string, VarInfo> | undefined): VarInfo | undefined {
   if (!binding || !varMap) return undefined;
   const id = aliasId(binding);
   return id === undefined ? undefined : varMap.get(id);
@@ -216,7 +234,7 @@ export function serializeReactions(node: SceneNode): unknown[] | undefined {
  */
 export function serialize(
   node: SceneNode,
-  varMap?: Map<string, string>,
+  varMap?: Map<string, VarInfo>,
   remainingDepth?: number,
 ): SerialNode {
   const n = node as unknown as Record<string, any>;
@@ -264,13 +282,13 @@ export function serialize(
   if (Array.isArray(n.fills)) {
     const boundFills = bv?.fills;
     out.fills = n.fills.map((p, i) =>
-      normalizePaint(p, varNameFor(Array.isArray(boundFills) ? boundFills[i] : undefined, varMap)),
+      normalizePaint(p, varInfoFor(Array.isArray(boundFills) ? boundFills[i] : undefined, varMap)),
     );
   }
   if (Array.isArray(n.strokes)) {
     const boundStrokes = bv?.strokes;
     out.strokes = n.strokes.map((p, i) =>
-      normalizePaint(p, varNameFor(Array.isArray(boundStrokes) ? boundStrokes[i] : undefined, varMap)),
+      normalizePaint(p, varInfoFor(Array.isArray(boundStrokes) ? boundStrokes[i] : undefined, varMap)),
     );
   }
   if (typeof n.strokeWeight === "number") out.strokeWeight = n.strokeWeight;
@@ -287,8 +305,11 @@ export function serialize(
     // Variable-bound uniform corner radius — resolve to a name so the
     // agent can reach for var(--radii-md) instead of a hardcoded px.
     const radiusBinding = (bv as { cornerRadius?: unknown })?.cornerRadius;
-    const radiusVar = varNameFor(radiusBinding, varMap);
-    if (radiusVar) out.cornerRadiusVar = radiusVar;
+    const radiusVar = varInfoFor(radiusBinding, varMap);
+    if (radiusVar) {
+      out.cornerRadiusVar = radiusVar.name;
+      if (radiusVar.web) out.cornerRadiusCssVar = radiusVar.web;
+    }
   } else if (typeof n.topLeftRadius === "number") {
     out.rectangleCornerRadii = [
       n.topLeftRadius ?? 0,

@@ -171,3 +171,44 @@ describe("buildPreWalk() — iterative traversal (Phase A5)", () => {
     expect(elById.has("root")).toBe(true);
   });
 });
+
+describe("normalize() — variable bindings", () => {
+  const brand = { r: 0.2, g: 0.4, b: 1, a: 1 };
+  const card: FigmaNode = {
+    id: "1",
+    name: "Card",
+    type: "FRAME",
+    absoluteBoundingBox: { x: 0, y: 0, width: 320, height: 200 },
+    fills: [{ type: "SOLID", color: brand, var: "Colors/Brand/Primary", cssVar: "var(--color-brand-primary)" }],
+    strokes: [{ type: "SOLID", color: { r: 0.9, g: 0.9, b: 0.9, a: 1 }, var: "Colors/Border" }],
+    strokeWeight: 1,
+    cornerRadius: 12,
+    cornerRadiusVar: "Radii/MD",
+    cornerRadiusCssVar: "var(--radius-md)",
+  };
+  const root: FigmaNode = {
+    id: "0",
+    name: "Screen",
+    type: "FRAME",
+    absoluteBoundingBox: { x: 0, y: 0, width: 1200, height: 800 },
+    children: [card],
+  };
+  const pds = normalize({ document: root, fileName: "f", version: "1" }, 5);
+  const node = Object.values(pds.nodes).find((n) => n.name === "Card")!;
+
+  it("carries the fill variable name and its Web code syntax", () => {
+    // Stacks may be interned to a `$fN` ref — resolve through tokens.
+    const fills = typeof node.fills === "string" ? pds.tokens.fills?.[node.fills] : node.fills;
+    expect(fills?.[0]).toMatchObject({ var: "Colors/Brand/Primary", cssVar: "var(--color-brand-primary)" });
+  });
+
+  it("carries the stroke variable, omitting cssVar when none is defined", () => {
+    expect(node.strokeVar).toBe("Colors/Border");
+    expect(node.strokeCssVar).toBeUndefined();
+  });
+
+  it("carries the corner radius variable and its Web code syntax", () => {
+    expect(node.radiusVar).toBe("Radii/MD");
+    expect(node.radiusCssVar).toBe("var(--radius-md)");
+  });
+});

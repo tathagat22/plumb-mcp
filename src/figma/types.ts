@@ -47,6 +47,11 @@ export interface FigmaPaint {
    */
   var?: string;
   /**
+   * Plugin-injected: the bound variable's Web code syntax
+   * (`codeSyntax.WEB`), verbatim, when the design system defines one.
+   */
+  cssVar?: string;
+  /**
    * IMAGE paints only — Figma's per-image adjustment sliders, each roughly
    * -1..1 (0/absent = untouched). Plugin path only: the raw Figma Plugin
    * API object is shallow-copied through `normalizePaint()`
@@ -164,6 +169,8 @@ export interface FigmaNode {
    * when present (e.g. `"radii/md"`). REST cannot reliably resolve this.
    */
   cornerRadiusVar?: string;
+  /** Plugin-injected: Web code syntax of the `cornerRadius` variable, if defined. */
+  cornerRadiusCssVar?: string;
   rectangleCornerRadii?: [number, number, number, number];
   effects?: FigmaEffect[];
   opacity?: number;
